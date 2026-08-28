@@ -33,6 +33,12 @@ public class Employee : BaseEntity
     /// <summary>Current employment status.</summary>
     public EmployeeStatus Status { get; set; } = EmployeeStatus.Active;
 
+    /// <summary>
+    /// Employee category (Staff / AE). Determines which requisition form
+    /// layout and account type checklist is used when raising a request.
+    /// </summary>
+    public EmployeeCategory Category { get; set; } = EmployeeCategory.Staff;
+
     // Navigation
     public ICollection<AccountRequest> AccountRequests { get; set; } = new List<AccountRequest>();
     public ICollection<EmployeeAccount> Accounts { get; set; } = new List<EmployeeAccount>();

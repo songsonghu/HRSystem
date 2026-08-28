@@ -1,43 +1,100 @@
 @using Microsoft.AspNetCore.Mvc.Rendering
+@using HRSystem.Application.DTOs
 @model CreateRequestDto
 @{
     ViewData["Title"] = "New Account Request";
     var employees = ViewBag.Employees as List<SelectListItem>;
     var requestTypes = ViewBag.RequestTypes as List<SelectListItem>;
-    var accountTypes = ViewBag.AccountTypes as IEnumerable<dynamic>;
+    var groups = ViewBag.AccountTypeGroups as List<IGrouping<string, AccountTypeOptionDto>> ?? new();
+    var employee = ViewBag.SelectedEmployee as EmployeeDto;
+    var isAe = employee?.Category == EmployeeCategory.AE;
+    var formName = employee is null ? null : (isAe ? "STAFF REQUISITION FORM \u2013 AE/SALES/SA" : "STAFF REQUISITION FORM \u2013 Staff");
 }
 
 <h2>New Account Request</h2>
 <hr />
 
-<form asp-action="Create" method="post" class="col-md-7">
+<form asp-action="Create" method="post" class="col-md-9">
     <div asp-validation-summary="All" class="text-danger"></div>
 
-    <div class="mb-3">
-        <label class="form-label">Employee</label>
-        <select asp-for="EmployeeId" class="form-select" asp-items="employees">
-            <option value="">-- select employee --</option>
-        </select>
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label class="form-label">Employee</label>
+            <select asp-for="EmployeeId" class="form-select"
+                    asp-items="employees" onchange="location.href='@Url.Action("Create")?employeeId=' + this.value">
+                <option value="">-- select employee --</option>
+            </select>
+        </div>
+        <div class="col-md-6 mb-3">
+            <label class="form-label">Request Type</label>
+            <select asp-for="RequestType" id="requestType" class="form-select" asp-items="requestTypes"></select>
+        </div>
     </div>
 
-    <div class="mb-3">
-        <label class="form-label">Request Type</label>
-        <select asp-for="RequestType" class="form-select" asp-items="requestTypes"></select>
-    </div>
+    @if (employee is null)
+    {
+        <div class="alert alert-info">Select an employee above to load the matching requisition checklist (Staff, or AE/Sales/SA).</div>
+    }
+    else
+    {
+        <div class="card mb-3">
+            <div class="card-header text-center fw-bold">@formName</div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-2">Name</dt><dd class="col-sm-4">@employee.Name</dd>
+                    <dt class="col-sm-2">@(isAe ? "Location" : "Department")</dt><dd class="col-sm-4">@employee.Department</dd>
+                    <dt class="col-sm-2">@(isAe ? "Title" : "Position")</dt><dd class="col-sm-4">@employee.Position</dd>
+                    <dt class="col-sm-2">Commencement Date</dt><dd class="col-sm-4">@employee.JoinDate.ToString("yyyy-MM-dd")</dd>
+                </dl>
+            </div>
+        </div>
 
-    <div class="mb-3">
-        <label class="form-label">Account Types</label>
-        <div class="border rounded p-3">
-            @foreach (var at in accountTypes!)
+        @if (!isAe)
+        {
+            <div class="card mb-3" id="headcountSection">
+                <div class="card-body">
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="HeadcountOption" id="hcNew" value="new" checked />
+                        <label class="form-check-label" for="hcNew">New Headcount</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="HeadcountOption" id="hcReplace" value="replace" />
+                        <label class="form-check-label" for="hcReplace">Replacement of</label>
+                    </div>
+                    <input asp-for="ReplacementOf" class="form-control form-control-sm d-inline-block w-auto ms-2" placeholder="name of employee replaced" />
+                    <label class="ms-3">Last day</label>
+                    <input asp-for="LastDay" type="date" class="form-control form-control-sm d-inline-block w-auto ms-2" />
+                    <input type="hidden" asp-for="IsNewHeadcount" id="isNewHeadcount" value="true" />
+                </div>
+            </div>
+        }
+
+        <div class="mb-3">
+            <label class="form-label">Items Requested by @(isAe ? "Team Head / Branch Manager" : "Related Department Head")</label>
+            @foreach (var group in groups)
             {
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" name="AccountTypeIds"
-                           value="@at.Id" id="at_@at.Id" />
-                    <label class="form-check-label" for="at_@at.Id">@at.Name</label>
+                <div class="border rounded p-3 mb-2">
+                    <h6 class="text-decoration-underline">@group.Key</h6>
+                    <div class="row">
+                        @foreach (var at in group.OrderBy(a => a.SortOrder))
+                        {
+                            <div class="col-md-6">
+                                <div class="form-check d-flex align-items-center gap-2 mb-1">
+                                    <input class="form-check-input" type="checkbox" name="AccountTypeIds"
+                                           value="@at.Id" id="at_@at.Id" />
+                                    <label class="form-check-label" for="at_@at.Id">@at.Name</label>
+                                    @if (at.RequiresDetail)
+                                    {
+                                        <input name="Details[@at.Id]" class="form-control form-control-sm" placeholder="@at.DetailLabel" />
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
                 </div>
             }
         </div>
-    </div>
+    }
 
     <div class="mb-3">
         <label asp-for="Remark" class="form-label">Remark</label>
@@ -48,4 +105,19 @@
     <a class="btn btn-secondary" asp-action="Index">Cancel</a>
 </form>
 
-@section Scripts { <partial name="_ValidationScriptsPartial" /> }
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        // Toggle "Replacement of / Last day" vs. "New Headcount" and keep the
+        // hidden IsNewHeadcount flag (posted with the form) in sync.
+        (function () {
+            var newRadio = document.getElementById('hcNew');
+            var replaceRadio = document.getElementById('hcReplace');
+            var flag = document.getElementById('isNewHeadcount');
+            if (!newRadio || !replaceRadio || !flag) return;
+            function sync() { flag.value = newRadio.checked ? 'true' : 'false'; }
+            newRadio.addEventListener('change', sync);
+            replaceRadio.addEventListener('change', sync);
+        })();
+    </script>
+}

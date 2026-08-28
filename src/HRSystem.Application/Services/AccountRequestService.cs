@@ -47,9 +47,16 @@ public class AccountRequestService : IAccountRequestService
         if (employee is null) return Result<int>.Fail("Employee not found.");
         if (dto.AccountTypeIds.Count == 0) return Result<int>.Fail("Select at least one account type.");
 
-        // Load the selected account types together with their responsible dept.
+        // Load the selected account types together with their responsible dept,
+        // restricted to those visible on this employee's requisition form
+        // (Staff or AE/Sales/SA).
+        var audience = employee.Category == EmployeeCategory.AE
+            ? AccountTypeAudience.AEOnly
+            : AccountTypeAudience.StaffOnly;
+
         var accountTypes = await _db.AccountTypes
-            .Where(a => dto.AccountTypeIds.Contains(a.Id) && a.IsActive)
+            .Where(a => dto.AccountTypeIds.Contains(a.Id) && a.IsActive
+                        && (a.Audience == AccountTypeAudience.Both || a.Audience == audience))
             .ToListAsync(ct);
 
         if (accountTypes.Count == 0) return Result<int>.Fail("No valid account types selected.");
@@ -61,6 +68,9 @@ public class AccountRequestService : IAccountRequestService
             RequestType = dto.RequestType,
             Status = RequestStatus.Draft,
             Remark = dto.Remark,
+            IsNewHeadcount = dto.IsNewHeadcount,
+            ReplacementOf = dto.ReplacementOf,
+            LastDay = dto.LastDay,
             CreatedBy = _currentUser.UserId
         };
 
@@ -71,7 +81,8 @@ public class AccountRequestService : IAccountRequestService
             {
                 AccountTypeId = at.Id,
                 AssignedDeptId = at.ResponsibleDeptId,
-                Status = ItemStatus.NotStarted
+                Status = ItemStatus.NotStarted,
+                RequestDetail = dto.Details.TryGetValue(at.Id, out var detail) ? detail : null
             });
         }
 
@@ -198,6 +209,35 @@ public class AccountRequestService : IAccountRequestService
         await _audit.LogAsync("UpdateItem", nameof(AccountRequestItem), item.Id.ToString(),
             $"{dto.Status}", ct);
         return Result.Success();
+    }
+
+    public async Task<IReadOnlyList<AccountTypeOptionDto>> GetAccountTypeOptionsAsync(int employeeId, CancellationToken ct = default)
+    {
+        var employee = await _db.Employees.AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Id == employeeId && !e.IsDeleted, ct);
+        if (employee is null) return Array.Empty<AccountTypeOptionDto>();
+
+        var audience = employee.Category == EmployeeCategory.AE
+            ? AccountTypeAudience.AEOnly
+            : AccountTypeAudience.StaffOnly;
+
+        var options = await _db.AccountTypes.AsNoTracking()
+            .Include(a => a.ResponsibleDept)
+            .Where(a => a.IsActive && (a.Audience == AccountTypeAudience.Both || a.Audience == audience))
+            .OrderBy(a => a.SortOrder)
+            .Select(a => new AccountTypeOptionDto
+            {
+                Id = a.Id,
+                Name = a.Name,
+                DeptId = a.ResponsibleDeptId,
+                DeptName = a.ResponsibleDept!.Name,
+                SortOrder = a.SortOrder,
+                RequiresDetail = a.RequiresDetail,
+                DetailLabel = a.DetailLabel
+            })
+            .ToListAsync(ct);
+
+        return options;
     }
 
     public async Task<Result> AddAttachmentAsync(
@@ -337,9 +377,13 @@ public class AccountRequestService : IAccountRequestService
         EmployeeId = r.EmployeeId,
         EmployeeName = r.Employee?.Name ?? string.Empty,
         EmployeeNo = r.Employee?.EmployeeNo ?? string.Empty,
+        EmployeeCategory = r.Employee?.Category ?? EmployeeCategory.Staff,
         RequestType = r.RequestType,
         Status = r.Status,
         Remark = r.Remark,
+        IsNewHeadcount = r.IsNewHeadcount,
+        ReplacementOf = r.ReplacementOf,
+        LastDay = r.LastDay,
         AppliedAt = r.AppliedAt,
         CompletedAt = r.CompletedAt,
         Items = r.Items.Select(MapItem).ToList(),
@@ -358,6 +402,7 @@ public class AccountRequestService : IAccountRequestService
         AssignedDeptName = i.AssignedDept?.Name ?? string.Empty,
         Status = i.Status,
         AccountValue = i.AccountValue,
+        RequestDetail = i.RequestDetail,
         ResultRemark = i.ResultRemark,
         HandledAt = i.HandledAt
     };

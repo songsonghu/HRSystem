@@ -8,6 +8,25 @@ public enum EmployeeStatus
 }
 
 /// <summary>
+/// The category of employee, which determines which paper form layout
+/// ("Staff Requisition Form" vs "AE/Sales/SA Requisition Form") and account
+/// type checklist applies to the account request.
+/// </summary>
+public enum EmployeeCategory
+{
+    Staff = 0,  // General staff - uses the "Staff Requisition Form" layout
+    AE = 1      // Account Executive / Sales / SA (broker) - uses the AE form
+}
+
+/// <summary>Which employee category(ies) an account type applies to.</summary>
+public enum AccountTypeAudience
+{
+    Both = 0,       // Shown on both the Staff and AE forms
+    StaffOnly = 1,  // Shown only on the Staff form
+    AEOnly = 2      // Shown only on the AE/Sales/SA form
+}
+
+/// <summary>
 /// The kind of account request. A single request table serves the whole
 /// lifecycle: onboarding, in-service add/remove, and offboarding.
 /// </summary>

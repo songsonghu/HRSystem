@@ -1,4 +1,5 @@
 using HRSystem.Domain.Common;
+using HRSystem.Domain.Enums;
 
 namespace HRSystem.Domain.Entities;
 
@@ -26,6 +27,19 @@ public class AccountType : BaseEntity
 
     /// <summary>Display order in the request form.</summary>
     public int SortOrder { get; set; }
+
+    /// <summary>Which requisition form (Staff / AE / both) shows this item.</summary>
+    public AccountTypeAudience Audience { get; set; } = AccountTypeAudience.Both;
+
+    /// <summary>
+    /// Whether HR must supply a free-text detail when selecting this item
+    /// (e.g. "Group(s)/Sub-group(s)" for E-mail, "Access profile" for
+    /// E-report/FXES, the license number for SFC License(s)).
+    /// </summary>
+    public bool RequiresDetail { get; set; }
+
+    /// <summary>Label shown next to the detail input, e.g. "Access profile".</summary>
+    public string? DetailLabel { get; set; }
 
     // Navigation
     public Department? ResponsibleDept { get; set; }

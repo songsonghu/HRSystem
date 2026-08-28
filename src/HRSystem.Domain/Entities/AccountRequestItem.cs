@@ -31,6 +31,13 @@ public class AccountRequestItem : BaseEntity
     /// <summary>Result remark / reason entered by the department head.</summary>
     public string? ResultRemark { get; set; }
 
+    /// <summary>
+    /// Free-text detail supplied by HR when raising the request, for items
+    /// that need it (e.g. E-mail "Group(s)/Sub-group(s)", E-report/FXES
+    /// "Access profile", the SFC license number).
+    /// </summary>
+    public string? RequestDetail { get; set; }
+
     /// <summary>Identity user id of the person who handled the item.</summary>
     public string? HandledBy { get; set; }
 

@@ -25,6 +25,18 @@ public class AccountRequest : BaseEntity
     /// <summary>Free-text remark entered by HR.</summary>
     public string? Remark { get; set; }
 
+    /// <summary>
+    /// Staff form only: true for a new headcount, false when this request
+    /// replaces a departing employee ("New Headcount" vs "Replacement of").
+    /// </summary>
+    public bool? IsNewHeadcount { get; set; }
+
+    /// <summary>Staff form only: name of the employee being replaced.</summary>
+    public string? ReplacementOf { get; set; }
+
+    /// <summary>Staff form only: last working day of the employee being replaced.</summary>
+    public DateTime? LastDay { get; set; }
+
     /// <summary>Identity user id of the HR person who applied.</summary>
     public string? AppliedBy { get; set; }
 

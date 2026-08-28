@@ -17,11 +17,13 @@ namespace HRSystem.Web.Controllers;
 public class RequestsController : Controller
 {
     private readonly IAccountRequestService _service;
+    private readonly IEmployeeService _employeeService;
     private readonly AppDbContext _db;
 
-    public RequestsController(IAccountRequestService service, AppDbContext db)
+    public RequestsController(IAccountRequestService service, IEmployeeService employeeService, AppDbContext db)
     {
         _service = service;
+        _employeeService = employeeService;
         _db = db;
     }
 
@@ -42,7 +44,7 @@ public class RequestsController : Controller
     // GET: /Requests/Create
     public async Task<IActionResult> Create(int? employeeId)
     {
-        await PopulateSelectListsAsync();
+        await PopulateSelectListsAsync(employeeId);
         return View(new CreateRequestDto { EmployeeId = employeeId ?? 0 });
     }
 
@@ -53,7 +55,7 @@ public class RequestsController : Controller
     {
         if (!ModelState.IsValid)
         {
-            await PopulateSelectListsAsync();
+            await PopulateSelectListsAsync(dto.EmployeeId);
             return View(dto);
         }
 
@@ -61,7 +63,7 @@ public class RequestsController : Controller
         if (!result.Succeeded)
         {
             ModelState.AddModelError(string.Empty, result.Error!);
-            await PopulateSelectListsAsync();
+            await PopulateSelectListsAsync(dto.EmployeeId);
             return View(dto);
         }
 
@@ -99,22 +101,32 @@ public class RequestsController : Controller
         return RedirectToAction(nameof(Details), new { id });
     }
 
-    /// <summary>Populate employee and account-type pickers for the create form.</summary>
-    private async Task PopulateSelectListsAsync()
+    /// <summary>
+    /// Populate the employee picker and the account-type checklist for the
+    /// create form. The checklist is filtered to the Staff or AE/Sales/SA
+    /// form (matching the paper requisition forms) based on the selected
+    /// employee's category.
+    /// </summary>
+    private async Task PopulateSelectListsAsync(int? employeeId)
     {
         var employees = await _db.Employees.AsNoTracking()
             .OrderBy(e => e.Name)
             .Select(e => new SelectListItem($"{e.Name} ({e.EmployeeNo})", e.Id.ToString()))
             .ToListAsync();
 
-        var accountTypes = await _db.AccountTypes.AsNoTracking()
-            .Where(a => a.IsActive)
-            .OrderBy(a => a.SortOrder)
-            .Select(a => new { a.Id, a.Name })
-            .ToListAsync();
+        var selectedEmployee = employeeId is > 0
+            ? await _employeeService.GetAsync(employeeId.Value)
+            : null;
+
+        var accountTypeGroups = selectedEmployee is null
+            ? new List<IGrouping<string, AccountTypeOptionDto>>()
+            : (await _service.GetAccountTypeOptionsAsync(selectedEmployee.Id))
+                .GroupBy(a => a.DeptName)
+                .ToList();
 
         ViewBag.Employees = employees;
-        ViewBag.AccountTypes = accountTypes;
+        ViewBag.SelectedEmployee = selectedEmployee;
+        ViewBag.AccountTypeGroups = accountTypeGroups;
         ViewBag.RequestTypes = Enum.GetValues<RequestType>()
             .Select(t => new SelectListItem(t.ToString(), ((int)t).ToString()))
             .ToList();

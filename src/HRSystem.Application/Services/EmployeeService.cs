@@ -59,7 +59,8 @@ public class EmployeeService : IEmployeeService
             Position = dto.Position,
             JoinDate = dto.JoinDate,
             ResignDate = dto.ResignDate,
-            Status = dto.Status
+            Status = dto.Status,
+            Category = dto.Category
         };
 
         _db.Employees.Add(entity);
@@ -80,6 +81,7 @@ public class EmployeeService : IEmployeeService
         entity.JoinDate = dto.JoinDate;
         entity.ResignDate = dto.ResignDate;
         entity.Status = dto.Status;
+        entity.Category = dto.Category;
 
         // Stamp resignation date automatically when moving to Resigned.
         if (dto.Status == EmployeeStatus.Resigned && entity.ResignDate is null)
@@ -111,6 +113,7 @@ public class EmployeeService : IEmployeeService
         Position = e.Position,
         JoinDate = e.JoinDate,
         ResignDate = e.ResignDate,
-        Status = e.Status
+        Status = e.Status,
+        Category = e.Category
     };
 }

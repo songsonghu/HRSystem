@@ -32,6 +32,12 @@
         <input asp-for="Position" class="form-control" />
     </div>
     <div class="mb-3">
+        <label asp-for="Category" class="form-label">Employee Category</label>
+        <select asp-for="Category" class="form-select"
+                asp-items="Html.GetEnumSelectList<EmployeeCategory>()"></select>
+        <div class="form-text">Determines which account request form (Staff or AE/Sales/SA) applies to this employee.</div>
+    </div>
+    <div class="mb-3">
         <label asp-for="JoinDate" class="form-label">Join Date</label>
         <input asp-for="JoinDate" type="date" class="form-control" />
     </div>

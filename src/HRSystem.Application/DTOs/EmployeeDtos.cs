@@ -14,6 +14,7 @@ public class EmployeeDto
     public DateTime JoinDate { get; set; }
     public DateTime? ResignDate { get; set; }
     public EmployeeStatus Status { get; set; }
+    public EmployeeCategory Category { get; set; }
 }
 
 /// <summary>Create/update model for an employee.</summary>
@@ -28,4 +29,5 @@ public class EmployeeEditDto
     public DateTime JoinDate { get; set; } = DateTime.Today;
     public DateTime? ResignDate { get; set; }
     public EmployeeStatus Status { get; set; } = EmployeeStatus.Active;
+    public EmployeeCategory Category { get; set; } = EmployeeCategory.Staff;
 }

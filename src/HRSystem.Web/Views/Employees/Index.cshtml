@@ -19,7 +19,7 @@
     <thead>
         <tr>
             <th>Emp No.</th><th>Name</th><th>Department</th><th>Position</th>
-            <th>Join Date</th><th>Status</th><th></th>
+            <th>Category</th><th>Join Date</th><th>Status</th><th></th>
         </tr>
     </thead>
     <tbody>
@@ -30,6 +30,7 @@
             <td>@e.Name</td>
             <td>@e.Department</td>
             <td>@e.Position</td>
+            <td><span class="badge bg-light text-dark border">@(e.Category == EmployeeCategory.AE ? "AE/Sales/SA" : "Staff")</span></td>
             <td>@e.JoinDate.ToString("yyyy-MM-dd")</td>
             <td>
                 <span class="badge @(e.Status == EmployeeStatus.Active ? "bg-success" : "bg-secondary")">@e.Status</span>

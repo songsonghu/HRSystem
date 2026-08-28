@@ -22,7 +22,17 @@
 
 <dl class="row col-md-8">
     <dt class="col-sm-3">Employee</dt><dd class="col-sm-9">@Model.EmployeeName (@Model.EmployeeNo)</dd>
+    <dt class="col-sm-3">Category</dt><dd class="col-sm-9">@(Model.EmployeeCategory == EmployeeCategory.AE ? "AE/Sales/SA" : "Staff")</dd>
     <dt class="col-sm-3">Type</dt><dd class="col-sm-9">@Model.RequestType</dd>
+    @if (Model.IsNewHeadcount == true)
+    {
+        <dt class="col-sm-3">Headcount</dt><dd class="col-sm-9">New Headcount</dd>
+    }
+    else if (Model.IsNewHeadcount == false)
+    {
+        <dt class="col-sm-3">Headcount</dt>
+        <dd class="col-sm-9">Replacement of @Model.ReplacementOf @(Model.LastDay is null ? "" : $"(last day {Model.LastDay:yyyy-MM-dd})")</dd>
+    }
     <dt class="col-sm-3">Remark</dt><dd class="col-sm-9">@Model.Remark</dd>
     <dt class="col-sm-3">Applied</dt><dd class="col-sm-9">@(Model.AppliedAt?.ToString("yyyy-MM-dd HH:mm") ?? "-")</dd>
 </dl>
@@ -30,7 +40,7 @@
 <h4 class="mt-4">Account Items</h4>
 <table class="table table-bordered align-middle">
     <thead class="table-light">
-        <tr><th>Account Type</th><th>Responsible Dept</th><th>Account Value</th><th>Status</th><th>Handled</th><th>Result</th></tr>
+        <tr><th>Account Type</th><th>Responsible Dept</th><th>Detail</th><th>Account Value</th><th>Status</th><th>Handled</th><th>Result</th></tr>
     </thead>
     <tbody>
     @foreach (var i in Model.Items)
@@ -38,6 +48,7 @@
         <tr>
             <td>@i.AccountTypeName</td>
             <td>@i.AssignedDeptName</td>
+            <td>@i.RequestDetail</td>
             <td>@i.AccountValue</td>
             <td><span class="badge @ItemBadge(i.Status)">@i.Status</span></td>
             <td>@(i.HandledAt?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>

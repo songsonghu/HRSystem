@@ -19,6 +19,10 @@
             <span class="badge bg-warning text-dark">@i.Status</span>
         </div>
         <div class="card-body">
+            @if (!string.IsNullOrWhiteSpace(i.RequestDetail))
+            {
+                <p class="text-muted mb-2">Requested detail: <b>@i.RequestDetail</b></p>
+            }
             <form asp-action="Update" method="post" class="row g-2 align-items-end">
                 @Html.AntiForgeryToken()
                 <input type="hidden" name="ItemId" value="@i.Id" />

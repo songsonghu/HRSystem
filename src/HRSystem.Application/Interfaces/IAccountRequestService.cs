@@ -35,6 +35,13 @@ public interface IAccountRequestService
     /// </summary>
     Task<Result> UpdateItemAsync(UpdateItemDto dto, CancellationToken ct = default);
 
+    /// <summary>
+    /// Get the account type checklist applicable to the given employee
+    /// (Staff or AE/Sales/SA form), grouped by responsible department and
+    /// ordered as printed on the paper requisition forms.
+    /// </summary>
+    Task<IReadOnlyList<AccountTypeOptionDto>> GetAccountTypeOptionsAsync(int employeeId, CancellationToken ct = default);
+
     /// <summary>Attach a scanned, signed approval document to a request.</summary>
     Task<Result> AddAttachmentAsync(
         int requestId, Stream content, string fileName, string? contentType, CancellationToken ct = default);

@@ -11,6 +11,7 @@
     <dt class="col-sm-4">Email</dt><dd class="col-sm-8">@Model.Email</dd>
     <dt class="col-sm-4">Department</dt><dd class="col-sm-8">@Model.Department</dd>
     <dt class="col-sm-4">Position</dt><dd class="col-sm-8">@Model.Position</dd>
+    <dt class="col-sm-4">Category</dt><dd class="col-sm-8">@(Model.Category == EmployeeCategory.AE ? "AE/Sales/SA" : "Staff")</dd>
     <dt class="col-sm-4">Join Date</dt><dd class="col-sm-8">@Model.JoinDate.ToString("yyyy-MM-dd")</dd>
     <dt class="col-sm-4">Status</dt><dd class="col-sm-8">@Model.Status</dd>
 </dl>

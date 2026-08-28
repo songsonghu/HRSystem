@@ -45,6 +45,7 @@ public class AccountTypeConfig : IEntityTypeConfiguration<AccountType>
         b.HasIndex(x => x.Code).IsUnique();
         b.Property(x => x.Name).HasMaxLength(100).IsRequired();
         b.Property(x => x.Description).HasMaxLength(500);
+        b.Property(x => x.DetailLabel).HasMaxLength(100);
         b.HasOne(x => x.ResponsibleDept)
             .WithMany(d => d.AccountTypes)
             .HasForeignKey(x => x.ResponsibleDeptId)
@@ -62,6 +63,7 @@ public class AccountRequestConfig : IEntityTypeConfiguration<AccountRequest>
         b.Property(x => x.RequestNo).HasMaxLength(30).IsRequired();
         b.HasIndex(x => x.RequestNo).IsUnique();
         b.Property(x => x.Remark).HasMaxLength(1000);
+        b.Property(x => x.ReplacementOf).HasMaxLength(100);
         b.HasOne(x => x.Employee)
             .WithMany(e => e.AccountRequests)
             .HasForeignKey(x => x.EmployeeId)
@@ -78,6 +80,7 @@ public class AccountRequestItemConfig : IEntityTypeConfiguration<AccountRequestI
         b.HasKey(x => x.Id);
         b.Property(x => x.AccountValue).HasMaxLength(200);
         b.Property(x => x.ResultRemark).HasMaxLength(1000);
+        b.Property(x => x.RequestDetail).HasMaxLength(500);
         b.Property(x => x.AssignedUserId).HasMaxLength(450);
         b.HasOne(x => x.Request)
             .WithMany(r => r.Items)
