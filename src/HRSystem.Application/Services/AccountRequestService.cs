@@ -58,6 +58,8 @@ public class AccountRequestService : IAccountRequestService
             .ToListAsync(ct);
 
         if (accountTypes.Count == 0) return Result<int>.Fail("No valid account types selected.");
+        if (accountTypes.Count != dto.AccountTypeIds.Distinct().Count())
+            return Result<int>.Fail("One or more selected account types are not available for this employee's requisition form.");
 
         var request = new AccountRequest
         {

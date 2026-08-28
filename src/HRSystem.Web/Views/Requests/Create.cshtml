@@ -64,7 +64,7 @@
                     <input asp-for="ReplacementOf" class="form-control form-control-sm d-inline-block w-auto ms-2" placeholder="name of employee replaced" />
                     <label class="ms-3">Last day</label>
                     <input asp-for="LastDay" type="date" class="form-control form-control-sm d-inline-block w-auto ms-2" />
-                    <input type="hidden" asp-for="IsNewHeadcount" id="isNewHeadcount" value="@((Model.IsNewHeadcount != false).ToString().ToLowerInvariant())" />
+                    <input type="hidden" name="IsNewHeadcount" id="isNewHeadcount" value="@((Model.IsNewHeadcount != false).ToString().ToLowerInvariant())" />
                 </div>
             </div>
         }
