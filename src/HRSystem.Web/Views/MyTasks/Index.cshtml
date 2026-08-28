@@ -1,0 +1,45 @@
+@model IReadOnlyList<RequestItemDto>
+@{
+    ViewData["Title"] = "My Tasks";
+}
+
+<h2>My Tasks</h2>
+<p class="text-muted">Account provisioning items dispatched to your department. Open the account, then set the status and submit.</p>
+
+@if (Model.Count == 0)
+{
+    <div class="alert alert-info">You have no pending items. 🎉</div>
+}
+
+@foreach (var i in Model)
+{
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between">
+            <span><b>@i.AccountTypeName</b></span>
+            <span class="badge bg-warning text-dark">@i.Status</span>
+        </div>
+        <div class="card-body">
+            <form asp-action="Update" method="post" class="row g-2 align-items-end">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="ItemId" value="@i.Id" />
+
+                <div class="col-md-3">
+                    <label class="form-label">Account Value</label>
+                    <input name="AccountValue" value="@i.AccountValue" class="form-control" placeholder="login / id" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Status</label>
+                    <select name="Status" class="form-select"
+                            asp-items="Html.GetEnumSelectList<ItemStatus>()"></select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Result Remark</label>
+                    <input name="ResultRemark" value="@i.ResultRemark" class="form-control" />
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-primary w-100">Submit</button>
+                </div>
+            </form>
+        </div>
+    </div>
+}

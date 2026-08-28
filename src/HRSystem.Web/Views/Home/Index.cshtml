@@ -1,0 +1,44 @@
+@{
+    ViewData["Title"] = "Home";
+}
+
+<div class="p-4 bg-light rounded-3 mb-4">
+    <h1 class="display-6">HR System</h1>
+    <p class="lead">Employee onboarding, account provisioning workflow, and offboarding — built on ASP.NET Core 8.0.</p>
+</div>
+
+<div class="row g-3">
+    @if (User.IsInRole("Admin") || User.IsInRole("HR"))
+    {
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Employees</h5>
+                    <p class="card-text">Create, edit, and manage employee records.</p>
+                    <a class="btn btn-primary" asp-controller="Employees" asp-action="Index">Open</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Account Requests</h5>
+                    <p class="card-text">Raise onboarding/add/remove requests and track status.</p>
+                    <a class="btn btn-primary" asp-controller="Requests" asp-action="Index">Open</a>
+                </div>
+            </div>
+        </div>
+    }
+    @if (User.IsInRole("Admin") || User.IsInRole("DeptHead"))
+    {
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">My Tasks</h5>
+                    <p class="card-text">Process account provisioning items assigned to your department.</p>
+                    <a class="btn btn-primary" asp-controller="MyTasks" asp-action="Index">Open</a>
+                </div>
+            </div>
+        </div>
+    }
+</div>

@@ -1,0 +1,39 @@
+@using HRSystem.Application.Interfaces
+@model IReadOnlyList<OffboardAccountRow>
+@{
+    ViewData["Title"] = "Offboarding";
+    var emp = ViewBag.Employee as EmployeeDto;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Offboarding — @emp!.Name <small class="text-muted">(@emp.EmployeeNo)</small></h2>
+    <a class="btn btn-success" asp-action="Export" asp-route-id="@emp.Id">⬇ Export Excel</a>
+</div>
+
+<p class="text-muted">All currently active accounts held by this employee. Use the export to drive the de-provisioning checklist.</p>
+
+<table class="table table-bordered">
+    <thead class="table-light">
+        <tr><th>#</th><th>Account Type</th><th>Account Value</th><th>Status</th><th>Opened At</th></tr>
+    </thead>
+    <tbody>
+    @{ var idx = 1; }
+    @foreach (var row in Model)
+    {
+        <tr>
+            <td>@idx</td>
+            <td>@row.AccountTypeName</td>
+            <td>@row.AccountValue</td>
+            <td><span class="badge bg-success">@row.Status</span></td>
+            <td>@row.OpenedAt.ToString("yyyy-MM-dd")</td>
+        </tr>
+        idx++;
+    }
+    @if (Model.Count == 0)
+    {
+        <tr><td colspan="5" class="text-center text-muted">No active accounts found.</td></tr>
+    }
+    </tbody>
+</table>
+
+<a class="btn btn-secondary" asp-controller="Employees" asp-action="Index">Back</a>

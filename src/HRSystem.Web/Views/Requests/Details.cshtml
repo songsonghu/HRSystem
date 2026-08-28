@@ -1,0 +1,84 @@
+@model RequestDto
+@{
+    ViewData["Title"] = "Request " + Model.RequestNo;
+}
+
+@functions {
+    string ItemBadge(ItemStatus s) => s switch
+    {
+        ItemStatus.NotStarted => "bg-secondary",
+        ItemStatus.WIP => "bg-warning text-dark",
+        ItemStatus.Completed => "bg-success",
+        ItemStatus.KIV => "bg-info text-dark",
+        ItemStatus.Rejected => "bg-danger",
+        _ => "bg-dark"
+    };
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Request @Model.RequestNo</h2>
+    <span class="badge bg-primary fs-6">@Model.Status</span>
+</div>
+
+<dl class="row col-md-8">
+    <dt class="col-sm-3">Employee</dt><dd class="col-sm-9">@Model.EmployeeName (@Model.EmployeeNo)</dd>
+    <dt class="col-sm-3">Type</dt><dd class="col-sm-9">@Model.RequestType</dd>
+    <dt class="col-sm-3">Remark</dt><dd class="col-sm-9">@Model.Remark</dd>
+    <dt class="col-sm-3">Applied</dt><dd class="col-sm-9">@(Model.AppliedAt?.ToString("yyyy-MM-dd HH:mm") ?? "-")</dd>
+</dl>
+
+<h4 class="mt-4">Account Items</h4>
+<table class="table table-bordered align-middle">
+    <thead class="table-light">
+        <tr><th>Account Type</th><th>Responsible Dept</th><th>Account Value</th><th>Status</th><th>Handled</th><th>Result</th></tr>
+    </thead>
+    <tbody>
+    @foreach (var i in Model.Items)
+    {
+        <tr>
+            <td>@i.AccountTypeName</td>
+            <td>@i.AssignedDeptName</td>
+            <td>@i.AccountValue</td>
+            <td><span class="badge @ItemBadge(i.Status)">@i.Status</span></td>
+            <td>@(i.HandledAt?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>
+            <td>@i.ResultRemark</td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <h5>Attachments (signed approval)</h5>
+        <ul>
+            @foreach (var a in Model.Attachments)
+            {
+                <li>@a.FileName <small class="text-muted">(@(a.FileSize / 1024) KB)</small></li>
+            }
+            @if (Model.Attachments.Count == 0) { <li class="text-muted">No files uploaded.</li> }
+        </ul>
+        <form asp-action="Upload" asp-route-id="@Model.Id" method="post" enctype="multipart/form-data" class="input-group">
+            @Html.AntiForgeryToken()
+            <input type="file" name="file" class="form-control" required />
+            <button class="btn btn-outline-secondary">Upload</button>
+        </form>
+    </div>
+    <div class="col-md-6">
+        <h5>Actions</h5>
+        @if (Model.Status == RequestStatus.Draft)
+        {
+            <form asp-action="Submit" asp-route-id="@Model.Id" method="post"
+                  onsubmit="return confirm('Submit and notify departments?');">
+                @Html.AntiForgeryToken()
+                <button class="btn btn-success">Submit &amp; Dispatch</button>
+            </form>
+            <p class="text-muted mt-2">Submitting triggers the new-employee email and notifies each responsible department head.</p>
+        }
+        else
+        {
+            <p class="text-muted">This request has been submitted and is being processed.</p>
+        }
+    </div>
+</div>
+
+<a class="btn btn-secondary mt-3" asp-action="Index">Back to list</a>

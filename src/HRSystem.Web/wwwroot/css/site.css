@@ -1,0 +1,5 @@
+/* HR System custom styles */
+body { min-height: 100vh; }
+.table thead th { white-space: nowrap; }
+.badge-status { font-size: 0.8rem; }
+main { padding-bottom: 2rem; }

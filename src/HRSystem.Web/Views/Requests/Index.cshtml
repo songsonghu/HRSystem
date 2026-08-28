@@ -1,0 +1,44 @@
+@model IReadOnlyList<RequestDto>
+@{
+    ViewData["Title"] = "Account Requests";
+}
+
+@functions {
+    string StatusBadge(RequestStatus s) => s switch
+    {
+        RequestStatus.Draft => "bg-secondary",
+        RequestStatus.Submitted => "bg-info",
+        RequestStatus.InProgress => "bg-warning text-dark",
+        RequestStatus.Completed => "bg-success",
+        _ => "bg-dark"
+    };
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Account Requests</h2>
+    <a class="btn btn-success" asp-action="Create">+ New Request</a>
+</div>
+
+<table class="table table-striped table-hover align-middle">
+    <thead>
+        <tr>
+            <th>Request No.</th><th>Employee</th><th>Type</th>
+            <th>Progress</th><th>Status</th><th>Applied</th><th></th>
+        </tr>
+    </thead>
+    <tbody>
+    @foreach (var r in Model)
+    {
+        var done = r.Items.Count(i => i.Status == ItemStatus.Completed || i.Status == ItemStatus.Rejected);
+        <tr>
+            <td>@r.RequestNo</td>
+            <td>@r.EmployeeName <small class="text-muted">(@r.EmployeeNo)</small></td>
+            <td>@r.RequestType</td>
+            <td>@done / @r.Items.Count</td>
+            <td><span class="badge @StatusBadge(r.Status)">@r.Status</span></td>
+            <td>@(r.AppliedAt?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>
+            <td><a class="btn btn-sm btn-outline-primary" asp-action="Details" asp-route-id="@r.Id">View</a></td>
+        </tr>
+    }
+    </tbody>
+</table>

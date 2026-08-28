@@ -1,0 +1,54 @@
+@model EmployeeEditDto
+@{
+    ViewData["Title"] = "Edit Employee";
+}
+
+<h2>Edit Employee</h2>
+<hr />
+
+<form asp-action="Edit" method="post" class="col-md-6">
+    <div asp-validation-summary="All" class="text-danger"></div>
+    <input type="hidden" asp-for="Id" />
+
+    <div class="mb-3">
+        <label asp-for="EmployeeNo" class="form-label">Employee No.</label>
+        <input asp-for="EmployeeNo" class="form-control" readonly />
+    </div>
+    <div class="mb-3">
+        <label asp-for="Name" class="form-label">Name</label>
+        <input asp-for="Name" class="form-control" />
+        <span asp-validation-for="Name" class="text-danger"></span>
+    </div>
+    <div class="mb-3">
+        <label asp-for="Email" class="form-label">Email</label>
+        <input asp-for="Email" class="form-control" />
+    </div>
+    <div class="mb-3">
+        <label asp-for="Department" class="form-label">Department</label>
+        <input asp-for="Department" class="form-control" />
+    </div>
+    <div class="mb-3">
+        <label asp-for="Position" class="form-label">Position</label>
+        <input asp-for="Position" class="form-control" />
+    </div>
+    <div class="row">
+        <div class="col mb-3">
+            <label asp-for="JoinDate" class="form-label">Join Date</label>
+            <input asp-for="JoinDate" type="date" class="form-control" />
+        </div>
+        <div class="col mb-3">
+            <label asp-for="ResignDate" class="form-label">Resign Date</label>
+            <input asp-for="ResignDate" type="date" class="form-control" />
+        </div>
+    </div>
+    <div class="mb-3">
+        <label asp-for="Status" class="form-label">Status</label>
+        <select asp-for="Status" class="form-select"
+                asp-items="Html.GetEnumSelectList<EmployeeStatus>()"></select>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a class="btn btn-secondary" asp-action="Index">Cancel</a>
+</form>
+
+@section Scripts { <partial name="_ValidationScriptsPartial" /> }

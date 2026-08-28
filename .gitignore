@@ -1,0 +1,52 @@
+# ---- .NET build output ----
+bin/
+obj/
+out/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# ---- Visual Studio / Rider / VS Code ----
+.vs/
+.vscode/
+.idea/
+*.swp
+
+# ---- Build results / packages ----
+*.dll
+*.pdb
+*.cache
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# ---- ASP.NET Core ----
+appsettings.*.local.json
+*.pfx
+wwwroot/lib/
+
+# ---- Runtime data (uploads, logs) ----
+src/HR.Web/App_Data/
+App_Data/
+App_Data/uploads/
+logs/
+
+# ---- EF Core ----
+# Keep migrations under source control; ignore local SQLite if any
+*.db
+*.db-shm
+*.db-wal
+
+# ---- OS files ----
+.DS_Store
+Thumbs.db
+
+# ---- User secrets (never commit) ----
+secrets.json
