@@ -26,6 +26,19 @@ public enum AccountTypeAudience
     AEOnly = 2      // Shown only on the AE/Sales/SA form
 }
 
+/// <summary>Helpers bridging <see cref="EmployeeCategory"/> and <see cref="AccountTypeAudience"/>.</summary>
+public static class EmployeeCategoryExtensions
+{
+    /// <summary>
+    /// The form-specific audience matching this employee category (used to
+    /// filter account types, in addition to <see cref="AccountTypeAudience.Both"/>).
+    /// Kept in one place so the checklist shown to HR and the server-side
+    /// validation in <c>AccountRequestService</c> can never disagree.
+    /// </summary>
+    public static AccountTypeAudience ToAudience(this EmployeeCategory category) =>
+        category == EmployeeCategory.AE ? AccountTypeAudience.AEOnly : AccountTypeAudience.StaffOnly;
+}
+
 /// <summary>
 /// The kind of account request. A single request table serves the whole
 /// lifecycle: onboarding, in-service add/remove, and offboarding.

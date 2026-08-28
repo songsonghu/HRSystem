@@ -50,9 +50,7 @@ public class AccountRequestService : IAccountRequestService
         // Load the selected account types together with their responsible dept,
         // restricted to those visible on this employee's requisition form
         // (Staff or AE/Sales/SA).
-        var audience = employee.Category == EmployeeCategory.AE
-            ? AccountTypeAudience.AEOnly
-            : AccountTypeAudience.StaffOnly;
+        var audience = employee.Category.ToAudience();
 
         var accountTypes = await _db.AccountTypes
             .Where(a => dto.AccountTypeIds.Contains(a.Id) && a.IsActive
@@ -217,9 +215,7 @@ public class AccountRequestService : IAccountRequestService
             .FirstOrDefaultAsync(e => e.Id == employeeId && !e.IsDeleted, ct);
         if (employee is null) return Array.Empty<AccountTypeOptionDto>();
 
-        var audience = employee.Category == EmployeeCategory.AE
-            ? AccountTypeAudience.AEOnly
-            : AccountTypeAudience.StaffOnly;
+        var audience = employee.Category.ToAudience();
 
         var options = await _db.AccountTypes.AsNoTracking()
             .Include(a => a.ResponsibleDept)
