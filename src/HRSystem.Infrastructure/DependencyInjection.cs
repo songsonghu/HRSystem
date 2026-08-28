@@ -37,6 +37,16 @@ public static class DependencyInjection
             .AddEntityFrameworkStores<AppDbContext>()
             .AddDefaultTokenProviders();
 
+        // Point the Identity cookie at the actual Razor Page routes under the
+        // "Identity" area (the default paths "/Account/Login" etc. do not
+        // exist and would otherwise result in a 404).
+        services.ConfigureApplicationCookie(options =>
+        {
+            options.LoginPath = "/Identity/Account/Login";
+            options.LogoutPath = "/Identity/Account/Logout";
+            options.AccessDeniedPath = "/Identity/Account/AccessDenied";
+        });
+
         // Bind options
         services.Configure<SmtpOptions>(config.GetSection("Smtp"));
         services.Configure<FileStorageOptions>(config.GetSection("FileStorage"));
