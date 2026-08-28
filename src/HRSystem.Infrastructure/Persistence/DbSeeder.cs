@@ -78,28 +78,33 @@ public static class DbSeeder
                 new AccountType { Code = "TradingSystem",Name = "Trading System (Ayers/Sharp Point)",       ResponsibleDeptId = depts["CREDIT"], Audience = both, SortOrder = ++order },
                 new AccountType { Code = "CreditOthers", Name = "Others",                                   ResponsibleDeptId = depts["CREDIT"], Audience = both, SortOrder = ++order, RequiresDetail = true, DetailLabel = "Specify" },
 
-                // --- IT Department (Staff form) ---
+                // --- IT Department (shared items, then Staff-only, then AE-only) ---
+                // NOTE: the SortOrder values below are chosen so that filtering by
+                // audience reproduces each paper form's exact item order, even
+                // though "E-report" and "Network Log on ID" swap relative order
+                // between the two forms (Staff: E-report then Network Log on ID;
+                // AE: Network Log on ID then E-report) - this is why "Network Log
+                // on ID" is modeled as two separate rows, one per audience.
                 new AccountType { Code = "PC",           Name = "PC",                                       ResponsibleDeptId = depts["IT"],     Audience = both, SortOrder = ++order },
+                new AccountType { Code = "Email",        Name = "E-mail Account",                            ResponsibleDeptId = depts["IT"],     Audience = both, SortOrder = ++order, RequiresDetail = true, DetailLabel = "Group(s) / Sub-group(s)" },
                 new AccountType { Code = "IBOSystem",    Name = "IBO System (HK/SG/US)",                    ResponsibleDeptId = depts["IT"],     Audience = s,    SortOrder = ++order },
                 new AccountType { Code = "AFEEquity",    Name = "AFE Equity Stock Option Back Office System",ResponsibleDeptId = depts["IT"],    Audience = s,    SortOrder = ++order },
                 new AccountType { Code = "AFEFutures",   Name = "AFE Global Futures Back Office System",    ResponsibleDeptId = depts["IT"],     Audience = s,    SortOrder = ++order },
                 new AccountType { Code = "SunAccount",   Name = "Sun Account System",                       ResponsibleDeptId = depts["IT"],     Audience = s,    SortOrder = ++order },
-                new AccountType { Code = "EReport",      Name = "E-report",                                 ResponsibleDeptId = depts["IT"],     Audience = both, SortOrder = ++order, RequiresDetail = true, DetailLabel = "Access profile" },
-                new AccountType { Code = "NetworkLogon", Name = "Network Log on ID",                        ResponsibleDeptId = depts["IT"],     Audience = both, SortOrder = ++order },
-                new AccountType { Code = "WebBanking",   Name = "Web Banking System \u2013 HSBC / SCB / BOC (CBS)", ResponsibleDeptId = depts["IT"], Audience = s, SortOrder = ++order },
-                new AccountType { Code = "VoiceRecording",Name = "Voice recording",                          ResponsibleDeptId = depts["IT"],     Audience = s,    SortOrder = ++order },
-                new AccountType { Code = "ITOthers",     Name = "Others",                                   ResponsibleDeptId = depts["IT"],     Audience = s,    SortOrder = ++order, RequiresDetail = true, DetailLabel = "Specify" },
-                new AccountType { Code = "Email",        Name = "E-mail Account",                            ResponsibleDeptId = depts["IT"],     Audience = both, SortOrder = ++order, RequiresDetail = true, DetailLabel = "Group(s) / Sub-group(s)" },
-
-                // --- IT Department (AE/Sales/SA form) ---
                 new AccountType { Code = "NextView",     Name = "NextView/Reuters/Bloomberg",               ResponsibleDeptId = depts["IT"],     Audience = ae,   SortOrder = ++order },
                 new AccountType { Code = "SharpPoint",   Name = "Sharp Point",                               ResponsibleDeptId = depts["IT"],     Audience = ae,   SortOrder = ++order },
                 new AccountType { Code = "ETnetAFE",     Name = "ETnet/AFE/Infocast",                        ResponsibleDeptId = depts["IT"],     Audience = ae,   SortOrder = ++order },
                 new AccountType { Code = "Ayers",        Name = "Ayers",                                     ResponsibleDeptId = depts["IT"],     Audience = ae,   SortOrder = ++order },
+                new AccountType { Code = "NetworkLogonAE",Name = "Network Log on ID",                        ResponsibleDeptId = depts["IT"],     Audience = ae,   SortOrder = ++order },
+                new AccountType { Code = "EReport",      Name = "E-report",                                 ResponsibleDeptId = depts["IT"],     Audience = both, SortOrder = ++order, RequiresDetail = true, DetailLabel = "Access profile" },
+                new AccountType { Code = "NetworkLogonStaff",Name = "Network Log on ID",                     ResponsibleDeptId = depts["IT"],     Audience = s,    SortOrder = ++order, RequiresDetail = true, DetailLabel = "Access profile" },
+                new AccountType { Code = "WebBanking",   Name = "Web Banking System \u2013 HSBC / SCB / BOC (CBS)", ResponsibleDeptId = depts["IT"], Audience = s, SortOrder = ++order },
+                new AccountType { Code = "VoiceRecording",Name = "Voice recording",                          ResponsibleDeptId = depts["IT"],     Audience = s,    SortOrder = ++order },
+                new AccountType { Code = "ITOthers",     Name = "Others",                                   ResponsibleDeptId = depts["IT"],     Audience = s,    SortOrder = ++order, RequiresDetail = true, DetailLabel = "Specify" },
                 new AccountType { Code = "FXES",         Name = "FXES",                                      ResponsibleDeptId = depts["IT"],     Audience = ae,   SortOrder = ++order, RequiresDetail = true, DetailLabel = "Access profile: AE / PWM" },
 
                 // --- HR & Administration Department (both forms) ---
-                new AccountType { Code = "Telephone",    Name = "Telephone",                                ResponsibleDeptId = depts["HR"],     Audience = both, SortOrder = ++order, RequiresDetail = true, DetailLabel = "Extension(s) / line details" },
+                new AccountType { Code = "Telephone",    Name = "Telephone - 1 internal extension",         ResponsibleDeptId = depts["HR"],     Audience = both, SortOrder = ++order },
                 new AccountType { Code = "NameCard",     Name = "Name Card",                                ResponsibleDeptId = depts["HR"],     Audience = both, SortOrder = ++order },
                 new AccountType { Code = "AccessRight4F",Name = "Access Right - 4/F",                        ResponsibleDeptId = depts["HR"],     Audience = both, SortOrder = ++order },
                 new AccountType { Code = "AccessRight5F",Name = "Access Right - 5/F",                        ResponsibleDeptId = depts["HR"],     Audience = both, SortOrder = ++order },
