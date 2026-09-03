@@ -2,6 +2,7 @@ using HRSystem.Application.DTOs;
 using HRSystem.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
 
 namespace HRSystem.Web.Controllers;
 
@@ -47,7 +48,11 @@ public class EmployeesController : Controller
     }
 
     // GET: /Employees/Create
-    public IActionResult Create() => View(new EmployeeEditDto());
+    public async Task<IActionResult> Create()
+    {
+        await PopulateDepartmentsAsync();
+        return View(new EmployeeEditDto());
+    }
 
     // POST: /Employees/Create
     [HttpPost]
@@ -56,12 +61,17 @@ public class EmployeesController : Controller
     public async Task<IActionResult> Create(EmployeeEditDto dto, List<IFormFile>? attachments)
     {
         ValidateAttachments(attachments);
-        if (!ModelState.IsValid) return View(dto);
+        if (!ModelState.IsValid)
+        {
+            await PopulateDepartmentsAsync();
+            return View(dto);
+        }
 
         var result = await _service.CreateAsync(dto);
         if (!result.Succeeded)
         {
             ModelState.AddModelError(string.Empty, result.Error!);
+            await PopulateDepartmentsAsync();
             return View(dto);
         }
 
@@ -87,6 +97,7 @@ public class EmployeesController : Controller
         var dto = await _service.GetAsync(id);
         if (dto is null) return NotFound();
 
+        await PopulateDepartmentsAsync();
         return View(new EmployeeEditDto
         {
             Id = dto.Id,
@@ -114,6 +125,7 @@ public class EmployeesController : Controller
         {
             var employee = await _service.GetAsync(dto.Id);
             dto.Attachments = employee?.Attachments ?? Array.Empty<EmployeeAttachmentDto>();
+            await PopulateDepartmentsAsync();
             return View(dto);
         }
 
@@ -123,6 +135,7 @@ public class EmployeesController : Controller
             ModelState.AddModelError(string.Empty, result.Error!);
             var employee = await _service.GetAsync(dto.Id);
             dto.Attachments = employee?.Attachments ?? Array.Empty<EmployeeAttachmentDto>();
+            await PopulateDepartmentsAsync();
             return View(dto);
         }
 
@@ -159,6 +172,14 @@ public class EmployeesController : Controller
         var result = await _service.DeleteAsync(id);
         TempData[result.Succeeded ? "Success" : "Error"] = result.Succeeded ? "Employee deleted." : result.Error;
         return RedirectToAction(nameof(Index));
+    }
+
+    private async Task PopulateDepartmentsAsync()
+    {
+        var departments = await _service.GetDepartmentNamesAsync();
+        ViewBag.Departments = departments
+            .Select(name => new SelectListItem(name, name))
+            .ToList();
     }
 
     private void ValidateAttachments(IEnumerable<IFormFile>? attachments)

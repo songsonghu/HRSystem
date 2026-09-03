@@ -19,4 +19,5 @@ public interface IEmployeeService
     Task<Result> ReplaceAttachmentsAsync(int employeeId, IReadOnlyList<EmployeeAttachmentUpload> attachments,
         CancellationToken ct = default);
     Task<EmployeeAttachmentFile?> OpenAttachmentAsync(int employeeId, int attachmentId, CancellationToken ct = default);
+    Task<IReadOnlyList<string>> GetDepartmentNamesAsync(CancellationToken ct = default);
 }

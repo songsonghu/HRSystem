@@ -59,6 +59,49 @@ public static class DbSeeder
             await db.SaveChangesAsync();
         }
 
+        // 3b) Corporate/business departments an employee can belong to (as
+        // opposed to the account-provisioning departments above). Added
+        // individually, if missing by name, so re-running the seeder against
+        // an already-seeded database still fills in any newly added entries.
+        var corporateDepartmentNames = new[]
+        {
+            "Private Wealth Mgt",
+            "Finance & Accounts",
+            "Legal & Compliance",
+            "Settlement",
+            "Dealing - Global Markets & Structured Products",
+            "Sales",
+            "Information Technology",
+            "Research",
+            "Internal Audit",
+            "HK Fixed Income & Structured Products",
+            "Credit Control",
+            "Client Account Services & Middle Office",
+            "Equity Capital Market",
+            "Insurance",
+            "Exec. Office",
+            "Central Dealing",
+            "Dealing",
+            "Marking",
+            "E-Business",
+            "Administrator",
+            "Institutional Sales",
+            "Human Resources",
+            "Dealing - Futures"
+        };
+
+        var existingDepartmentNames = (await db.Departments.Select(d => d.Name).ToListAsync())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var newDepartments = corporateDepartmentNames
+            .Where(name => !existingDepartmentNames.Contains(name))
+            .Select(name => new Department { Name = name })
+            .ToList();
+        if (newDepartments.Count > 0)
+        {
+            db.Departments.AddRange(newDepartments);
+            await db.SaveChangesAsync();
+        }
+
         // 4) Account types mapped to responsible departments, tagged with the
         // requisition form(s) they appear on (Staff / AE / Both).
         if (!await db.AccountTypes.AnyAsync())

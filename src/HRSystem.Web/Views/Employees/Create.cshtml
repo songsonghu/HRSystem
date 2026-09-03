@@ -25,7 +25,9 @@
     </div>
     <div class="mb-3">
         <label asp-for="Department" class="form-label">Department</label>
-        <input asp-for="Department" class="form-control" />
+        <select asp-for="Department" class="form-select" asp-items="ViewBag.Departments">
+            <option value="">-- select department --</option>
+        </select>
     </div>
     <div class="mb-3">
         <label asp-for="Email" class="form-label">Email</label>

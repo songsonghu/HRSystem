@@ -186,6 +186,15 @@ public class EmployeeService : IEmployeeService
         return new EmployeeAttachmentFile(content, attachment.FileName, attachment.ContentType);
     }
 
+    public async Task<IReadOnlyList<string>> GetDepartmentNamesAsync(CancellationToken ct = default)
+    {
+        return await _db.Departments.AsNoTracking()
+            .Where(d => d.IsActive)
+            .OrderBy(d => d.Name)
+            .Select(d => d.Name)
+            .ToListAsync(ct);
+    }
+
     private static EmployeeDto Map(Employee e) => new()
     {
         Id = e.Id,
