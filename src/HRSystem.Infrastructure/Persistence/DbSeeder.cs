@@ -147,7 +147,10 @@ public static class DbSeeder
                 new AccountType { Code = "FXES",         Name = "FXES",                                      ResponsibleDeptId = depts["IT"],     Audience = ae,   SortOrder = ++order, RequiresDetail = true, DetailLabel = "Access profile: AE / PWM" },
 
                 // --- HR & Administration Department (both forms) ---
-                new AccountType { Code = "Telephone",    Name = "Telephone - 1 internal extension",         ResponsibleDeptId = depts["HR"],     Audience = both, SortOrder = ++order },
+                // Telephone item wording differs slightly between the two paper
+                // forms, so it is modeled as two audience-specific rows.
+                new AccountType { Code = "TelephoneStaff",Name = "Telephone - 1 internal extension",         ResponsibleDeptId = depts["HR"],     Audience = s,    SortOrder = ++order },
+                new AccountType { Code = "TelephoneAE",  Name = "1 / 2 Telephone(s) \u2013 direct line + internal extension", ResponsibleDeptId = depts["HR"], Audience = ae, SortOrder = ++order },
                 new AccountType { Code = "NameCard",     Name = "Name Card",                                ResponsibleDeptId = depts["HR"],     Audience = both, SortOrder = ++order },
                 new AccountType { Code = "AccessRight4F",Name = "Access Right - 4/F",                        ResponsibleDeptId = depts["HR"],     Audience = both, SortOrder = ++order },
                 new AccountType { Code = "AccessRight5F",Name = "Access Right - 5/F",                        ResponsibleDeptId = depts["HR"],     Audience = both, SortOrder = ++order },

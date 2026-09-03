@@ -73,10 +73,12 @@
             <label class="form-label">Items Requested by @(isAe ? "Team Head / Branch Manager" : "Related Department Head")</label>
             @foreach (var group in groups)
             {
+                var accessRightItems = group.Where(a => a.Name.StartsWith("Access Right - ")).OrderBy(a => a.SortOrder).ToList();
+                var normalItems = group.Where(a => !a.Name.StartsWith("Access Right - ")).OrderBy(a => a.SortOrder).ToList();
                 <div class="border rounded p-3 mb-2">
                     <h6 class="text-decoration-underline">@group.Key</h6>
                     <div class="row">
-                        @foreach (var at in group.OrderBy(a => a.SortOrder))
+                        @foreach (var at in normalItems)
                         {
                             <div class="col-md-6">
                                 <div class="form-check d-flex align-items-center gap-2 mb-1">
@@ -91,6 +93,21 @@
                             </div>
                         }
                     </div>
+                    @if (accessRightItems.Count > 0)
+                    {
+                        <div class="d-flex flex-wrap align-items-center gap-3 mt-2">
+                            <span>Access Right to</span>
+                            @foreach (var at in accessRightItems)
+                            {
+                                <div class="form-check d-flex align-items-center gap-1 mb-0">
+                                    <input class="form-check-input" type="checkbox" name="AccountTypeIds"
+                                           value="@at.Id" id="at_@at.Id" />
+                                    <label class="form-check-label" for="at_@at.Id">@at.Name["Access Right - ".Length..]</label>
+                                </div>
+                            }
+                            <span class="text-muted small">(not applicable to Branches)</span>
+                        </div>
+                    }
                 </div>
             }
         </div>
