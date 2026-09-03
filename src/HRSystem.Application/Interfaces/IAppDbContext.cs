@@ -15,6 +15,7 @@ public interface IAppDbContext
     DbSet<AccountRequest> AccountRequests { get; }
     DbSet<AccountRequestItem> AccountRequestItems { get; }
     DbSet<Attachment> Attachments { get; }
+    DbSet<EmployeeAttachment> EmployeeAttachments { get; }
     DbSet<EmployeeAccount> EmployeeAccounts { get; }
     DbSet<AuditLog> AuditLogs { get; }
 

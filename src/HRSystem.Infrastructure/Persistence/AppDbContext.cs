@@ -21,6 +21,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
     public DbSet<AccountRequest> AccountRequests => Set<AccountRequest>();
     public DbSet<AccountRequestItem> AccountRequestItems => Set<AccountRequestItem>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
+    public DbSet<EmployeeAttachment> EmployeeAttachments => Set<EmployeeAttachment>();
     public DbSet<EmployeeAccount> EmployeeAccounts => Set<EmployeeAccount>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 

@@ -2,6 +2,15 @@ using HRSystem.Domain.Enums;
 
 namespace HRSystem.Application.DTOs;
 
+/// <summary>Read model for an employee attachment.</summary>
+public class EmployeeAttachmentDto
+{
+    public int Id { get; set; }
+    public string FileName { get; set; } = string.Empty;
+    public string? ContentType { get; set; }
+    public long FileSize { get; set; }
+}
+
 /// <summary>Read model for an employee row.</summary>
 public class EmployeeDto
 {
@@ -15,6 +24,7 @@ public class EmployeeDto
     public DateTime? ResignDate { get; set; }
     public EmployeeStatus Status { get; set; }
     public EmployeeCategory Category { get; set; }
+    public IReadOnlyList<EmployeeAttachmentDto> Attachments { get; set; } = Array.Empty<EmployeeAttachmentDto>();
 }
 
 /// <summary>Create/update model for an employee.</summary>
@@ -30,4 +40,5 @@ public class EmployeeEditDto
     public DateTime? ResignDate { get; set; }
     public EmployeeStatus Status { get; set; } = EmployeeStatus.Active;
     public EmployeeCategory Category { get; set; } = EmployeeCategory.Staff;
+    public IReadOnlyList<EmployeeAttachmentDto> Attachments { get; set; } = Array.Empty<EmployeeAttachmentDto>();
 }

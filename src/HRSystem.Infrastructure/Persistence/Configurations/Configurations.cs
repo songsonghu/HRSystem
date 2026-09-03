@@ -114,6 +114,23 @@ public class AttachmentConfig : IEntityTypeConfiguration<Attachment>
     }
 }
 
+/// <summary>Fluent configuration for <see cref="EmployeeAttachment"/>.</summary>
+public class EmployeeAttachmentConfig : IEntityTypeConfiguration<EmployeeAttachment>
+{
+    public void Configure(EntityTypeBuilder<EmployeeAttachment> b)
+    {
+        b.ToTable("EmployeeAttachments");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.FileName).HasMaxLength(260).IsRequired();
+        b.Property(x => x.FilePath).HasMaxLength(500).IsRequired();
+        b.Property(x => x.ContentType).HasMaxLength(120);
+        b.HasOne(x => x.Employee)
+            .WithMany(e => e.Attachments)
+            .HasForeignKey(x => x.EmployeeId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
 /// <summary>Fluent configuration for <see cref="EmployeeAccount"/>.</summary>
 public class EmployeeAccountConfig : IEntityTypeConfiguration<EmployeeAccount>
 {

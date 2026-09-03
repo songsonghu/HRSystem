@@ -1,4 +1,4 @@
-using HRSystem.Application;
+﻿using HRSystem.Application;
 using HRSystem.Application.Interfaces;
 using HRSystem.Infrastructure;
 using HRSystem.Infrastructure.Identity;
@@ -24,7 +24,7 @@ builder.Services.AddRazorPages(); // for Identity UI
 
 // --- HttpContext + current user bridge ---
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddScoped<ICurrentUser, CurrentUser>();
+builder.Services.AddScoped<ICurrentUser, CurrentUser>(); 
 
 // --- Application & Infrastructure layers ---
 builder.Services.AddApplication();
@@ -51,8 +51,8 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
 
-app.UseAuthentication();
-app.UseAuthorization();
+app.UseAuthentication();    // ← 必须在前:识别"你是谁"
+app.UseAuthorization();     // ← 再判断"你能不能进"
 
 // Hangfire dashboard (admin only).
 app.UseHangfireDashboard("/hangfire", new DashboardOptions

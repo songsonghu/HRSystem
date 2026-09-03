@@ -12,11 +12,15 @@ public class EmployeeService : IEmployeeService
 {
     private readonly IAppDbContext _db;
     private readonly IAuditService _audit;
+    private readonly IFileStorageService _files;
+    private readonly ICurrentUser _currentUser;
 
-    public EmployeeService(IAppDbContext db, IAuditService audit)
+    public EmployeeService(IAppDbContext db, IAuditService audit, IFileStorageService files, ICurrentUser currentUser)
     {
         _db = db;
         _audit = audit;
+        _files = files;
+        _currentUser = currentUser;
     }
 
     public async Task<IReadOnlyList<EmployeeDto>> GetListAsync(string? keyword = null, CancellationToken ct = default)
@@ -41,6 +45,7 @@ public class EmployeeService : IEmployeeService
     public async Task<EmployeeDto?> GetAsync(int id, CancellationToken ct = default)
     {
         var e = await _db.Employees.AsNoTracking()
+            .Include(x => x.Attachments)
             .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, ct);
         return e is null ? null : Map(e);
     }
@@ -103,6 +108,84 @@ public class EmployeeService : IEmployeeService
         return Result.Success();
     }
 
+    public async Task<Result> AddAttachmentAsync(
+        int employeeId, Stream content, string fileName, string? contentType, CancellationToken ct = default)
+    {
+        var employee = await _db.Employees
+            .FirstOrDefaultAsync(e => e.Id == employeeId && !e.IsDeleted, ct);
+        if (employee is null) return Result.Fail("Employee not found.");
+
+        var stored = await _files.SaveAsync(content, fileName, contentType, ct);
+        _db.EmployeeAttachments.Add(new EmployeeAttachment
+        {
+            EmployeeId = employeeId,
+            FileName = stored.FileName,
+            FilePath = stored.RelativePath,
+            ContentType = stored.ContentType,
+            FileSize = stored.Size,
+            CreatedBy = _currentUser.UserId
+        });
+
+        await _db.SaveChangesAsync(ct);
+        await _audit.LogAsync("AddEmployeeAttachment", nameof(Employee), employeeId.ToString(), stored.FileName, ct);
+        return Result.Success();
+    }
+
+    public async Task<Result> ReplaceAttachmentsAsync(
+        int employeeId, IReadOnlyList<EmployeeAttachmentUpload> attachments, CancellationToken ct = default)
+    {
+        var employee = await _db.Employees
+            .Include(e => e.Attachments)
+            .FirstOrDefaultAsync(e => e.Id == employeeId && !e.IsDeleted, ct);
+        if (employee is null) return Result.Fail("Employee not found.");
+
+        var storedFiles = new List<StoredFile>();
+        try
+        {
+            foreach (var attachment in attachments)
+                storedFiles.Add(await _files.SaveAsync(attachment.Content, attachment.FileName, attachment.ContentType, ct));
+        }
+        catch
+        {
+            foreach (var stored in storedFiles)
+                await _files.DeleteAsync(stored.RelativePath, ct);
+            throw;
+        }
+
+        var existingAttachments = employee.Attachments.ToList();
+        _db.EmployeeAttachments.RemoveRange(existingAttachments);
+        foreach (var stored in storedFiles)
+        {
+            _db.EmployeeAttachments.Add(new EmployeeAttachment
+            {
+                EmployeeId = employeeId,
+                FileName = stored.FileName,
+                FilePath = stored.RelativePath,
+                ContentType = stored.ContentType,
+                FileSize = stored.Size,
+                CreatedBy = _currentUser.UserId
+            });
+        }
+
+        await _db.SaveChangesAsync(ct);
+        foreach (var existing in existingAttachments)
+            await _files.DeleteAsync(existing.FilePath, ct);
+
+        await _audit.LogAsync("ReplaceEmployeeAttachments", nameof(Employee), employeeId.ToString(), null, ct);
+        return Result.Success();
+    }
+
+    public async Task<EmployeeAttachmentFile?> OpenAttachmentAsync(
+        int employeeId, int attachmentId, CancellationToken ct = default)
+    {
+        var attachment = await _db.EmployeeAttachments.AsNoTracking()
+            .FirstOrDefaultAsync(a => a.Id == attachmentId && a.EmployeeId == employeeId, ct);
+        if (attachment is null) return null;
+
+        var content = await _files.OpenReadAsync(attachment.FilePath, ct);
+        return new EmployeeAttachmentFile(content, attachment.FileName, attachment.ContentType);
+    }
+
     private static EmployeeDto Map(Employee e) => new()
     {
         Id = e.Id,
@@ -114,6 +197,16 @@ public class EmployeeService : IEmployeeService
         JoinDate = e.JoinDate,
         ResignDate = e.ResignDate,
         Status = e.Status,
-        Category = e.Category
+        Category = e.Category,
+        Attachments = e.Attachments
+            .OrderByDescending(a => a.Id)
+            .Select(a => new EmployeeAttachmentDto
+            {
+                Id = a.Id,
+                FileName = a.FileName,
+                ContentType = a.ContentType,
+                FileSize = a.FileSize
+            })
+            .ToList()
     };
 }

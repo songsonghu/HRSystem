@@ -9,6 +9,13 @@ namespace HRSystem.Web.Controllers;
 [Authorize(Policy = "RequireHR")]
 public class EmployeesController : Controller
 {
+    private const long MaxAttachmentSize = 20_000_000;
+
+    private static readonly HashSet<string> AllowedAttachmentExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".jpg", ".jpeg", ".png"
+    };
+
     private readonly IEmployeeService _service;
 
     public EmployeesController(IEmployeeService service) => _service = service;
@@ -28,14 +35,27 @@ public class EmployeesController : Controller
         return dto is null ? NotFound() : View(dto);
     }
 
+    // GET: /Employees/Attachment/5/3
+    public async Task<IActionResult> Attachment(int employeeId, int attachmentId, bool download = false)
+    {
+        var attachment = await _service.OpenAttachmentAsync(employeeId, attachmentId);
+        if (attachment is null) return NotFound();
+
+        return download
+            ? File(attachment.Content, attachment.ContentType ?? "application/octet-stream", attachment.FileName)
+            : File(attachment.Content, attachment.ContentType ?? "application/octet-stream");
+    }
+
     // GET: /Employees/Create
     public IActionResult Create() => View(new EmployeeEditDto());
 
     // POST: /Employees/Create
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(EmployeeEditDto dto)
+    [RequestSizeLimit(MaxAttachmentSize)]
+    public async Task<IActionResult> Create(EmployeeEditDto dto, List<IFormFile>? attachments)
     {
+        ValidateAttachments(attachments);
         if (!ModelState.IsValid) return View(dto);
 
         var result = await _service.CreateAsync(dto);
@@ -44,6 +64,19 @@ public class EmployeesController : Controller
             ModelState.AddModelError(string.Empty, result.Error!);
             return View(dto);
         }
+
+        foreach (var attachment in attachments ?? [])
+        {
+            await using var stream = attachment.OpenReadStream();
+            var uploadResult = await _service.AddAttachmentAsync(
+                result.Value, stream, attachment.FileName, attachment.ContentType);
+            if (!uploadResult.Succeeded)
+            {
+                TempData["Error"] = $"Employee created, but '{attachment.FileName}' could not be uploaded: {uploadResult.Error}";
+                return RedirectToAction(nameof(Details), new { id = result.Value });
+            }
+        }
+
         TempData["Success"] = "Employee created.";
         return RedirectToAction(nameof(Index));
     }
@@ -64,23 +97,56 @@ public class EmployeesController : Controller
             Position = dto.Position,
             JoinDate = dto.JoinDate,
             ResignDate = dto.ResignDate,
-            Status = dto.Status
+            Status = dto.Status,
+            Category = dto.Category,
+            Attachments = dto.Attachments
         });
     }
 
     // POST: /Employees/Edit/5
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit(EmployeeEditDto dto)
+    [RequestSizeLimit(MaxAttachmentSize)]
+    public async Task<IActionResult> Edit(EmployeeEditDto dto, List<IFormFile>? replacementAttachments)
     {
-        if (!ModelState.IsValid) return View(dto);
+        ValidateAttachments(replacementAttachments);
+        if (!ModelState.IsValid)
+        {
+            var employee = await _service.GetAsync(dto.Id);
+            dto.Attachments = employee?.Attachments ?? Array.Empty<EmployeeAttachmentDto>();
+            return View(dto);
+        }
 
         var result = await _service.UpdateAsync(dto);
         if (!result.Succeeded)
         {
             ModelState.AddModelError(string.Empty, result.Error!);
+            var employee = await _service.GetAsync(dto.Id);
+            dto.Attachments = employee?.Attachments ?? Array.Empty<EmployeeAttachmentDto>();
             return View(dto);
         }
+
+        if (replacementAttachments is { Count: > 0 })
+        {
+            var uploads = replacementAttachments
+                .Select(file => new EmployeeAttachmentUpload(file.OpenReadStream(), file.FileName, file.ContentType))
+                .ToList();
+            try
+            {
+                var replacementResult = await _service.ReplaceAttachmentsAsync(dto.Id, uploads);
+                if (!replacementResult.Succeeded)
+                {
+                    TempData["Error"] = replacementResult.Error;
+                    return RedirectToAction(nameof(Edit), new { id = dto.Id });
+                }
+            }
+            finally
+            {
+                foreach (var upload in uploads)
+                    await upload.Content.DisposeAsync();
+            }
+        }
+
         TempData["Success"] = "Employee updated.";
         return RedirectToAction(nameof(Index));
     }
@@ -93,5 +159,23 @@ public class EmployeesController : Controller
         var result = await _service.DeleteAsync(id);
         TempData[result.Succeeded ? "Success" : "Error"] = result.Succeeded ? "Employee deleted." : result.Error;
         return RedirectToAction(nameof(Index));
+    }
+
+    private void ValidateAttachments(IEnumerable<IFormFile>? attachments)
+    {
+        foreach (var attachment in attachments ?? [])
+        {
+            if (attachment.Length == 0)
+            {
+                ModelState.AddModelError(nameof(attachments), "An uploaded file is empty.");
+                continue;
+            }
+
+            if (attachment.Length > MaxAttachmentSize)
+                ModelState.AddModelError(nameof(attachments), $"'{attachment.FileName}' exceeds the 20 MB limit.");
+
+            if (!AllowedAttachmentExtensions.Contains(Path.GetExtension(attachment.FileName)))
+                ModelState.AddModelError(nameof(attachments), $"'{attachment.FileName}' is not an allowed file type.");
+        }
     }
 }
