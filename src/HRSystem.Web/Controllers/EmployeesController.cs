@@ -164,6 +164,13 @@ public class EmployeesController : Controller
         return RedirectToAction(nameof(Index));
     }
 
+    // GET: /Employees/Departure/5
+    public async Task<IActionResult> Departure(int id)
+    {
+        var dto = await _service.GetAsync(id);
+        return dto is null ? NotFound() : View(dto);
+    }
+
     // POST: /Employees/Delete/5
     [HttpPost]
     [ValidateAntiForgeryToken]

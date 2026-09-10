@@ -1,0 +1,164 @@
+@model EmployeeDto
+@{
+    ViewData["Title"] = "Staff Departure Checklist";
+}
+
+<style>
+    .dep-form { border: 1px solid #333; }
+    .dep-title { text-align: center; font-weight: bold; text-decoration: underline; padding: .75rem; }
+    .dep-fields { padding: 0 1rem .75rem 1rem; }
+    .dep-bar { background: #d9d9d9; font-weight: bold; padding: .35rem .75rem; border-top: 1px solid #333; border-bottom: 1px solid #333; }
+    .dep-section { border-bottom: 1px solid #333; }
+    .dep-section-body { padding: .5rem .75rem; }
+    .dep-section:last-child { border-bottom: none; }
+    .dep-static-line { display: inline-block; min-width: 200px; border-bottom: 1px solid #333; }
+    .dep-item { margin-bottom: .35rem; }
+    .dep-checked-cols { color: #444; }
+</style>
+
+<h2>Staff Departure Checklist</h2>
+<hr />
+
+<div class="dep-form col-md-11 mb-3">
+    <div class="dep-title">Staff Departure Checklist</div>
+
+    <div class="dep-fields">
+        <div class="row mb-2">
+            <div class="col-md-6">Staff No.: <span class="dep-static-line">@Model.EmployeeNo</span></div>
+            <div class="col-md-6">Staff Name: <span class="dep-static-line">@Model.Name</span></div>
+        </div>
+        <div class="row mb-2">
+            <div class="col-md-6">Department: <span class="dep-static-line">@Model.Department</span></div>
+            <div class="col-md-6">Position: <span class="dep-static-line">@Model.Position</span></div>
+        </div>
+        <div class="row mb-2">
+            <div class="col-md-6">Start Date: <span class="dep-static-line">@Model.JoinDate.ToString("yyyy-MM-dd")</span></div>
+            <div class="col-md-6">Last Working Date: <span class="dep-static-line">@(Model.ResignDate?.ToString("yyyy-MM-dd"))</span></div>
+        </div>
+        <div class="row">
+            <div class="col-md-6">Last Employment Date: <span class="dep-static-line">&nbsp;</span></div>
+        </div>
+    </div>
+
+    <div class="dep-section">
+        <div class="dep-bar row g-0">
+            <div class="col-md-8">Human Resources</div>
+            <div class="col-md-2">Checked by Dept Head</div>
+            <div class="col-md-2">Finished Date</div>
+        </div>
+        <div class="dep-section-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">1. Update Staff Movement Checklist</label></div>
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">2. Update HR System</label></div>
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">3. Calculate Final Payment (e.g. Leave encashment, Long Service payment, Exam Fee, Training Subsidy payback, gratuity, etc.) and confirm with the leaving staff</label></div>
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">4. Terminate Medical Plan</label></div>
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">5. Terminate Work Permit</label></div>
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">6. Prepare IR56F tax form</label></div>
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">7. Prepare IR56G tax form for leaving staff who is leaving Hong Kong for a period exceeding one month for the purpose of clearing tax</label></div>
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">8. Check with Legal &amp; Compliance Dept if the leaving staff is under any internal investigation</label></div>
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">9. De-register SFC license</label></div>
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">10. Update the Photo Album</label></div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">11. Send Resignation Acknowledgement &amp; Exit Interview Questionnaire to leaving staff via email right after we confirmed the resignation</label></div>
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">12. Send Staff Departure email to working group two weeks before the last working date</label></div>
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">13. Send Staff Departure email to all staff members on the last working date</label></div>
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">14. Issue Employment Certification Letter to leaving staff</label></div>
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">15. Conduct Exit Interview</label></div>
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">16. Collect Staff Access Card / key(s) / equipment / e-banking token(s)</label></div>
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">17. Terminate MPF</label></div>
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">18. Release final payment to leaving staff within 7 days from the last employment date</label></div>
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">19. Others:</label></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="dep-section">
+        <div class="dep-bar row g-0">
+            <div class="col-md-8">Finance &amp; Accounts</div>
+            <div class="col-md-2">Checked by Dept Head</div>
+            <div class="col-md-2">Finished Date</div>
+        </div>
+        <div class="dep-section-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">Delete the login of the following systems:</label></div>
+                    <div class="ms-4">
+                        <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">HSBC FX</label></div>
+                        <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">SCB FX</label></div>
+                    </div>
+                    <p class="mb-1"><u>For Permanent Staff:</u></p>
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">1. Check if there is cash advance for opening external broker account / other purpose</label></div>
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">2. Collect e-banking token(s)</label></div>
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">3. Delete user account access to e-banking by admin user or submit deletion form to the banks</label></div>
+                </div>
+                <div class="col-md-6">
+                    <p class="mb-1"><u>For Sales/AE/PWM:</u></p>
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">1. Check if there is Commission Rebate / Deficit held up by the Company</label></div>
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">2. Others:</label></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="dep-section">
+        <div class="dep-bar row g-0">
+            <div class="col-md-8">Administration</div>
+            <div class="col-md-2">Checked by Dept Head</div>
+            <div class="col-md-2">Finished Date</div>
+        </div>
+        <div class="dep-section-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">1. Check the workstation of leaving staff if furniture are in place</label></div>
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">2. Deactivate the Staff Access Card</label></div>
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">3. Update Intranet Phone Directory</label></div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">4. Collect Key(s) for drawers / cabinets / lockers/ room doors</label></div>
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">Others:</label></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="dep-section">
+        <div class="dep-bar row g-0">
+            <div class="col-md-8">Credit Control</div>
+            <div class="col-md-2">Checked by Dept Head</div>
+            <div class="col-md-2">Finished Date</div>
+        </div>
+        <div class="dep-section-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">Delete the login of the following systems:</label></div>
+                    <div class="ms-4">
+                        <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">1) Ayers</label></div>
+                        <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">2) Sharp Point</label></div>
+                        <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">3) 2Go</label></div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">Update the Company's authorized dealer list with brokers (UOBKH Group and third-party brokers)</label></div>
+                    <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">Others:</label></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="dep-section">
+        <div class="dep-bar row g-0">
+            <div class="col-md-8">Legal &amp; Compliance</div>
+            <div class="col-md-2">Checked by Dept Head</div>
+            <div class="col-md-2">Finished Date</div>
+        </div>
+        <div class="dep-section-body">
+            <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">Follow up on outstanding AML items (if any)</label></div>
+            <div class="form-check dep-item"><input class="form-check-input" type="checkbox" disabled /><label class="form-check-label">Follow up on acknowledgement of Quarterly Newsletters (if any)</label></div>
+        </div>
+    </div>
+</div>
+
+<a class="btn btn-secondary" asp-action="Index">Back to Employees</a>
