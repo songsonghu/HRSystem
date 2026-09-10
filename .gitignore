@@ -33,9 +33,8 @@ appsettings.*.local.json
 wwwroot/lib/
 
 # ---- Runtime data (uploads, logs) ----
-src/HR.Web/App_Data/
-App_Data/
-App_Data/uploads/
+src/HRSystem.Web/App_Data/
+src/HRSystem.Web/App_Data/uploads/
 [Ll]ogs/
 
 # ---- EF Core ----

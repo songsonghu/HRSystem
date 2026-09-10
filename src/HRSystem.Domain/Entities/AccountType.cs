@@ -28,6 +28,21 @@ public class AccountType : BaseEntity
     /// <summary>Display order in the request form.</summary>
     public int SortOrder { get; set; }
 
+    /// <summary>Paper-form section name used to group this item.</summary>
+    public string? GroupName { get; set; }
+
+    /// <summary>Paper-form column: 1 for left and 2 for right.</summary>
+    public int Column { get; set; } = 1;
+
+    /// <summary>Whether the item is rendered with a selectable checkbox.</summary>
+    public bool HasCheckbox { get; set; } = true;
+
+    /// <summary>Optional text displayed before the item label.</summary>
+    public string? PrefixText { get; set; }
+
+    /// <summary>Optional text displayed after the item label.</summary>
+    public string? SuffixText { get; set; }
+
     /// <summary>Which requisition form (Staff / AE / both) shows this item.</summary>
     public AccountTypeAudience Audience { get; set; } = AccountTypeAudience.Both;
 
