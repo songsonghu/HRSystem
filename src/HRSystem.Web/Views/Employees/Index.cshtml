@@ -5,7 +5,10 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h2>Employees</h2>
-    <a class="btn btn-success" asp-action="Create">+ New Employee</a>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary" asp-controller="Departures" asp-action="Index">Departure Requests</a>
+        <a class="btn btn-success" asp-action="Create">+ New Employee</a>
+    </div>
 </div>
 
 <form method="get" class="row g-2 mb-3">

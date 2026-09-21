@@ -29,6 +29,29 @@ public class DepartureService : IDepartureService
         _users = users;
     }
 
+    public async Task<IReadOnlyList<DepartureRequestDto>> GetAllAsync(CancellationToken ct = default)
+    {
+        var requests = await _db.DepartureRequests.AsNoTracking()
+            .Include(r => r.Employee)
+            .Include(r => r.Tasks)
+            .ThenInclude(t => t.Items)
+            .OrderByDescending(r => r.Id)
+            .ToListAsync(ct);
+
+        return requests.Select(MapRequest).ToList();
+    }
+
+    public async Task<int?> GetOpenRequestIdByEmployeeAsync(int employeeId, CancellationToken ct = default)
+    {
+        return await _db.DepartureRequests.AsNoTracking()
+            .Where(r => r.EmployeeId == employeeId
+                        && r.Status != DepartureRequestStatus.Completed
+                        && r.Status != DepartureRequestStatus.Cancelled)
+            .OrderByDescending(r => r.Id)
+            .Select(r => (int?)r.Id)
+            .FirstOrDefaultAsync(ct);
+    }
+
     public async Task<Result<DepartureCreatePageDto>> GetCreatePageAsync(int employeeId, CancellationToken ct = default)
     {
         var employee = await _db.Employees.AsNoTracking()

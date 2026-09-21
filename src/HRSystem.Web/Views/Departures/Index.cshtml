@@ -1,0 +1,43 @@
+@model IReadOnlyList<DepartureRequestDto>
+@{
+    ViewData["Title"] = "Departure Requests";
+}
+
+<h2>Departure Requests</h2>
+
+@if (Model.Count == 0)
+{
+    <div class="alert alert-info">No departure requests yet.</div>
+}
+else
+{
+    <table class="table table-striped table-hover">
+        <thead>
+            <tr>
+                <th>Request No.</th>
+                <th>Employee</th>
+                <th>Status</th>
+                <th>Last Working Date</th>
+                <th>Last Employment Date</th>
+                <th>Submitted At</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var r in Model)
+        {
+            <tr>
+                <td>@r.RequestNo</td>
+                <td>@r.EmployeeName (@r.EmployeeNo)</td>
+                <td><span class="badge bg-info">@r.Status</span></td>
+                <td>@r.LastWorkingDate.ToString("yyyy-MM-dd")</td>
+                <td>@r.LastEmploymentDate.ToString("yyyy-MM-dd")</td>
+                <td>@r.SubmittedAt?.ToString("yyyy-MM-dd HH:mm")</td>
+                <td>
+                    <a asp-action="Details" asp-route-id="@r.Id" class="btn btn-sm btn-outline-primary">Details</a>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}

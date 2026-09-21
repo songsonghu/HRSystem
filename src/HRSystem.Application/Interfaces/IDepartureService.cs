@@ -5,6 +5,8 @@ namespace HRSystem.Application.Interfaces;
 
 public interface IDepartureService
 {
+    Task<IReadOnlyList<DepartureRequestDto>> GetAllAsync(CancellationToken ct = default);
+    Task<int?> GetOpenRequestIdByEmployeeAsync(int employeeId, CancellationToken ct = default);
     Task<Result<DepartureCreatePageDto>> GetCreatePageAsync(int employeeId, CancellationToken ct = default);
     Task<Result<int>> CreateDraftAsync(CreateDepartureRequestDto dto, CancellationToken ct = default);
     Task<DepartureRequestDto?> GetAsync(int requestId, CancellationToken ct = default);

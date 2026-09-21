@@ -14,8 +14,22 @@ public class DeparturesController : Controller
     public DeparturesController(IDepartureService service) => _service = service;
 
     [Authorize(Policy = "RequireHR")]
+    public async Task<IActionResult> Index()
+    {
+        var requests = await _service.GetAllAsync();
+        return View(requests);
+    }
+
+    [Authorize(Policy = "RequireHR")]
     public async Task<IActionResult> Create(int employeeId)
     {
+        var openRequestId = await _service.GetOpenRequestIdByEmployeeAsync(employeeId);
+        if (openRequestId.HasValue)
+        {
+            TempData["Success"] = "This employee already has an open departure request. Redirected to details.";
+            return RedirectToAction(nameof(Details), new { id = openRequestId.Value });
+        }
+
         var page = await _service.GetCreatePageAsync(employeeId);
         if (!page.Succeeded)
         {
