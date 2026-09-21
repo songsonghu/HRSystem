@@ -269,7 +269,7 @@ public static class DbSeeder
         {
             var template = await db.DepartureTaskTemplates
                 .Include(t => t.Items)
-                .FirstOrDefaultAsync(t => t.DepartmentName == templateSeed.DepartmentName);
+                .FirstOrDefaultAsync(t => t.DepartmentName == templateSeed.DepartmentName && !t.IsDeleted);
 
             if (template is null)
             {
@@ -313,6 +313,12 @@ public static class DbSeeder
                     CreatedBy = "system"
                 });
             }
+
+            var obsoleteItems = template.Items
+                .Where(i => i.SortOrder > templateSeed.Items.Length)
+                .ToList();
+            if (obsoleteItems.Count > 0)
+                db.DepartureTaskTemplateItems.RemoveRange(obsoleteItems);
         }
 
         await db.SaveChangesAsync();

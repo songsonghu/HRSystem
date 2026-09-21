@@ -192,9 +192,10 @@ namespace HRSystem.Infrastructure.Migrations
                 columns: new[] { "DepartureTaskTemplateId", "SortOrder" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_DepartureTaskTemplates_DepartmentName",
+                name: "IX_DepartureTaskTemplates_DepartmentName_IsDeleted",
                 table: "DepartureTaskTemplates",
-                column: "DepartmentName");
+                columns: new[] { "DepartmentName", "IsDeleted" },
+                unique: true);
         }
 
         /// <inheritdoc />

@@ -630,7 +630,8 @@ namespace HRSystem.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("DepartmentName");
+                    b.HasIndex("DepartmentName", "IsDeleted")
+                        .IsUnique();
 
                     b.ToTable("DepartureTaskTemplates", (string)null);
                 });

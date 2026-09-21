@@ -287,7 +287,11 @@ public class DepartureService : IDepartureService
         if (!_currentUser.IsInRole("Admin") && !_currentUser.IsInRole("HR"))
             return Result.Fail("Only Admin/HR can finalize departure requests.");
 
-        if (request.Tasks.Where(t => t.IsRequired).Any(t => t.Status is not (DepartureTaskStatus.Completed or DepartureTaskStatus.NotApplicable)))
+        var requiredTasks = request.Tasks.Where(t => t.IsRequired).ToList();
+        if (requiredTasks.Count == 0)
+            return Result.Fail("Departure request has no required department tasks.");
+
+        if (requiredTasks.Any(t => t.Status is not (DepartureTaskStatus.Completed or DepartureTaskStatus.NotApplicable)))
             return Result.Fail("All required department tasks must be completed before finalization.");
 
         request.Status = DepartureRequestStatus.Completed;
