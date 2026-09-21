@@ -1,0 +1,27 @@
+@model IReadOnlyList<DepartureTaskDto>
+@{
+    ViewData["Title"] = "My Departure Tasks";
+}
+
+<h2>My Departure Tasks</h2>
+
+@if (Model.Count == 0)
+{
+    <div class="alert alert-info">No pending departure tasks.</div>
+}
+
+@foreach (var t in Model)
+{
+    var completed = t.Items.Count(i => i.IsCompleted || i.IsNotApplicable);
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between">
+            <span><b>@t.DepartmentName</b> - @t.EmployeeName (@t.EmployeeNo)</span>
+            <span class="badge bg-warning text-dark">@t.Status</span>
+        </div>
+        <div class="card-body">
+            <p class="mb-2">Request: @t.RequestNo</p>
+            <p class="mb-2">Progress: @completed / @t.Items.Count</p>
+            <a asp-action="Task" asp-route-id="@t.Id" class="btn btn-primary btn-sm">Open Task</a>
+        </div>
+    </div>
+}

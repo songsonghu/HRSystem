@@ -1,0 +1,65 @@
+@model DepartureDetailsViewModel
+@{
+    ViewData["Title"] = "Departure Request Details";
+    var req = Model.Request;
+}
+
+<h2>Departure Request @req.RequestNo</h2>
+
+<div class="row g-3 mb-3">
+    <div class="col-md-3"><b>Status</b><br /><span class="badge bg-info">@req.Status</span></div>
+    <div class="col-md-3"><b>Employee</b><br />@req.EmployeeName (@req.EmployeeNo)</div>
+    <div class="col-md-3"><b>Last Working Date</b><br />@req.LastWorkingDate.ToString("yyyy-MM-dd")</div>
+    <div class="col-md-3"><b>Last Employment Date</b><br />@req.LastEmploymentDate.ToString("yyyy-MM-dd")</div>
+</div>
+
+<div class="mb-3">
+    <b>Reason:</b> @req.Reason<br />
+    <b>Remark:</b> @req.Remark
+</div>
+
+@if (Model.CanManage)
+{
+    <div class="mb-3 d-flex gap-2">
+        @if (Model.CanSubmit)
+        {
+            <form asp-action="Submit" asp-route-id="@req.Id" method="post">
+                @Html.AntiForgeryToken()
+                <button class="btn btn-primary">Submit & Dispatch</button>
+            </form>
+        }
+        @if (Model.CanFinalize)
+        {
+            <form asp-action="Finalize" asp-route-id="@req.Id" method="post">
+                @Html.AntiForgeryToken()
+                <button class="btn btn-success">Finalize Departure</button>
+            </form>
+        }
+    </div>
+}
+
+<h4>Department Tasks</h4>
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>Department</th>
+            <th>Status</th>
+            <th>Progress</th>
+            <th>Completed At</th>
+        </tr>
+    </thead>
+    <tbody>
+    @foreach (var t in req.Tasks.OrderBy(x => x.SortOrder))
+    {
+        var done = t.Items.Count(i => i.IsCompleted || i.IsNotApplicable);
+        <tr>
+            <td>@t.DepartmentName</td>
+            <td>@t.Status</td>
+            <td>@done / @t.Items.Count</td>
+            <td>@t.CompletedAt?.ToString("yyyy-MM-dd HH:mm")</td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+<a asp-controller="Employees" asp-action="Index" class="btn btn-outline-secondary">Back to Employees</a>

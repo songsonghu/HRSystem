@@ -1,0 +1,63 @@
+@model DepartureCreateViewModel
+@{
+    ViewData["Title"] = "Create Departure Request";
+}
+
+<h2>Create Departure Request</h2>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2">
+            <div class="col-md-3"><b>Employee No.</b><br />@Model.EmployeeNo</div>
+            <div class="col-md-3"><b>Name</b><br />@Model.EmployeeName</div>
+            <div class="col-md-3"><b>Department</b><br />@Model.Department</div>
+            <div class="col-md-3"><b>Position</b><br />@Model.Position</div>
+        </div>
+    </div>
+</div>
+
+<form asp-action="Create" method="post" class="card">
+    @Html.AntiForgeryToken()
+    <div class="card-body">
+        <input type="hidden" asp-for="EmployeeId" />
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label asp-for="LastWorkingDate" class="form-label"></label>
+                <input asp-for="LastWorkingDate" class="form-control" type="date" />
+                <span asp-validation-for="LastWorkingDate" class="text-danger"></span>
+            </div>
+            <div class="col-md-4">
+                <label asp-for="LastEmploymentDate" class="form-label"></label>
+                <input asp-for="LastEmploymentDate" class="form-control" type="date" />
+                <span asp-validation-for="LastEmploymentDate" class="text-danger"></span>
+            </div>
+            <div class="col-md-4">
+                <label asp-for="Reason" class="form-label"></label>
+                <input asp-for="Reason" class="form-control" />
+            </div>
+            <div class="col-12">
+                <label asp-for="Remark" class="form-label"></label>
+                <textarea asp-for="Remark" class="form-control" rows="3"></textarea>
+            </div>
+        </div>
+
+        <hr />
+        <h5>Department checklist preview</h5>
+        <ul>
+            @foreach (var dep in Model.TemplateDepartments)
+            {
+                <li>@dep.DepartmentName (@dep.ItemCount items)</li>
+            }
+        </ul>
+    </div>
+    <div class="card-footer">
+        <button class="btn btn-primary">Create Draft</button>
+        <a asp-controller="Employees" asp-action="Index" class="btn btn-outline-secondary">Cancel</a>
+    </div>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

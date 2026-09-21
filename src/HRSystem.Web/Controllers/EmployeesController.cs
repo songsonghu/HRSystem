@@ -168,7 +168,8 @@ public class EmployeesController : Controller
     public async Task<IActionResult> Departure(int id)
     {
         var dto = await _service.GetAsync(id);
-        return dto is null ? NotFound() : View(dto);
+        if (dto is null) return NotFound();
+        return RedirectToAction("Create", "Departures", new { employeeId = id });
     }
 
     // POST: /Employees/Delete/5

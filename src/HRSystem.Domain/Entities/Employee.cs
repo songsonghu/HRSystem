@@ -41,6 +41,7 @@ public class Employee : BaseEntity
 
     // Navigation
     public ICollection<AccountRequest> AccountRequests { get; set; } = new List<AccountRequest>();
+    public ICollection<DepartureRequest> DepartureRequests { get; set; } = new List<DepartureRequest>();
     public ICollection<EmployeeAccount> Accounts { get; set; } = new List<EmployeeAccount>();
     public ICollection<EmployeeAttachment> Attachments { get; set; } = new List<EmployeeAttachment>();
 }
