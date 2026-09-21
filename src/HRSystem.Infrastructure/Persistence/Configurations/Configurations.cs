@@ -220,7 +220,7 @@ public class DepartureTaskTemplateConfig : IEntityTypeConfiguration<DepartureTas
         b.ToTable("DepartureTaskTemplates");
         b.HasKey(x => x.Id);
         b.Property(x => x.DepartmentName).HasMaxLength(100).IsRequired();
-        b.HasIndex(x => x.DepartmentName).IsUnique();
+        b.HasIndex(x => x.DepartmentName);
     }
 }
 

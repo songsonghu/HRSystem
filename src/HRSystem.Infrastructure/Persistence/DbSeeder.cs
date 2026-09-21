@@ -4,6 +4,7 @@ using HRSystem.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using System.Security.Cryptography;
 
 namespace HRSystem.Infrastructure.Persistence;
 
@@ -201,7 +202,7 @@ public static class DbSeeder
                     FullName = seed.FullName,
                     DepartmentId = department.Id
                 };
-                var createResult = await userManager.CreateAsync(user, "DeptHead@12345");
+                var createResult = await userManager.CreateAsync(user, GenerateSeedPassword());
                 if (!createResult.Succeeded) continue;
             }
 
@@ -319,4 +320,10 @@ public static class DbSeeder
 
     private sealed record DepartmentHeadSeed(string DepartmentName, string? Code, string Email, string FullName);
     private sealed record DepartureTemplateSeed(string DepartmentName, int SortOrder, string[] Items);
+
+    private static string GenerateSeedPassword()
+    {
+        var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(8));
+        return $"Dh!{token}a9";
+    }
 }

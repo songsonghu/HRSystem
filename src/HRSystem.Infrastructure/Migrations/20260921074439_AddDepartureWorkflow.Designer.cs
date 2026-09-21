@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace HRSystem.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260921074055_AddDepartureWorkflow")]
+    [Migration("20260921074439_AddDepartureWorkflow")]
     partial class AddDepartureWorkflow
     {
         /// <inheritdoc />
@@ -633,8 +633,7 @@ namespace HRSystem.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("DepartmentName")
-                        .IsUnique();
+                    b.HasIndex("DepartmentName");
 
                     b.ToTable("DepartureTaskTemplates", (string)null);
                 });

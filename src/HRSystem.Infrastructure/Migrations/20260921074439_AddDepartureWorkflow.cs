@@ -194,8 +194,7 @@ namespace HRSystem.Infrastructure.Migrations
             migrationBuilder.CreateIndex(
                 name: "IX_DepartureTaskTemplates_DepartmentName",
                 table: "DepartureTaskTemplates",
-                column: "DepartmentName",
-                unique: true);
+                column: "DepartmentName");
         }
 
         /// <inheritdoc />

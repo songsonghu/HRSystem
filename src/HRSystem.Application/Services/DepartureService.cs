@@ -83,7 +83,7 @@ public class DepartureService : IDepartureService
 
         var request = new DepartureRequest
         {
-            RequestNo = await GenerateRequestNoAsync(ct),
+            RequestNo = $"TMP-{Guid.NewGuid():N}"[..16],
             EmployeeId = dto.EmployeeId,
             Status = DepartureRequestStatus.Draft,
             LastWorkingDate = dto.LastWorkingDate,
@@ -95,6 +95,10 @@ public class DepartureService : IDepartureService
 
         _db.DepartureRequests.Add(request);
         await _db.SaveChangesAsync(ct);
+
+        request.RequestNo = $"DEP-{DateTime.UtcNow.Year}-{request.Id:D5}";
+        await _db.SaveChangesAsync(ct);
+
         await _audit.LogAsync("CreateDepartureDraft", nameof(DepartureRequest), request.Id.ToString(), request.RequestNo, ct);
         return Result<int>.Success(request.Id);
     }
@@ -137,7 +141,7 @@ public class DepartureService : IDepartureService
                 return Result.Fail($"Department '{template.DepartmentName}' has no assigned department head.");
 
             var user = await _users.GetByIdAsync(department.HeadUserId, ct);
-            if (user?.Email is null)
+            if (string.IsNullOrWhiteSpace(user?.Email))
                 return Result.Fail($"Department '{template.DepartmentName}' head user email is missing.");
 
             var task = new DepartureTask
@@ -340,14 +344,6 @@ public class DepartureService : IDepartureService
                 $"[Action Required] Departure task assigned ({request.RequestNo})",
                 $"<p>You have new departure checklist task(s) for <b>{request.Employee?.Name}</b> ({request.Employee?.EmployeeNo}).</p><p>Departments: {departments}</p><p>Please process them in HR System under My Departure Tasks.</p>"));
         }
-    }
-
-    private async Task<string> GenerateRequestNoAsync(CancellationToken ct)
-    {
-        var year = DateTime.UtcNow.Year;
-        var prefix = $"DEP-{year}-";
-        var count = await _db.DepartureRequests.CountAsync(r => r.RequestNo.StartsWith(prefix), ct);
-        return $"{prefix}{(count + 1):D5}";
     }
 
     private static DepartureRequestDto MapRequest(DepartureRequest request) => new()
