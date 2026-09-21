@@ -45,6 +45,11 @@ public class AccountTypeConfig : IEntityTypeConfiguration<AccountType>
         b.HasIndex(x => x.Code).IsUnique();
         b.Property(x => x.Name).HasMaxLength(100).IsRequired();
         b.Property(x => x.Description).HasMaxLength(500);
+        b.Property(x => x.GroupName).HasMaxLength(100);
+        b.Property(x => x.PrefixText).HasMaxLength(200);
+        b.Property(x => x.SuffixText).HasMaxLength(200);
+        b.Property(x => x.Column).HasDefaultValue(1);
+        b.Property(x => x.HasCheckbox).HasDefaultValue(true);
         b.Property(x => x.DetailLabel).HasMaxLength(100);
         b.HasOne(x => x.ResponsibleDept)
             .WithMany(d => d.AccountTypes)
@@ -148,6 +153,89 @@ public class EmployeeAccountConfig : IEntityTypeConfiguration<EmployeeAccount>
             .WithMany()
             .HasForeignKey(x => x.AccountTypeId)
             .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class DepartureRequestConfig : IEntityTypeConfiguration<DepartureRequest>
+{
+    public void Configure(EntityTypeBuilder<DepartureRequest> b)
+    {
+        b.ToTable("DepartureRequests");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.RequestNo).HasMaxLength(30).IsRequired();
+        b.HasIndex(x => x.RequestNo).IsUnique();
+        b.HasIndex(x => new { x.EmployeeId, x.Status });
+        b.Property(x => x.Reason).HasMaxLength(500);
+        b.Property(x => x.Remark).HasMaxLength(1000);
+        b.Property(x => x.SubmittedBy).HasMaxLength(450);
+        b.Property(x => x.FinalizedBy).HasMaxLength(450);
+        b.HasOne(x => x.Employee)
+            .WithMany(e => e.DepartureRequests)
+            .HasForeignKey(x => x.EmployeeId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class DepartureTaskConfig : IEntityTypeConfiguration<DepartureTask>
+{
+    public void Configure(EntityTypeBuilder<DepartureTask> b)
+    {
+        b.ToTable("DepartureTasks");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.DepartmentName).HasMaxLength(100).IsRequired();
+        b.Property(x => x.AssignedUserId).HasMaxLength(450);
+        b.Property(x => x.AssignedUserName).HasMaxLength(256);
+        b.Property(x => x.TaskRemark).HasMaxLength(1000);
+        b.Property(x => x.HandledBy).HasMaxLength(450);
+        b.HasIndex(x => new { x.DepartureRequestId, x.SortOrder });
+        b.HasIndex(x => new { x.AssignedUserId, x.Status });
+        b.HasOne(x => x.DepartureRequest)
+            .WithMany(r => r.Tasks)
+            .HasForeignKey(x => x.DepartureRequestId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public class DepartureTaskItemConfig : IEntityTypeConfiguration<DepartureTaskItem>
+{
+    public void Configure(EntityTypeBuilder<DepartureTaskItem> b)
+    {
+        b.ToTable("DepartureTaskItems");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Description).HasMaxLength(500).IsRequired();
+        b.Property(x => x.Remark).HasMaxLength(1000);
+        b.Property(x => x.CompletedBy).HasMaxLength(450);
+        b.HasIndex(x => new { x.DepartureTaskId, x.SortOrder });
+        b.HasOne(x => x.DepartureTask)
+            .WithMany(t => t.Items)
+            .HasForeignKey(x => x.DepartureTaskId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public class DepartureTaskTemplateConfig : IEntityTypeConfiguration<DepartureTaskTemplate>
+{
+    public void Configure(EntityTypeBuilder<DepartureTaskTemplate> b)
+    {
+        b.ToTable("DepartureTaskTemplates");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.DepartmentName).HasMaxLength(100).IsRequired();
+        b.HasIndex(x => x.DepartmentName).IsUnique();
+    }
+}
+
+public class DepartureTaskTemplateItemConfig : IEntityTypeConfiguration<DepartureTaskTemplateItem>
+{
+    public void Configure(EntityTypeBuilder<DepartureTaskTemplateItem> b)
+    {
+        b.ToTable("DepartureTaskTemplateItems");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Description).HasMaxLength(500).IsRequired();
+        b.HasIndex(x => new { x.DepartureTaskTemplateId, x.SortOrder });
+        b.HasOne(x => x.DepartureTaskTemplate)
+            .WithMany(t => t.Items)
+            .HasForeignKey(x => x.DepartureTaskTemplateId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }
 

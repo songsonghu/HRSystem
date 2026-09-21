@@ -18,6 +18,11 @@ public interface IAppDbContext
     DbSet<EmployeeAttachment> EmployeeAttachments { get; }
     DbSet<EmployeeAccount> EmployeeAccounts { get; }
     DbSet<AuditLog> AuditLogs { get; }
+    DbSet<DepartureRequest> DepartureRequests { get; }
+    DbSet<DepartureTask> DepartureTasks { get; }
+    DbSet<DepartureTaskItem> DepartureTaskItems { get; }
+    DbSet<DepartureTaskTemplate> DepartureTaskTemplates { get; }
+    DbSet<DepartureTaskTemplateItem> DepartureTaskTemplateItems { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

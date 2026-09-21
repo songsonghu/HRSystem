@@ -80,3 +80,24 @@ public enum AccountStatus
     Active = 0,     // Account is live
     Disabled = 1    // Account has been disabled
 }
+
+/// <summary>Overall status of a departure request (master workflow).</summary>
+public enum DepartureRequestStatus
+{
+    Draft = 0,
+    Submitted = 1,
+    InProgress = 2,
+    PendingFinalReview = 3,
+    Completed = 4,
+    Cancelled = 5
+}
+
+/// <summary>Status of one department departure task.</summary>
+public enum DepartureTaskStatus
+{
+    NotStarted = 0,
+    InProgress = 1,
+    Completed = 2,
+    Returned = 3,
+    NotApplicable = 4
+}

@@ -68,6 +68,7 @@ public static class DependencyInjection
         services.AddScoped<IFileStorageService, LocalFileStorageService>();
         services.AddScoped<IReportService, ReportService>();
         services.AddScoped<IAuditService, AuditService>();
+        services.AddScoped<IUserDirectoryService, UserDirectoryService>();
 
         return services;
     }

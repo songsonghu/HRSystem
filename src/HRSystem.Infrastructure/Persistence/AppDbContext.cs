@@ -24,6 +24,11 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
     public DbSet<EmployeeAttachment> EmployeeAttachments => Set<EmployeeAttachment>();
     public DbSet<EmployeeAccount> EmployeeAccounts => Set<EmployeeAccount>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<DepartureRequest> DepartureRequests => Set<DepartureRequest>();
+    public DbSet<DepartureTask> DepartureTasks => Set<DepartureTask>();
+    public DbSet<DepartureTaskItem> DepartureTaskItems => Set<DepartureTaskItem>();
+    public DbSet<DepartureTaskTemplate> DepartureTaskTemplates => Set<DepartureTaskTemplate>();
+    public DbSet<DepartureTaskTemplateItem> DepartureTaskTemplateItems => Set<DepartureTaskTemplateItem>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

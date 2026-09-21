@@ -1,0 +1,64 @@
+@model DepartureTaskEditViewModel
+@{
+    ViewData["Title"] = "Departure Task";
+}
+
+<h2>Departure Task - @Model.DepartmentName</h2>
+<p class="text-muted">Request @Model.RequestNo · @Model.EmployeeName (@Model.EmployeeNo)</p>
+
+<form asp-action="Task" method="post">
+    @Html.AntiForgeryToken()
+    <input type="hidden" asp-for="TaskId" />
+    <input type="hidden" asp-for="RequestId" />
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Done</th>
+                    <th>N/A</th>
+                    <th>Checklist Item</th>
+                    <th>Remark</th>
+                </tr>
+            </thead>
+            <tbody>
+            @for (int i = 0; i < Model.Items.Count; i++)
+            {
+                <tr>
+                    <td>
+                        <input type="hidden" asp-for="Items[i].Id" />
+                        <input asp-for="Items[i].IsCompleted" class="form-check-input" />
+                    </td>
+                    <td><input asp-for="Items[i].IsNotApplicable" class="form-check-input" /></td>
+                    <td>
+                        @Model.Items[i].Description
+                        @if (Model.Items[i].IsRequired)
+                        {
+                            <span class="text-danger">*</span>
+                        }
+                    </td>
+                    <td><input asp-for="Items[i].Remark" class="form-control" /></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="TaskRemark" class="form-label"></label>
+        <textarea asp-for="TaskRemark" class="form-control" rows="3"></textarea>
+    </div>
+
+    <div class="form-check mb-3">
+        <input asp-for="MarkAsCompleted" class="form-check-input" />
+        <label asp-for="MarkAsCompleted" class="form-check-label">Submit this department task as completed</label>
+    </div>
+
+    <button class="btn btn-primary">Save</button>
+    <a asp-action="MyTasks" class="btn btn-outline-secondary">Back</a>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
