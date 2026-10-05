@@ -1,7 +1,9 @@
-﻿using HRSystem.Application;
+﻿using FluentValidation.AspNetCore;
+using HRSystem.Application;
 using HRSystem.Application.Interfaces;
 using HRSystem.Infrastructure;
 using HRSystem.Infrastructure.Identity;
+using HRSystem.Infrastructure.Middleware;
 using HRSystem.Infrastructure.Persistence;
 using HRSystem.Web.Services;
 using Hangfire;
@@ -18,8 +20,9 @@ builder.Host.UseSerilog((ctx, cfg) => cfg
     .WriteTo.Console()
     .WriteTo.File("Logs/log-.txt", rollingInterval: RollingInterval.Day));
 
-// --- MVC + Razor ---
-builder.Services.AddControllersWithViews();
+// --- MVC + Razor + FluentValidation ---
+builder.Services.AddControllersWithViews()
+    .AddFluentValidation(cfg => cfg.AutomaticValidationEnabled = true);
 builder.Services.AddRazorPages(); // for Identity UI
 
 // --- HttpContext + current user bridge ---
@@ -41,6 +44,9 @@ builder.Services.AddAuthorization(options =>
 var app = builder.Build();
 
 // --- Middleware pipeline ---
+// Global exception handling (before other middleware)
+app.UseMiddleware<ExceptionHandlingMiddleware>();
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");

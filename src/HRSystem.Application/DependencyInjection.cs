@@ -1,3 +1,5 @@
+using FluentValidation;
+using HRSystem.Application.DTOs.Validators;
 using HRSystem.Application.Interfaces;
 using HRSystem.Application.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,6 +16,10 @@ public static class DependencyInjection
         services.AddScoped<IAccountRequestService, AccountRequestService>();
         services.AddScoped<IOffboardingService, OffboardingService>();
         services.AddScoped<IDepartureService, DepartureService>();
+
+        // FluentValidation - auto-register all validators in this assembly
+        services.AddValidatorsFromAssemblyContaining<EmployeeEditDtoValidator>(includeInternalTypes: true);
+
         return services;
     }
 }

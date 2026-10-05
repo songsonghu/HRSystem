@@ -63,6 +63,10 @@ public static class DependencyInjection
             }));
         services.AddHangfireServer();
 
+        // Repository & Unit of Work
+        services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
+
         // Infrastructure service implementations
         services.AddScoped<IEmailService, EmailService>();
         services.AddScoped<IFileStorageService, LocalFileStorageService>();
