@@ -7,13 +7,9 @@ public class EmployeeEditDtoValidator : AbstractValidator<EmployeeEditDto>
 {
     public EmployeeEditDtoValidator()
     {
-        RuleFor(x => x.EmployeeNo)
-            .NotEmpty().WithMessage("Staff No. is required.")
-            .MaximumLength(50);
-
-        RuleFor(x => x.Name)
-            .NotEmpty().WithMessage("Name is required.")
-            .MaximumLength(100);
+        // Required-ness of EmployeeNo/Name comes from MVC's implicit [Required] on non-nullable strings.
+        RuleFor(x => x.EmployeeNo).MaximumLength(50);
+        RuleFor(x => x.Name).MaximumLength(100);
 
         RuleFor(x => x.Email)
             .MaximumLength(200)
