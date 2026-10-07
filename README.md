@@ -22,16 +22,15 @@ built on **ASP.NET Core 8.0 (MVC + Razor Pages)** using **Clean Architecture**.
 ## 🏗️ Architecture (Clean Architecture)
 
 ```
-HRSystem.sln
 ├─ src/
-│  ├─ HR.Domain          # Entities, Enums, base types (no external deps)
-│  ├─ HR.Application     # DTOs, Interfaces, Services, Workflow state machine
-│  ├─ HR.Infrastructure  # EF Core 8, Identity, Email(MailKit+Hangfire), Files, Reports
-│  └─ HR.Web             # MVC Controllers/Views + Identity Razor Pages
-├─ database/             # SQL scripts (create / seed / queries)
-├─ docs/                 # Design document
-├─ HRSystem.sln
-├─ .gitignore
+│  ├─ HRSystem.sln
+│  ├─ HRSystem.Domain          # Entities, Enums, base types (no external deps)
+│  ├─ HRSystem.Application     # DTOs, validators, interfaces, services, workflow state machine
+│  ├─ HRSystem.Infrastructure  # EF Core 8, Identity, Email(MailKit+Hangfire), Files, Reports
+│  └─ HRSystem.Web             # MVC Controllers/Views + Identity Razor Pages
+├─ database/                   # SQL scripts (create / seed / queries)
+├─ docs/                       # Design document
+├─ global.json
 └─ README.md
 ```
 
@@ -44,6 +43,7 @@ Dependency direction: **Web → Application → Domain ← Infrastructure**.
 - ASP.NET Core 8.0 MVC + Razor Pages, Bootstrap 5
 - Entity Framework Core 8 (Code First) + SQL Server
 - ASP.NET Core Identity (roles / policies)
+- FluentValidation (input validation, `HRSystem.Application/DTOs/Validators`)
 - MailKit + **Hangfire** (background email queue with retries)
 - ClosedXML (Excel export)
 - Serilog (file + console logging)
@@ -57,7 +57,7 @@ Dependency direction: **Web → Application → Domain ← Infrastructure**.
 - SQL Server 2019+ (or SQL Server Express / LocalDB)
 
 ### 1. Configure the connection string
-Edit `src/HR.Web/appsettings.json`:
+Edit `src/HRSystem.Web/appsettings.json`:
 
 ```json
 "ConnectionStrings": {
@@ -68,13 +68,13 @@ Edit `src/HR.Web/appsettings.json`:
 ### 2. Restore & create the EF Core migration
 
 ```bash
-dotnet restore
+dotnet restore src/HRSystem.sln
 dotnet tool install --global dotnet-ef      # if not installed
 
-# Create the initial migration (run from repo root)
-dotnet ef migrations add InitialCreate \
-  --project src/HR.Infrastructure \
-  --startup-project src/HR.Web
+# Add a migration (run from repo root)
+dotnet ef migrations add <Name> \
+  --project src/HRSystem.Infrastructure \
+  --startup-project src/HRSystem.Web
 ```
 
 > The app also calls `DbSeeder.SeedAsync` on startup, which runs
@@ -84,7 +84,7 @@ dotnet ef migrations add InitialCreate \
 ### 3. Run
 
 ```bash
-dotnet run --project src/HR.Web
+dotnet run --project src/HRSystem.Web
 ```
 
 Browse to `https://localhost:7080`.
