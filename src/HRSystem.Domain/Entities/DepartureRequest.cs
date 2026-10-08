@@ -6,6 +6,9 @@ namespace HRSystem.Domain.Entities;
 public class DepartureRequest : BaseEntity
 {
     public string RequestNo { get; set; } = string.Empty;
+
+    /// <summary>Optimistic concurrency token; departments update tasks of the same request in parallel.</summary>
+    public byte[] RowVersion { get; set; } = Array.Empty<byte>();
     public int EmployeeId { get; set; }
     public DepartureRequestStatus Status { get; set; } = DepartureRequestStatus.Draft;
     public DateTime LastWorkingDate { get; set; }

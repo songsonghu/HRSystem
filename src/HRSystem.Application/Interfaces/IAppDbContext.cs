@@ -24,5 +24,8 @@ public interface IAppDbContext
     DbSet<DepartureTaskTemplate> DepartureTaskTemplates { get; }
     DbSet<DepartureTaskTemplateItem> DepartureTaskTemplateItems { get; }
 
+    /// <summary>Used to discard tracked state before retrying after a concurrency conflict.</summary>
+    Microsoft.EntityFrameworkCore.ChangeTracking.ChangeTracker ChangeTracker { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

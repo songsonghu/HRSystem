@@ -13,8 +13,8 @@ built on **ASP.NET Core 8.0 (MVC + Razor Pages)** using **Clean Architecture**.
 |---|--------|-------------|
 | 1 | **Users, Roles & Permissions** | ASP.NET Core Identity. Admins manage users (disable, reset password, link to an employee) and roles; each role is a set of permissions checked by policy. |
 | 2 | **Organization & Employees** | Departments with a manager (an employee) and their members; employee records (staff no., name, gender, position, department, email, category, join date, attachments) with search and soft delete. Account and departure tasks for a department are assigned to its manager's login. |
-| 3 | **Account Provisioning Workflow** | HR raises a request → fans out into per-account-type items → dispatched to 5 responsible departments → each opens the account & submits → master status auto-recomputes. Triggers new-employee email + department-head emails. Scanned signed approval upload. |
-| 4 | **In-service Add / Remove** | Same request pipeline with `RequestType = Add / Remove`, updating the account ledger. |
+| 3 | **Account Provisioning Workflow** | A request fans out into per-account-type items → dispatched to each responsible department's manager → they open the account & submit → master status auto-recomputes (safe under parallel updates). Notifies the employee and each manager. Scanned signed approval upload. |
+| 4 | **Account requests (self-service)** | `Add / Remove` requests can be raised by HR (anyone), a department manager (their team, dispatched directly) or an employee for themself — which first needs their department manager's approval or rejection (with reason). |
 | 5 | **Offboarding & Export** | List all active accounts of a leaver and export an Excel de-provisioning checklist (ClosedXML). |
 
 ---
@@ -123,20 +123,27 @@ always holds every permission and cannot be renamed or deleted.
 | `system.jobs` | Hangfire dashboard `/hangfire` | Admin |
 | `employees.manage` | Employees | Admin, HR |
 | `departments.manage` | Departments and department managers | Admin, HR |
-| `account-requests.manage` | Account requests (create / submit / track) | Admin, HR |
+| `account-requests.manage` | Account requests for any employee, including onboarding/offboarding types | Admin, HR |
 | `departures.manage` | Departure requests (create / submit / finalize) | Admin, HR |
 | `offboarding.export` | Employee account list & Excel export | Admin, HR |
 | `tasks.process` | My Tasks / My Departure Tasks | Admin, DeptHead |
 
 Default roles and users are only seeded into an empty database; after that they are managed in the UI.
 
+Some access comes from the organization data rather than a permission: any user whose login is
+linked to an employee can raise Add/Remove account requests for themself; the manager of a
+department can raise them for its employees and approves the self-service ones; whoever an item
+is assigned to can process it.
+
 ---
 
 ## 🔄 Account request state machine
 
 **Item status:** `NotStarted → WIP → Completed` (with side paths `KIV`, `Rejected`).
-**Master status:** `Draft → Submitted → InProgress → Completed → Closed`, recomputed
-from the aggregate of all items by `WorkflowService`.
+**Master status:** `Draft → [PendingApproval →] Submitted → InProgress → Completed → Closed`
+(self-service requests pass through `PendingApproval` and may end as `Rejected`). After
+dispatch it is recomputed from the aggregate of all items by `WorkflowService`; the request's
+row version makes parallel updates by different departments retry instead of overwriting each other.
 
 See `docs/DESIGN.md` for the full flow and ER overview.
 

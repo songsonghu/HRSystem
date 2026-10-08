@@ -76,6 +76,11 @@ public class AccountRequestConfig : IEntityTypeConfiguration<AccountRequest>
         b.HasIndex(x => x.RequestNo).IsUnique();
         b.Property(x => x.Remark).HasMaxLength(1000);
         b.Property(x => x.ReplacementOf).HasMaxLength(100);
+        b.Property(x => x.ApproverUserId).HasMaxLength(450);
+        b.HasIndex(x => new { x.ApproverUserId, x.Status });
+        b.Property(x => x.DecidedBy).HasMaxLength(450);
+        b.Property(x => x.DecisionRemark).HasMaxLength(1000);
+        b.Property(x => x.RowVersion).IsRowVersion();
         b.HasOne(x => x.Employee)
             .WithMany(e => e.AccountRequests)
             .HasForeignKey(x => x.EmployeeId)
@@ -169,6 +174,7 @@ public class DepartureRequestConfig : IEntityTypeConfiguration<DepartureRequest>
     {
         b.ToTable("DepartureRequests");
         b.HasKey(x => x.Id);
+        b.Property(x => x.RowVersion).IsRowVersion();
         b.Property(x => x.RequestNo).HasMaxLength(30).IsRequired();
         b.HasIndex(x => x.RequestNo).IsUnique();
         b.HasIndex(x => new { x.EmployeeId, x.Status });

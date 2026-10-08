@@ -20,13 +20,13 @@
             </div>
         </div>
     }
-    @if (User.HasPermission(Permissions.AccountRequestsManage))
+    @if (User.Identity?.IsAuthenticated == true)
     {
         <div class="col-md-4">
             <div class="card h-100">
                 <div class="card-body">
                     <h5 class="card-title">Account Requests</h5>
-                    <p class="card-text">Raise onboarding/add/remove requests and track status.</p>
+                    <p class="card-text">Request new accounts or changes (e.g. email, trading system access), approve your team's requests, and track status.</p>
                     <a class="btn btn-primary" asp-controller="Requests" asp-action="Index">Open</a>
                 </div>
             </div>

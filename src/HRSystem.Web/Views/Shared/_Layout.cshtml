@@ -28,10 +28,7 @@
                             {
                                 <li class="nav-item"><a class="nav-link" asp-controller="Departments" asp-action="Index">Departments</a></li>
                             }
-                            @if (User.HasPermission(Permissions.AccountRequestsManage))
-                            {
-                                <li class="nav-item"><a class="nav-link" asp-controller="Requests" asp-action="Index">Requests</a></li>
-                            }
+                            <li class="nav-item"><a class="nav-link" asp-controller="Requests" asp-action="Index">Account Requests</a></li>
                             @if (User.HasPermission(Permissions.DeparturesManage))
                             {
                                 <li class="nav-item"><a class="nav-link" asp-controller="Departures" asp-action="Index">Departures</a></li>

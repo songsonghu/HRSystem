@@ -62,11 +62,13 @@ public enum RequestType
 /// <summary>Overall status of an account request (the master ticket).</summary>
 public enum RequestStatus
 {
-    Draft = 0,       // Being prepared by HR, not submitted
-    Submitted = 1,   // Submitted, emails dispatched to department heads
-    InProgress = 2,  // At least one item handled, not all completed
-    Completed = 3,   // All items completed
-    Closed = 4       // Archived
+    Draft = 0,            // Being prepared, not submitted
+    Submitted = 1,        // Dispatched to the responsible departments
+    InProgress = 2,       // At least one item handled, not all completed
+    Completed = 3,        // All items completed
+    Closed = 4,           // Archived
+    PendingApproval = 5,  // Raised by the employee; waiting for their department manager
+    Rejected = 6          // Rejected by the approving manager; never dispatched
 }
 
 /// <summary>

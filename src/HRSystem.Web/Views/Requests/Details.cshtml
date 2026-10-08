@@ -17,7 +17,7 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h2>Request @Model.RequestNo</h2>
-    <span class="badge bg-primary fs-6">@Model.Status</span>
+    <span class="fs-6"><partial name="_RequestStatusBadge" model="Model.Status" /></span>
 </div>
 
 <dl class="row col-md-8">
@@ -35,6 +35,18 @@
     }
     <dt class="col-sm-3">Remark</dt><dd class="col-sm-9">@Model.Remark</dd>
     <dt class="col-sm-3">Applied</dt><dd class="col-sm-9">@(Model.AppliedAt?.ToString("yyyy-MM-dd HH:mm") ?? "-")</dd>
+    @if (Model.ApproverName is not null)
+    {
+        <dt class="col-sm-3">Approver</dt><dd class="col-sm-9">@Model.ApproverName</dd>
+    }
+    @if (Model.DecidedAt is not null)
+    {
+        <dt class="col-sm-3">@(Model.Status == RequestStatus.Rejected ? "Rejected" : "Approved")</dt>
+        <dd class="col-sm-9">
+            @Model.DecidedByName, @Model.DecidedAt.Value.ToString("yyyy-MM-dd HH:mm")
+            @if (!string.IsNullOrWhiteSpace(Model.DecisionRemark)) { <br /><span class="text-muted">Reason: @Model.DecisionRemark</span> }
+        </dd>
+    }
 </dl>
 
 <h4 class="mt-4">Account Items</h4>
@@ -68,26 +80,56 @@
             }
             @if (Model.Attachments.Count == 0) { <li class="text-muted">No files uploaded.</li> }
         </ul>
-        <form asp-action="Upload" asp-route-id="@Model.Id" method="post" enctype="multipart/form-data" class="input-group">
-            @Html.AntiForgeryToken()
-            <input type="file" name="file" class="form-control" required />
-            <button class="btn btn-outline-secondary">Upload</button>
-        </form>
+        @if (Model.CanUpload)
+        {
+            <form asp-action="Upload" asp-route-id="@Model.Id" method="post" enctype="multipart/form-data" class="input-group">
+                <input type="file" name="file" class="form-control" required />
+                <button class="btn btn-outline-secondary">Upload</button>
+            </form>
+        }
     </div>
     <div class="col-md-6">
         <h5>Actions</h5>
-        @if (Model.Status == RequestStatus.Draft)
+        @if (Model.CanSubmit && Model.SubmitNeedsApproval)
         {
             <form asp-action="Submit" asp-route-id="@Model.Id" method="post"
-                  onsubmit="return confirm('Submit and notify departments?');">
-                @Html.AntiForgeryToken()
+                  onsubmit="return confirm('Submit this request to your manager for approval?');">
+                <button class="btn btn-success">Submit for Approval</button>
+            </form>
+            <p class="text-muted mt-2">Your department manager will be asked to approve it before it is sent to the responsible departments.</p>
+        }
+        else if (Model.CanSubmit)
+        {
+            <form asp-action="Submit" asp-route-id="@Model.Id" method="post"
+                  onsubmit="return confirm('Submit and notify the responsible departments?');">
                 <button class="btn btn-success">Submit &amp; Dispatch</button>
             </form>
-            <p class="text-muted mt-2">Submitting triggers the new-employee email and notifies each responsible department head.</p>
+            <p class="text-muted mt-2">Submitting notifies the employee and each responsible department manager.</p>
         }
-        else
+        else if (Model.CanApprove)
         {
-            <p class="text-muted">This request has been submitted and is being processed.</p>
+            <form asp-action="Approve" asp-route-id="@Model.Id" method="post" class="mb-3"
+                  onsubmit="return confirm('Approve and send to the responsible departments?');">
+                <button class="btn btn-success">Approve</button>
+            </form>
+            <form asp-action="Reject" asp-route-id="@Model.Id" method="post">
+                <div class="input-group">
+                    <input name="reason" class="form-control" placeholder="Reason for rejecting" required maxlength="1000" />
+                    <button class="btn btn-outline-danger">Reject</button>
+                </div>
+            </form>
+        }
+        else if (Model.Status == RequestStatus.PendingApproval)
+        {
+            <p class="text-muted">Waiting for approval by @(Model.ApproverName ?? "the department manager").</p>
+        }
+        else if (Model.Status == RequestStatus.Rejected)
+        {
+            <p class="text-muted">This request was rejected and will not be processed.</p>
+        }
+        else if (Model.Status != RequestStatus.Draft)
+        {
+            <p class="text-muted">This request has been sent to the responsible departments.</p>
         }
     </div>
 </div>

@@ -241,7 +241,10 @@ public class DepartureService : IDepartureService
         return MapTask(task);
     }
 
-    public async Task<Result> UpdateTaskAsync(DepartureTaskUpdateDto dto, CancellationToken ct = default)
+    public Task<Result> UpdateTaskAsync(DepartureTaskUpdateDto dto, CancellationToken ct = default)
+        => ConcurrencyRetry.RunAsync(_db, () => UpdateTaskOnceAsync(dto, ct));
+
+    private async Task<Result> UpdateTaskOnceAsync(DepartureTaskUpdateDto dto, CancellationToken ct)
     {
         var task = await _db.DepartureTasks
             .Include(t => t.DepartureRequest)
@@ -296,13 +299,19 @@ public class DepartureService : IDepartureService
             task.CompletedAt = null;
         }
 
+        // Always write the request row so its row version detects a parallel update by another
+        // department; the retry then recomputes from the tasks that department just changed.
         await RecomputeRequestStatusAsync(task.DepartureRequest!, ct);
+        task.DepartureRequest!.ModifiedAt = now;
         await _db.SaveChangesAsync(ct);
         await _audit.LogAsync("UpdateDepartureTask", nameof(DepartureTask), task.Id.ToString(), task.Status.ToString(), ct);
         return Result.Success();
     }
 
-    public async Task<Result> FinalizeAsync(int requestId, CancellationToken ct = default)
+    public Task<Result> FinalizeAsync(int requestId, CancellationToken ct = default)
+        => ConcurrencyRetry.RunAsync(_db, () => FinalizeOnceAsync(requestId, ct));
+
+    private async Task<Result> FinalizeOnceAsync(int requestId, CancellationToken ct)
     {
         var request = await _db.DepartureRequests
             .Include(r => r.Employee)
@@ -311,6 +320,8 @@ public class DepartureService : IDepartureService
         if (request is null) return Result.Fail("Departure request not found.");
         if (!_currentUser.HasPermission(Permissions.DeparturesManage))
             return Result.Fail("You do not have permission to finalize departure requests.");
+        if (request.Status == DepartureRequestStatus.Completed)
+            return Result.Fail("This departure request is already finalized.");
 
         var requiredTasks = request.Tasks.Where(t => t.IsRequired).ToList();
         if (requiredTasks.Count == 0)
