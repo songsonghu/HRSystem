@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using HRSystem.Application.Security;
 using HRSystem.Domain.Entities;
 using HRSystem.Domain.Enums;
 using HRSystem.Infrastructure.Identity;
@@ -15,6 +17,17 @@ namespace HRSystem.Infrastructure.Persistence;
 /// </summary>
 public static class DbSeeder
 {
+    // Keep in sync with the AddEmployeeUserLinkAndPermissions migration, which grants the same set to existing databases.
+    private static readonly (string Role, string[] Permissions)[] DefaultRolePermissions =
+    {
+        (Roles.HR, new[]
+        {
+            Permissions.EmployeesManage, Permissions.AccountRequestsManage,
+            Permissions.DeparturesManage, Permissions.OffboardingExport
+        }),
+        (Roles.DeptHead, new[] { Permissions.TasksProcess })
+    };
+
     public static async Task SeedAsync(IServiceProvider services)
     {
         using var scope = services.CreateScope();
@@ -26,16 +39,29 @@ public static class DbSeeder
 
         await db.Database.MigrateAsync();
 
-        // 1) Roles
-        foreach (var role in new[] { Roles.Admin, Roles.HR, Roles.DeptHead })
+        // Roles and users are managed in the UI after installation, so defaults are only
+        // created on a fresh database; otherwise deleted roles/users would reappear on restart.
+        bool freshInstall = !await roleManager.Roles.AnyAsync();
+
+        // 1) Roles. Admin is built in and implicitly holds every permission.
+        if (!await roleManager.RoleExistsAsync(Roles.Admin))
+            await roleManager.CreateAsync(new IdentityRole(Roles.Admin));
+
+        if (freshInstall)
         {
-            if (!await roleManager.RoleExistsAsync(role))
-                await roleManager.CreateAsync(new IdentityRole(role));
+            foreach (var (roleName, permissions) in DefaultRolePermissions)
+            {
+                var role = new IdentityRole(roleName);
+                await roleManager.CreateAsync(role);
+                foreach (var permission in permissions)
+                    await roleManager.AddClaimAsync(role, new Claim(Permissions.ClaimType, permission));
+            }
         }
 
-        // 2) Default admin account
+        // 2) Default admin account, only while no Admin user exists.
         const string adminEmail = "admin@hrsystem.local";
-        if (await userManager.FindByEmailAsync(adminEmail) is null)
+        if ((await userManager.GetUsersInRoleAsync(Roles.Admin)).Count == 0
+            && await userManager.FindByEmailAsync(adminEmail) is null)
         {
             var admin = new ApplicationUser
             {
@@ -104,7 +130,8 @@ public static class DbSeeder
             await db.SaveChangesAsync();
         }
 
-        await EnsureDepartmentHeadsAsync(db, userManager);
+        if (freshInstall)
+            await EnsureDepartmentHeadsAsync(db, userManager);
 
         // 4) Account types mapped to responsible departments, tagged with the
         // requisition form(s) they appear on (Staff / AE / Both).
@@ -204,10 +231,8 @@ public static class DbSeeder
                 };
                 var createResult = await userManager.CreateAsync(user, GenerateSeedPassword());
                 if (!createResult.Succeeded) continue;
-            }
-
-            if (!await userManager.IsInRoleAsync(user, Roles.DeptHead))
                 await userManager.AddToRoleAsync(user, Roles.DeptHead);
+            }
 
             if (department.HeadUserId != user.Id)
             {

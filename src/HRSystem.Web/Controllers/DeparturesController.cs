@@ -1,3 +1,4 @@
+using HRSystem.Application.Security;
 using HRSystem.Application.Interfaces;
 using HRSystem.Domain.Enums;
 using HRSystem.Web.ViewModels;
@@ -13,14 +14,14 @@ public class DeparturesController : Controller
 
     public DeparturesController(IDepartureService service) => _service = service;
 
-    [Authorize(Policy = "RequireHR")]
+    [Authorize(Policy = Permissions.DeparturesManage)]
     public async Task<IActionResult> Index()
     {
         var requests = await _service.GetAllAsync();
         return View(requests);
     }
 
-    [Authorize(Policy = "RequireHR")]
+    [Authorize(Policy = Permissions.DeparturesManage)]
     public async Task<IActionResult> Create(int employeeId)
     {
         var openRequestId = await _service.GetOpenRequestIdByEmployeeAsync(employeeId);
@@ -41,7 +42,7 @@ public class DeparturesController : Controller
     }
 
     [HttpPost]
-    [Authorize(Policy = "RequireHR")]
+    [Authorize(Policy = Permissions.DeparturesManage)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(DepartureCreateViewModel vm)
     {
@@ -67,7 +68,7 @@ public class DeparturesController : Controller
         return RedirectToAction(nameof(Details), new { id = result.Value });
     }
 
-    [Authorize(Policy = "RequireHR")]
+    [Authorize(Policy = Permissions.DeparturesManage)]
     public async Task<IActionResult> Details(int id)
     {
         var request = await _service.GetAsync(id);
@@ -84,7 +85,7 @@ public class DeparturesController : Controller
     }
 
     [HttpPost]
-    [Authorize(Policy = "RequireHR")]
+    [Authorize(Policy = Permissions.DeparturesManage)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Submit(int id)
     {
@@ -96,7 +97,7 @@ public class DeparturesController : Controller
     }
 
     [HttpPost]
-    [Authorize(Policy = "RequireHR")]
+    [Authorize(Policy = Permissions.DeparturesManage)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Finalize(int id)
     {
@@ -107,14 +108,14 @@ public class DeparturesController : Controller
         return RedirectToAction(nameof(Details), new { id });
     }
 
-    [Authorize(Policy = "RequireDeptHead")]
+    [Authorize(Policy = Permissions.TasksProcess)]
     public async Task<IActionResult> MyTasks()
     {
         var tasks = await _service.GetMyPendingTasksAsync();
         return View(tasks);
     }
 
-    [Authorize(Policy = "RequireDeptHead")]
+    [Authorize(Policy = Permissions.TasksProcess)]
     public async Task<IActionResult> Task(int id)
     {
         var task = await _service.GetTaskAsync(id);
@@ -123,7 +124,7 @@ public class DeparturesController : Controller
     }
 
     [HttpPost]
-    [Authorize(Policy = "RequireDeptHead")]
+    [Authorize(Policy = Permissions.TasksProcess)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Task(DepartureTaskEditViewModel vm)
     {

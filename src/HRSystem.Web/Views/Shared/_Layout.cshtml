@@ -20,16 +20,42 @@
                     <ul class="navbar-nav me-auto">
                         @if (User.Identity?.IsAuthenticated == true)
                         {
-                            @if (User.IsInRole("Admin") || User.IsInRole("HR"))
+                            @if (User.HasPermission(Permissions.EmployeesManage))
                             {
                                 <li class="nav-item"><a class="nav-link" asp-controller="Employees" asp-action="Index">Employees</a></li>
+                            }
+                            @if (User.HasPermission(Permissions.AccountRequestsManage))
+                            {
                                 <li class="nav-item"><a class="nav-link" asp-controller="Requests" asp-action="Index">Requests</a></li>
+                            }
+                            @if (User.HasPermission(Permissions.DeparturesManage))
+                            {
                                 <li class="nav-item"><a class="nav-link" asp-controller="Departures" asp-action="Index">Departures</a></li>
                             }
-                            @if (User.IsInRole("Admin") || User.IsInRole("DeptHead"))
+                            @if (User.HasPermission(Permissions.TasksProcess))
                             {
                                 <li class="nav-item"><a class="nav-link" asp-controller="MyTasks" asp-action="Index">My Tasks</a></li>
                                 <li class="nav-item"><a class="nav-link" asp-controller="Departures" asp-action="MyTasks">My Departure Tasks</a></li>
+                            }
+                            @if (User.HasPermission(Permissions.UsersManage) || User.HasPermission(Permissions.RolesManage) || User.HasPermission(Permissions.SystemJobs))
+                            {
+                                <li class="nav-item dropdown">
+                                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Administration</a>
+                                    <ul class="dropdown-menu">
+                                        @if (User.HasPermission(Permissions.UsersManage))
+                                        {
+                                            <li><a class="dropdown-item" asp-controller="Users" asp-action="Index">Users</a></li>
+                                        }
+                                        @if (User.HasPermission(Permissions.RolesManage))
+                                        {
+                                            <li><a class="dropdown-item" asp-controller="Roles" asp-action="Index">Roles &amp; Permissions</a></li>
+                                        }
+                                        @if (User.HasPermission(Permissions.SystemJobs))
+                                        {
+                                            <li><a class="dropdown-item" href="~/hangfire">Background Jobs</a></li>
+                                        }
+                                    </ul>
+                                </li>
                             }
                         }
                     </ul>

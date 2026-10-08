@@ -17,6 +17,8 @@ public class EmployeeConfig : IEntityTypeConfiguration<Employee>
         b.Property(x => x.Email).HasMaxLength(200);
         b.Property(x => x.Department).HasMaxLength(100);
         b.Property(x => x.Position).HasMaxLength(100);
+        b.Property(x => x.UserId).HasMaxLength(450);
+        b.HasIndex(x => x.UserId).IsUnique().HasFilter("[UserId] IS NOT NULL");
         b.HasQueryFilter(x => !x.IsDeleted);
     }
 }

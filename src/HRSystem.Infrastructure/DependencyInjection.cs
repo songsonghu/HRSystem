@@ -47,6 +47,10 @@ public static class DependencyInjection
             options.AccessDeniedPath = "/Identity/Account/AccessDenied";
         });
 
+        // Role/permission changes reach signed-in users when their cookie principal is
+        // re-validated; disabled users and password resets sign them out at the same point.
+        services.Configure<SecurityStampValidatorOptions>(o => o.ValidationInterval = TimeSpan.FromMinutes(1));
+
         // Bind options
         services.Configure<SmtpOptions>(config.GetSection("Smtp"));
         services.Configure<FileStorageOptions>(config.GetSection("FileStorage"));
@@ -69,6 +73,8 @@ public static class DependencyInjection
         services.AddScoped<IReportService, ReportService>();
         services.AddScoped<IAuditService, AuditService>();
         services.AddScoped<IUserDirectoryService, UserDirectoryService>();
+        services.AddScoped<IUserAdminService, UserAdminService>();
+        services.AddScoped<IRoleAdminService, RoleAdminService>();
 
         return services;
     }

@@ -103,6 +103,7 @@ public class EmployeeService : IEmployeeService
         if (entity is null) return Result.Fail("Employee not found.");
 
         entity.IsDeleted = true; // soft delete keeps the audit trail intact
+        entity.UserId = null;    // free the login so it can be linked to another employee
         await _db.SaveChangesAsync(ct);
         await _audit.LogAsync("DeleteEmployee", nameof(Employee), entity.Id.ToString(), null, ct);
         return Result.Success();

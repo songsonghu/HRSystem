@@ -11,7 +11,7 @@ built on **ASP.NET Core 8.0 (MVC + Razor Pages)** using **Clean Architecture**.
 
 | # | Module | Description |
 |---|--------|-------------|
-| 1 | **Login / Authorization** | ASP.NET Core Identity with 3 roles: `Admin`, `HR`, `DeptHead`. Policy-based authorization. |
+| 1 | **Users, Roles & Permissions** | ASP.NET Core Identity. Admins manage users (disable, reset password, link to an employee) and roles; each role is a set of permissions checked by policy. |
 | 2 | **Employee Management** | Create / edit / (soft) delete employees, search & filter. |
 | 3 | **Account Provisioning Workflow** | HR raises a request → fans out into per-account-type items → dispatched to 5 responsible departments → each opens the account & submits → master status auto-recomputes. Triggers new-employee email + department-head emails. Scanned signed approval upload. |
 | 4 | **In-service Add / Remove** | Same request pipeline with `RequestType = Add / Remove`, updating the account ledger. |
@@ -111,13 +111,23 @@ If you prefer to create the schema by hand instead of EF migrations, run in orde
 
 ## 🔐 Roles & permissions
 
-| Area | Admin | HR | DeptHead |
-|------|:----:|:--:|:--------:|
-| Employees | ✅ | ✅ | – |
-| Requests (create/submit/track) | ✅ | ✅ | – |
-| My Tasks (open accounts) | ✅ | – | ✅ |
-| Offboarding export | ✅ | ✅ | – |
-| Hangfire dashboard `/hangfire` | ✅ | – | – |
+Roles are managed under **Administration → Roles & Permissions**; each role is granted a
+subset of the fixed permissions in `HRSystem.Application/Security/Permissions.cs` (stored as
+role claims). Changes reach signed-in users within about a minute. The built-in `Admin` role
+always holds every permission and cannot be renamed or deleted.
+
+| Permission | Grants | Default roles |
+|------------|--------|---------------|
+| `users.manage` | Users page | Admin |
+| `roles.manage` | Roles & Permissions page | Admin |
+| `system.jobs` | Hangfire dashboard `/hangfire` | Admin |
+| `employees.manage` | Employees | Admin, HR |
+| `account-requests.manage` | Account requests (create / submit / track) | Admin, HR |
+| `departures.manage` | Departure requests (create / submit / finalize) | Admin, HR |
+| `offboarding.export` | Employee account list & Excel export | Admin, HR |
+| `tasks.process` | My Tasks / My Departure Tasks | Admin, DeptHead |
+
+Default roles and users are only seeded into an empty database; after that they are managed in the UI.
 
 ---
 

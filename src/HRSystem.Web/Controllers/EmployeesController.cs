@@ -1,3 +1,4 @@
+using HRSystem.Application.Security;
 using HRSystem.Application.DTOs;
 using HRSystem.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -7,7 +8,7 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 namespace HRSystem.Web.Controllers;
 
 /// <summary>Employee management UI (Module 2). Restricted to Admin/HR.</summary>
-[Authorize(Policy = "RequireHR")]
+[Authorize(Policy = Permissions.EmployeesManage)]
 public class EmployeesController : Controller
 {
     private const long MaxAttachmentSize = 20_000_000;

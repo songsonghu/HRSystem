@@ -1,6 +1,7 @@
 ﻿using FluentValidation.AspNetCore;
 using HRSystem.Application;
 using HRSystem.Application.Interfaces;
+using HRSystem.Application.Security;
 using HRSystem.Infrastructure;
 using HRSystem.Infrastructure.Identity;
 using HRSystem.Infrastructure.Persistence;
@@ -33,12 +34,11 @@ builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
-// --- Authorization policies (role-based) ---
+// --- Authorization: one policy per permission, named after the permission ---
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy("RequireAdmin", p => p.RequireRole(Roles.Admin));
-    options.AddPolicy("RequireHR", p => p.RequireRole(Roles.Admin, Roles.HR));
-    options.AddPolicy("RequireDeptHead", p => p.RequireRole(Roles.Admin, Roles.DeptHead));
+    foreach (var permission in Permissions.All)
+        options.AddPolicy(permission.Name, p => p.RequireAssertion(ctx => ctx.User.HasPermission(permission.Name)));
 });
 
 var app = builder.Build();
@@ -73,13 +73,13 @@ await DbSeeder.SeedAsync(app.Services);
 
 app.Run();
 
-/// <summary>Restricts the Hangfire dashboard to authenticated Admin users.</summary>
+/// <summary>Restricts the Hangfire dashboard to users with the system.jobs permission.</summary>
 public class HangfireAdminAuthorizationFilter : Hangfire.Dashboard.IDashboardAuthorizationFilter
 {
     public bool Authorize(Hangfire.Dashboard.DashboardContext context)
     {
         var httpContext = context.GetHttpContext();
         return httpContext.User.Identity?.IsAuthenticated == true
-               && httpContext.User.IsInRole(Roles.Admin);
+               && httpContext.User.HasPermission(Permissions.SystemJobs);
     }
 }

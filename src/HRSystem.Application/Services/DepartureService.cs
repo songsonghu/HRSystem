@@ -1,6 +1,7 @@
 using HRSystem.Application.Common;
 using HRSystem.Application.DTOs;
 using HRSystem.Application.Interfaces;
+using HRSystem.Application.Security;
 using HRSystem.Domain.Entities;
 using HRSystem.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -220,7 +221,7 @@ public class DepartureService : IDepartureService
                         && t.Status != DepartureTaskStatus.Completed
                         && t.Status != DepartureTaskStatus.NotApplicable);
 
-        if (!_currentUser.IsInRole("Admin"))
+        if (!_currentUser.IsAdmin)
             query = query.Where(t => t.AssignedUserId == userId);
 
         var tasks = await query.OrderBy(t => t.SortOrder).ToListAsync(ct);
@@ -307,8 +308,8 @@ public class DepartureService : IDepartureService
             .Include(r => r.Tasks)
             .FirstOrDefaultAsync(r => r.Id == requestId, ct);
         if (request is null) return Result.Fail("Departure request not found.");
-        if (!_currentUser.IsInRole("Admin") && !_currentUser.IsInRole("HR"))
-            return Result.Fail("Only Admin/HR can finalize departure requests.");
+        if (!_currentUser.HasPermission(Permissions.DeparturesManage))
+            return Result.Fail("You do not have permission to finalize departure requests.");
 
         var requiredTasks = request.Tasks.Where(t => t.IsRequired).ToList();
         if (requiredTasks.Count == 0)
@@ -356,7 +357,7 @@ public class DepartureService : IDepartureService
     }
 
     private bool CanHandleTask(string? assignedUserId)
-        => _currentUser.IsInRole("Admin") || (!string.IsNullOrWhiteSpace(_currentUser.UserId) && _currentUser.UserId == assignedUserId);
+        => _currentUser.IsAdmin || (!string.IsNullOrWhiteSpace(_currentUser.UserId) && _currentUser.UserId == assignedUserId);
 
     private async Task NotifyDepartmentHeadsAsync(DepartureRequest request, IReadOnlyList<DepartureTask> tasks, CancellationToken ct)
     {

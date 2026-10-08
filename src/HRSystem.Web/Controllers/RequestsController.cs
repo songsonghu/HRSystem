@@ -1,3 +1,4 @@
+using HRSystem.Application.Security;
 using HRSystem.Application.DTOs;
 using HRSystem.Application.Interfaces;
 using HRSystem.Domain.Enums;
@@ -13,7 +14,7 @@ namespace HRSystem.Web.Controllers;
 /// Account provisioning request UI (Modules 3 &amp; 4). HR creates/submits
 /// requests; Admin can view everyone's status.
 /// </summary>
-[Authorize(Policy = "RequireHR")]
+[Authorize(Policy = Permissions.AccountRequestsManage)]
 public class RequestsController : Controller
 {
     private readonly IAccountRequestService _service;

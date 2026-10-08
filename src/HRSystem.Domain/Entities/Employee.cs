@@ -39,6 +39,9 @@ public class Employee : BaseEntity
     /// </summary>
     public EmployeeCategory Category { get; set; } = EmployeeCategory.Staff;
 
+    /// <summary>Identity user id of this employee's login account, if any (one-to-one).</summary>
+    public string? UserId { get; set; }
+
     // Navigation
     public ICollection<AccountRequest> AccountRequests { get; set; } = new List<AccountRequest>();
     public ICollection<DepartureRequest> DepartureRequests { get; set; } = new List<DepartureRequest>();
