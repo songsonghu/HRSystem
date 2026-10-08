@@ -31,7 +31,7 @@
         <tr>
             <td>@e.EmployeeNo</td>
             <td>@e.Name</td>
-            <td>@e.Department</td>
+            <td>@if (e.DepartmentId is null) { <span class="badge bg-warning text-dark">Unassigned</span> } else { @e.Department }</td>
             <td>@e.Position</td>
             <td><span class="badge bg-light text-dark border">@(e.Category == EmployeeCategory.AE ? "AE/Sales/SA" : "Staff")</span></td>
             <td>@e.JoinDate.ToString("yyyy-MM-dd")</td>

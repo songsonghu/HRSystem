@@ -15,8 +15,10 @@ public class EmployeeConfig : IEntityTypeConfiguration<Employee>
         b.HasIndex(x => x.EmployeeNo).IsUnique();
         b.Property(x => x.Name).HasMaxLength(100).IsRequired();
         b.Property(x => x.Email).HasMaxLength(200);
-        b.Property(x => x.Department).HasMaxLength(100);
         b.Property(x => x.Position).HasMaxLength(100);
+        b.HasOne(x => x.Department).WithMany(d => d.Employees)
+            .HasForeignKey(x => x.DepartmentId)
+            .OnDelete(DeleteBehavior.Restrict);
         b.Property(x => x.UserId).HasMaxLength(450);
         b.HasIndex(x => x.UserId).IsUnique().HasFilter("[UserId] IS NOT NULL");
         b.HasQueryFilter(x => !x.IsDeleted);
@@ -32,7 +34,10 @@ public class DepartmentConfig : IEntityTypeConfiguration<Department>
         b.HasKey(x => x.Id);
         b.Property(x => x.Name).HasMaxLength(100).IsRequired();
         b.Property(x => x.Code).HasMaxLength(50);
-        b.Property(x => x.HeadUserId).HasMaxLength(450);
+        b.HasIndex(x => x.Name).IsUnique(); // departure templates are matched by department name
+        b.HasOne(x => x.Manager).WithMany()
+            .HasForeignKey(x => x.ManagerEmployeeId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
 

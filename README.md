@@ -12,7 +12,7 @@ built on **ASP.NET Core 8.0 (MVC + Razor Pages)** using **Clean Architecture**.
 | # | Module | Description |
 |---|--------|-------------|
 | 1 | **Users, Roles & Permissions** | ASP.NET Core Identity. Admins manage users (disable, reset password, link to an employee) and roles; each role is a set of permissions checked by policy. |
-| 2 | **Employee Management** | Create / edit / (soft) delete employees, search & filter. |
+| 2 | **Organization & Employees** | Departments with a manager (an employee) and their members; employee records (staff no., name, gender, position, department, email, category, join date, attachments) with search and soft delete. Account and departure tasks for a department are assigned to its manager's login. |
 | 3 | **Account Provisioning Workflow** | HR raises a request → fans out into per-account-type items → dispatched to 5 responsible departments → each opens the account & submits → master status auto-recomputes. Triggers new-employee email + department-head emails. Scanned signed approval upload. |
 | 4 | **In-service Add / Remove** | Same request pipeline with `RequestType = Add / Remove`, updating the account ledger. |
 | 5 | **Offboarding & Export** | List all active accounts of a leaver and export an Excel de-provisioning checklist (ClosedXML). |
@@ -122,6 +122,7 @@ always holds every permission and cannot be renamed or deleted.
 | `roles.manage` | Roles & Permissions page | Admin |
 | `system.jobs` | Hangfire dashboard `/hangfire` | Admin |
 | `employees.manage` | Employees | Admin, HR |
+| `departments.manage` | Departments and department managers | Admin, HR |
 | `account-requests.manage` | Account requests (create / submit / track) | Admin, HR |
 | `departures.manage` | Departure requests (create / submit / finalize) | Admin, HR |
 | `offboarding.export` | Employee account list & Excel export | Admin, HR |

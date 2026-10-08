@@ -7,6 +7,14 @@ public enum EmployeeStatus
     Resigned = 1    // Left the company
 }
 
+/// <summary>Employee gender. Unspecified only exists for records created before the field was added.</summary>
+public enum Gender
+{
+    Unspecified = 0,
+    Male = 1,
+    Female = 2
+}
+
 /// <summary>
 /// The category of employee, which determines which paper form layout
 /// ("Staff Requisition Form" vs "AE/Sales/SA Requisition Form") and account

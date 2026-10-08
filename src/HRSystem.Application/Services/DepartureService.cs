@@ -56,6 +56,7 @@ public class DepartureService : IDepartureService
     public async Task<Result<DepartureCreatePageDto>> GetCreatePageAsync(int employeeId, CancellationToken ct = default)
     {
         var employee = await _db.Employees.AsNoTracking()
+            .Include(e => e.Department)
             .FirstOrDefaultAsync(e => e.Id == employeeId && !e.IsDeleted, ct);
         if (employee is null || employee.Status != EmployeeStatus.Active)
             return Result<DepartureCreatePageDto>.Fail("Only active employees can start departure.");
@@ -78,7 +79,7 @@ public class DepartureService : IDepartureService
             EmployeeId = employee.Id,
             EmployeeNo = employee.EmployeeNo,
             EmployeeName = employee.Name,
-            Department = employee.Department,
+            Department = employee.Department?.Name,
             Position = employee.Position,
             JoinDate = employee.JoinDate,
             LastWorkingDateDefault = DateTime.Today,
@@ -153,7 +154,7 @@ public class DepartureService : IDepartureService
             .ToListAsync(ct);
         if (templates.Count == 0) return Result.Fail("No active departure templates found.");
 
-        var departments = await _db.Departments.ToListAsync(ct);
+        var departments = await _db.Departments.Include(d => d.Manager).ToListAsync(ct);
         var tasks = new List<DepartureTask>();
 
         foreach (var template in templates)
@@ -161,12 +162,12 @@ public class DepartureService : IDepartureService
             var department = departments.FirstOrDefault(d => d.Name == template.DepartmentName);
             if (department is null)
                 return Result.Fail($"Department '{template.DepartmentName}' is not configured.");
-            if (string.IsNullOrWhiteSpace(department.HeadUserId))
-                return Result.Fail($"Department '{template.DepartmentName}' has no assigned department head.");
+            if (string.IsNullOrWhiteSpace(department.Manager?.UserId))
+                return Result.Fail($"Department '{template.DepartmentName}' has no manager with a login account. Set one under Departments first.");
 
-            var user = await _users.GetByIdAsync(department.HeadUserId, ct);
+            var user = await _users.GetByIdAsync(department.Manager.UserId, ct);
             if (string.IsNullOrWhiteSpace(user?.Email))
-                return Result.Fail($"Department '{template.DepartmentName}' head user email is missing.");
+                return Result.Fail($"Department '{template.DepartmentName}' manager's login has no email.");
 
             var task = new DepartureTask
             {

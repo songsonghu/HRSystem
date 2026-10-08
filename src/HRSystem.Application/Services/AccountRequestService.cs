@@ -21,6 +21,7 @@ public class AccountRequestService : IAccountRequestService
     private readonly IFileStorageService _files;
     private readonly ICurrentUser _currentUser;
     private readonly IAuditService _audit;
+    private readonly IUserDirectoryService _users;
     private readonly ILogger<AccountRequestService> _logger;
 
     public AccountRequestService(
@@ -30,6 +31,7 @@ public class AccountRequestService : IAccountRequestService
         IFileStorageService files,
         ICurrentUser currentUser,
         IAuditService audit,
+        IUserDirectoryService users,
         ILogger<AccountRequestService> logger)
     {
         _db = db;
@@ -38,6 +40,7 @@ public class AccountRequestService : IAccountRequestService
         _files = files;
         _currentUser = currentUser;
         _audit = audit;
+        _users = users;
         _logger = logger;
     }
 
@@ -97,16 +100,24 @@ public class AccountRequestService : IAccountRequestService
         var request = await _db.AccountRequests
             .Include(r => r.Employee)
             .Include(r => r.Items).ThenInclude(i => i.AccountType)
-            .Include(r => r.Items).ThenInclude(i => i.AssignedDept)
+            .Include(r => r.Items).ThenInclude(i => i.AssignedDept).ThenInclude(d => d!.Manager)
             .FirstOrDefaultAsync(r => r.Id == requestId, ct);
 
         if (request is null) return Result.Fail("Request not found.");
         if (request.Status != RequestStatus.Draft) return Result.Fail("Only draft requests can be submitted.");
         if (request.Items.Count == 0) return Result.Fail("Request has no items.");
 
-        // Snapshot assigned department heads at submit time.
+        var unrouted = request.Items
+            .Where(i => i.AssignedDept?.Manager?.UserId is null)
+            .Select(i => i.AssignedDept?.Name ?? $"#{i.AssignedDeptId}")
+            .Distinct()
+            .ToList();
+        if (unrouted.Count > 0)
+            return Result.Fail($"No manager with a login account is set for: {string.Join(", ", unrouted)}. Set one under Departments first.");
+
+        // Snapshot the assignee at submit time; later manager changes do not move open items.
         foreach (var item in request.Items)
-            item.AssignedUserId = item.AssignedDept?.HeadUserId;
+            item.AssignedUserId = item.AssignedDept!.Manager!.UserId;
 
         request.Status = RequestStatus.Submitted;
         request.AppliedBy = _currentUser.UserId;
@@ -116,7 +127,7 @@ public class AccountRequestService : IAccountRequestService
 
         // --- Notifications (queued, non-blocking) ---
         NotifyNewEmployee(request);
-        NotifyDepartmentHeads(request);
+        await NotifyDepartmentManagersAsync(request, ct);
 
         await _audit.LogAsync("SubmitRequest", nameof(AccountRequest), request.Id.ToString(), request.RequestNo, ct);
         _logger.LogInformation("Request {RequestNo} submitted with {Count} items.", request.RequestNo, request.Items.Count);
@@ -330,10 +341,10 @@ public class AccountRequestService : IAccountRequestService
     }
 
     /// <summary>
-    /// Notify each responsible department head, grouped so a head who owns
+    /// Notify each assigned department manager, grouped so a manager who owns
     /// several account types receives a single consolidated email.
     /// </summary>
-    private void NotifyDepartmentHeads(AccountRequest request)
+    private async Task NotifyDepartmentManagersAsync(AccountRequest request, CancellationToken ct)
     {
         var groups = request.Items
             .Where(i => !string.IsNullOrWhiteSpace(i.AssignedUserId))
@@ -341,8 +352,8 @@ public class AccountRequestService : IAccountRequestService
 
         foreach (var group in groups)
         {
-            var deptHeadEmail = group.First().AssignedDept?.HeadUserId; // resolved to email in infra
-            if (string.IsNullOrWhiteSpace(deptHeadEmail)) continue;
+            var managerEmail = (await _users.GetByIdAsync(group.Key, ct))?.Email;
+            if (string.IsNullOrWhiteSpace(managerEmail)) continue;
 
             var typeList = string.Join(", ", group.Select(i => i.AccountType?.Name));
             var subject = $"[Action Required] Account provisioning for {request.Employee?.Name} ({request.RequestNo})";
@@ -355,7 +366,7 @@ public class AccountRequestService : IAccountRequestService
                 <p>Regards,<br/>HR System</p>
                 """;
 
-            _email.Enqueue(new EmailMessage(new[] { deptHeadEmail }, subject, body));
+            _email.Enqueue(new EmailMessage(new[] { managerEmail }, subject, body));
         }
     }
 

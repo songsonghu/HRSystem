@@ -19,8 +19,13 @@ public class EmployeesController : Controller
     };
 
     private readonly IEmployeeService _service;
+    private readonly IDepartmentService _departments;
 
-    public EmployeesController(IEmployeeService service) => _service = service;
+    public EmployeesController(IEmployeeService service, IDepartmentService departments)
+    {
+        _service = service;
+        _departments = departments;
+    }
 
     // GET: /Employees?keyword=...
     public async Task<IActionResult> Index(string? keyword)
@@ -98,14 +103,15 @@ public class EmployeesController : Controller
         var dto = await _service.GetAsync(id);
         if (dto is null) return NotFound();
 
-        await PopulateDepartmentsAsync();
+        await PopulateDepartmentsAsync(dto.DepartmentId);
         return View(new EmployeeEditDto
         {
             Id = dto.Id,
             EmployeeNo = dto.EmployeeNo,
             Name = dto.Name,
+            Gender = dto.Gender,
             Email = dto.Email,
-            Department = dto.Department,
+            DepartmentId = dto.DepartmentId,
             Position = dto.Position,
             JoinDate = dto.JoinDate,
             ResignDate = dto.ResignDate,
@@ -126,7 +132,7 @@ public class EmployeesController : Controller
         {
             var employee = await _service.GetAsync(dto.Id);
             dto.Attachments = employee?.Attachments ?? Array.Empty<EmployeeAttachmentDto>();
-            await PopulateDepartmentsAsync();
+            await PopulateDepartmentsAsync(employee?.DepartmentId);
             return View(dto);
         }
 
@@ -136,7 +142,7 @@ public class EmployeesController : Controller
             ModelState.AddModelError(string.Empty, result.Error!);
             var employee = await _service.GetAsync(dto.Id);
             dto.Attachments = employee?.Attachments ?? Array.Empty<EmployeeAttachmentDto>();
-            await PopulateDepartmentsAsync();
+            await PopulateDepartmentsAsync(employee?.DepartmentId);
             return View(dto);
         }
 
@@ -183,11 +189,11 @@ public class EmployeesController : Controller
         return RedirectToAction(nameof(Index));
     }
 
-    private async Task PopulateDepartmentsAsync()
+    private async Task PopulateDepartmentsAsync(int? currentDepartmentId = null)
     {
-        var departments = await _service.GetDepartmentNamesAsync();
+        var departments = await _departments.GetOptionsAsync(currentDepartmentId);
         ViewBag.Departments = departments
-            .Select(name => new SelectListItem(name, name))
+            .Select(d => new SelectListItem(d.Name, d.Id.ToString()))
             .ToList();
     }
 

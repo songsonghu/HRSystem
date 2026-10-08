@@ -6,7 +6,6 @@ using HRSystem.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using System.Security.Cryptography;
 
 namespace HRSystem.Infrastructure.Persistence;
 
@@ -17,12 +16,13 @@ namespace HRSystem.Infrastructure.Persistence;
 /// </summary>
 public static class DbSeeder
 {
-    // Keep in sync with the AddEmployeeUserLinkAndPermissions migration, which grants the same set to existing databases.
+    // Keep in sync with the migrations that grant the same permissions to existing databases
+    // (AddEmployeeUserLinkAndPermissions, AddDepartmentsAndGender).
     private static readonly (string Role, string[] Permissions)[] DefaultRolePermissions =
     {
         (Roles.HR, new[]
         {
-            Permissions.EmployeesManage, Permissions.AccountRequestsManage,
+            Permissions.EmployeesManage, Permissions.DepartmentsManage, Permissions.AccountRequestsManage,
             Permissions.DeparturesManage, Permissions.OffboardingExport
         }),
         (Roles.DeptHead, new[] { Permissions.TasksProcess })
@@ -74,15 +74,15 @@ public static class DbSeeder
             await userManager.AddToRoleAsync(admin, Roles.Admin);
         }
 
-        // 3) Departments (each with a placeholder head user email as HeadUserId).
-        // These mirror the sections printed on the two paper requisition forms.
+        // 3) Departments that own account types, mirroring the sections printed on the two
+        // paper requisition forms. Managers are assigned in the UI (Departments page).
         if (!await db.Departments.AnyAsync())
         {
             db.Departments.AddRange(
-                new Department { Name = "Client Service & Internet Trading", Code = "CSIT",   HeadUserId = "csit.head@hrsystem.local" },
-                new Department { Name = "Credit Department",                 Code = "CREDIT", HeadUserId = "credit.head@hrsystem.local" },
-                new Department { Name = "IT Department",                     Code = "IT",      HeadUserId = "it.head@hrsystem.local" },
-                new Department { Name = "HR & Administration Department",    Code = "HR",      HeadUserId = "hr.head@hrsystem.local" });
+                new Department { Name = "Client Service & Internet Trading", Code = "CSIT" },
+                new Department { Name = "Credit Department",                 Code = "CREDIT" },
+                new Department { Name = "IT Department",                     Code = "IT" },
+                new Department { Name = "HR & Administration Department",    Code = "HR" });
             await db.SaveChangesAsync();
         }
 
@@ -129,9 +129,6 @@ public static class DbSeeder
             db.Departments.AddRange(newDepartments);
             await db.SaveChangesAsync();
         }
-
-        if (freshInstall)
-            await EnsureDepartmentHeadsAsync(db, userManager);
 
         // 4) Account types mapped to responsible departments, tagged with the
         // requisition form(s) they appear on (Staff / AE / Both).
@@ -195,54 +192,6 @@ public static class DbSeeder
         }
 
         await SeedDepartureTemplatesAsync(db);
-    }
-
-    private static async Task EnsureDepartmentHeadsAsync(AppDbContext db, UserManager<ApplicationUser> userManager)
-    {
-        var seeds = new[]
-        {
-            new DepartmentHeadSeed("Client Service & Internet Trading", "CSIT", "csit.head@hrsystem.local", "CSIT Department Head"),
-            new DepartmentHeadSeed("Credit Department", "CREDIT", "credit.head@hrsystem.local", "Credit Department Head"),
-            new DepartmentHeadSeed("IT Department", "IT", "it.head@hrsystem.local", "IT Department Head"),
-            new DepartmentHeadSeed("HR & Administration Department", "HR", "hr.head@hrsystem.local", "HR & Administration Head"),
-            new DepartmentHeadSeed("Finance & Accounts", null, "finance.departure.head@hrsystem.local", "Finance & Accounts Head"),
-            new DepartmentHeadSeed("Credit Control", null, "creditcontrol.departure.head@hrsystem.local", "Credit Control Head"),
-            new DepartmentHeadSeed("Legal & Compliance", null, "legal.departure.head@hrsystem.local", "Legal & Compliance Head"),
-            new DepartmentHeadSeed("Information Technology", null, "it.departure.head@hrsystem.local", "Information Technology Head"),
-            new DepartmentHeadSeed("HR & Administration", null, "hradmin.departure.head@hrsystem.local", "HR & Administration Head")
-        };
-
-        foreach (var seed in seeds)
-        {
-            var department = await db.Departments.FirstOrDefaultAsync(d =>
-                (seed.Code != null && d.Code == seed.Code) || d.Name == seed.DepartmentName);
-            if (department is null) continue;
-
-            var user = await userManager.FindByEmailAsync(seed.Email);
-            if (user is null)
-            {
-                user = new ApplicationUser
-                {
-                    UserName = seed.Email,
-                    Email = seed.Email,
-                    EmailConfirmed = true,
-                    FullName = seed.FullName,
-                    DepartmentId = department.Id
-                };
-                var createResult = await userManager.CreateAsync(user, GenerateSeedPassword());
-                if (!createResult.Succeeded) continue;
-                await userManager.AddToRoleAsync(user, Roles.DeptHead);
-            }
-
-            if (department.HeadUserId != user.Id)
-            {
-                department.HeadUserId = user.Id;
-                department.ModifiedAt = DateTime.UtcNow;
-                department.ModifiedBy = "system";
-            }
-        }
-
-        await db.SaveChangesAsync();
     }
 
     private static async Task SeedDepartureTemplatesAsync(AppDbContext db)
@@ -349,12 +298,5 @@ public static class DbSeeder
         await db.SaveChangesAsync();
     }
 
-    private sealed record DepartmentHeadSeed(string DepartmentName, string? Code, string Email, string FullName);
     private sealed record DepartureTemplateSeed(string DepartmentName, int SortOrder, string[] Items);
-
-    private static string GenerateSeedPassword()
-    {
-        var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(8));
-        return $"Dh!{token}a9";
-    }
 }

@@ -16,6 +16,7 @@ public static class DependencyInjection
         services.AddScoped<IAccountRequestService, AccountRequestService>();
         services.AddScoped<IOffboardingService, OffboardingService>();
         services.AddScoped<IDepartureService, DepartureService>();
+        services.AddScoped<IDepartmentService, DepartmentService>();
 
         // FluentValidation - auto-register all validators in this assembly
         services.AddValidatorsFromAssemblyContaining<EmployeeEditDtoValidator>(includeInternalTypes: true);

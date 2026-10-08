@@ -15,11 +15,13 @@ public class Employee : BaseEntity
     /// <summary>Full name.</summary>
     public string Name { get; set; } = string.Empty;
 
+    public Gender Gender { get; set; } = Gender.Unspecified;
+
     /// <summary>Personal / work email used for the welcome notification.</summary>
     public string? Email { get; set; }
 
-    /// <summary>Department name the employee belongs to.</summary>
-    public string? Department { get; set; }
+    public int? DepartmentId { get; set; }
+    public Department? Department { get; set; }
 
     /// <summary>Job title / position.</summary>
     public string? Position { get; set; }

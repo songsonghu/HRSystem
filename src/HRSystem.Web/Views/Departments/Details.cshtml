@@ -1,0 +1,62 @@
+@model DepartmentDetailsDto
+@{
+    ViewData["Title"] = Model.Name;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>
+        @Model.Name
+        @if (!Model.IsActive) { <span class="badge bg-secondary fs-6 align-middle">Inactive</span> }
+    </h2>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-primary" asp-action="Edit" asp-route-id="@Model.Id">Edit</a>
+        <a class="btn btn-secondary" asp-action="Index">Back</a>
+    </div>
+</div>
+
+<dl class="row col-md-6">
+    <dt class="col-sm-4">Code</dt><dd class="col-sm-8">@(Model.Code ?? "—")</dd>
+    <dt class="col-sm-4">Manager</dt><dd class="col-sm-8">@(Model.ManagerName ?? "—")</dd>
+</dl>
+
+@if (Model.ManagerName is null)
+{
+    <div class="alert alert-warning">No manager is set. Account and departure tasks for this department cannot be assigned until one is.</div>
+}
+else if (!Model.ManagerCanReceiveTasks)
+{
+    <div class="alert alert-warning">The manager has no login account. Link one under Administration → Users so tasks can be assigned to this department.</div>
+}
+
+<h4 class="mt-4">Employees (@Model.Employees.Count)</h4>
+<table class="table table-sm table-striped align-middle">
+    <thead>
+        <tr><th>Staff No.</th><th>Name</th><th>Position</th><th>Status</th><th>Login</th></tr>
+    </thead>
+    <tbody>
+    @foreach (var e in Model.Employees)
+    {
+        <tr>
+            <td>@e.EmployeeNo</td>
+            <td>
+                @if (User.HasPermission(Permissions.EmployeesManage))
+                {
+                    <a asp-controller="Employees" asp-action="Details" asp-route-id="@e.Id">@e.Name</a>
+                }
+                else
+                {
+                    @e.Name
+                }
+                @if (e.Id == Model.ManagerEmployeeId) { <span class="badge bg-primary ms-1">Manager</span> }
+            </td>
+            <td>@e.Position</td>
+            <td><span class="badge @(e.Status == EmployeeStatus.Active ? "bg-success" : "bg-secondary")">@e.Status</span></td>
+            <td>@(e.HasLogin ? "Yes" : "—")</td>
+        </tr>
+    }
+    @if (Model.Employees.Count == 0)
+    {
+        <tr><td colspan="5" class="text-muted">No employees in this department.</td></tr>
+    }
+    </tbody>
+</table>

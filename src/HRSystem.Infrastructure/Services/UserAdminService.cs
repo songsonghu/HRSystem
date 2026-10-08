@@ -223,9 +223,12 @@ public class UserAdminService : IUserAdminService
         if (await _users.IsInRoleAsync(user, Roles.Admin) && !IsDisabled(user) && await CountActiveAdminsAsync() <= 1)
             return Result.Fail("At least one active Admin user is required.");
 
-        var headOf = await _db.Departments.Where(d => d.HeadUserId == id).Select(d => d.Name).ToListAsync(ct);
-        if (headOf.Count > 0)
-            return Result.Fail($"This user is the head of: {string.Join(", ", headOf)}. Assign another head first, or disable the user instead.");
+        var managerOf = await _db.Departments
+            .Where(d => d.Manager != null && d.Manager.UserId == id)
+            .Select(d => d.Name)
+            .ToListAsync(ct);
+        if (managerOf.Count > 0)
+            return Result.Fail($"This user's employee record is the manager of: {string.Join(", ", managerOf)}. Assign another manager first, or disable the user instead.");
 
         bool hasOpenAccountTasks = await _db.AccountRequestItems.AnyAsync(i =>
             i.AssignedUserId == id && i.Status != ItemStatus.Completed && i.Status != ItemStatus.Rejected, ct);
