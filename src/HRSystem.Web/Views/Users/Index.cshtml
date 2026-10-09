@@ -23,7 +23,7 @@
     @foreach (var u in Model)
     {
         <tr>
-            <td>@u.Email</td>
+            <td><span class="person"><partial name="_Avatar" model="u.FullName ?? u.Email" />@u.Email</span></td>
             <td>@u.FullName</td>
             <td>
                 @foreach (var role in u.Roles)

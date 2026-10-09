@@ -41,11 +41,11 @@ else if (!Model.ManagerCanReceiveTasks)
             <td>
                 @if (User.HasPermission(Permissions.EmployeesManage))
                 {
-                    <a asp-controller="Employees" asp-action="Details" asp-route-id="@e.Id">@e.Name</a>
+                    <a class="person" asp-controller="Employees" asp-action="Details" asp-route-id="@e.Id"><partial name="_Avatar" model="e.Name" />@e.Name</a>
                 }
                 else
                 {
-                    @e.Name
+                    <span class="person"><partial name="_Avatar" model="e.Name" />@e.Name</span>
                 }
                 @if (e.Id == Model.ManagerEmployeeId) { <span class="badge bg-primary ms-1">Manager</span> }
             </td>

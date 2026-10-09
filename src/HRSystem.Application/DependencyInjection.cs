@@ -18,6 +18,7 @@ public static class DependencyInjection
         services.AddScoped<IChecklistService, ChecklistService>();
         services.AddScoped<IChecklistTemplateService, ChecklistTemplateService>();
         services.AddScoped<IDepartmentService, DepartmentService>();
+        services.AddScoped<IDashboardService, DashboardService>();
 
         // FluentValidation - auto-register all validators in this assembly
         services.AddValidatorsFromAssemblyContaining<EmployeeEditDtoValidator>(includeInternalTypes: true);

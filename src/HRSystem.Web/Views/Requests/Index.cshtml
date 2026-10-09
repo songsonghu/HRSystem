@@ -42,7 +42,7 @@
         var done = r.Items.Count(i => i.Status == ItemStatus.Completed || i.Status == ItemStatus.Rejected);
         <tr>
             <td>@r.RequestNo</td>
-            <td>@r.EmployeeName <small class="text-muted">(@r.EmployeeNo)</small></td>
+            <td><span class="person"><partial name="_Avatar" model="r.EmployeeName" /><span>@r.EmployeeName <small class="text-muted">(@r.EmployeeNo)</small></span></span></td>
             <td>@r.RequestType</td>
             <td>@done / @r.Items.Count</td>
             <td><partial name="_RequestStatusBadge" model="r.Status" /></td>

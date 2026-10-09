@@ -1,47 +1,140 @@
+@using HRSystem.Application.Interfaces
+@model DashboardDto
 @{
     ViewData["Title"] = "Home";
+    var myTasks = Model.MyAccountTasks + Model.MyChecklistTasks;
+    var firstName = Model.DisplayName.Split(' ', '@')[0];
 }
 
-<div class="p-4 bg-light rounded-3 mb-4">
-    <h1 class="display-6">HR System</h1>
-    <p class="lead">Employee onboarding, account provisioning workflow, and offboarding — built on ASP.NET Core 8.0.</p>
+<h1 class="mb-1">@Display.Greeting(DateTime.Now), @firstName</h1>
+<p class="page-subtitle">Here is what needs your attention today.</p>
+
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <a class="card stat-card" asp-controller="@(Model.MyAccountTasks > 0 || Model.MyChecklistTasks == 0 ? "MyTasks" : "ChecklistTasks")" asp-action="Index">
+            <span class="stat-icon"><i class="bi bi-check2-square"></i></span>
+            <span>
+                <span class="stat-value d-block">@myTasks</span>
+                <span class="stat-label">My open tasks</span>
+            </span>
+        </a>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <a class="card stat-card" asp-controller="Requests" asp-action="Index">
+            <span class="stat-icon tone-amber"><i class="bi bi-hourglass-split"></i></span>
+            <span>
+                <span class="stat-value d-block">@Model.WaitingForMyApproval</span>
+                <span class="stat-label">Waiting for my approval</span>
+            </span>
+        </a>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <a class="card stat-card" asp-controller="Requests" asp-action="Index">
+            <span class="stat-icon tone-slate"><i class="bi bi-send"></i></span>
+            <span>
+                <span class="stat-value d-block">@Model.MyOpenRequests</span>
+                <span class="stat-label">My open requests</span>
+            </span>
+        </a>
+    </div>
+    @if (Model.ActiveEmployees is int employees)
+    {
+        <div class="col-sm-6 col-xl-3">
+            <a class="card stat-card" asp-controller="Employees" asp-action="Index">
+                <span class="stat-icon tone-green"><i class="bi bi-people"></i></span>
+                <span>
+                    <span class="stat-value d-block">@employees</span>
+                    <span class="stat-label">Active employees</span>
+                </span>
+            </a>
+        </div>
+    }
+    @if (Model.OpenOnboarding is int onboarding)
+    {
+        <div class="col-sm-6 col-xl-3">
+            <a class="card stat-card" asp-controller="Onboarding" asp-action="Index">
+                <span class="stat-icon tone-green"><i class="bi bi-person-plus"></i></span>
+                <span>
+                    <span class="stat-value d-block">@onboarding</span>
+                    <span class="stat-label">Onboarding in progress</span>
+                </span>
+            </a>
+        </div>
+    }
+    @if (Model.OpenDepartures is int departures)
+    {
+        <div class="col-sm-6 col-xl-3">
+            <a class="card stat-card" asp-controller="Departures" asp-action="Index">
+                <span class="stat-icon tone-rose"><i class="bi bi-person-dash"></i></span>
+                <span>
+                    <span class="stat-value d-block">@departures</span>
+                    <span class="stat-label">Departures in progress</span>
+                </span>
+            </a>
+        </div>
+    }
+    @if (Model.OpenAccountRequests is int openRequests)
+    {
+        <div class="col-sm-6 col-xl-3">
+            <a class="card stat-card" asp-controller="Requests" asp-action="Index">
+                <span class="stat-icon"><i class="bi bi-person-badge"></i></span>
+                <span>
+                    <span class="stat-value d-block">@openRequests</span>
+                    <span class="stat-label">Open account requests</span>
+                </span>
+            </a>
+        </div>
+    }
 </div>
 
 <div class="row g-3">
-    @if (User.HasPermission(Permissions.EmployeesManage))
-    {
-        <div class="col-md-4">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5 class="card-title">Employees</h5>
-                    <p class="card-text">Create, edit, and manage employee records.</p>
-                    <a class="btn btn-primary" asp-controller="Employees" asp-action="Index">Open</a>
-                </div>
+    <div class="col-lg-8">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Recent account requests</span>
+                <a class="small fw-normal" asp-controller="Requests" asp-action="Index">View all</a>
             </div>
+            @if (Model.RecentRequests.Count == 0)
+            {
+                <div class="empty-state"><i class="bi bi-inbox fs-3 d-block mb-2"></i>No requests yet.</div>
+            }
+            else
+            {
+                <table class="table mb-0">
+                    <thead><tr><th>Request</th><th>Employee</th><th>Type</th><th>Status</th><th>Created</th></tr></thead>
+                    <tbody>
+                    @foreach (var r in Model.RecentRequests)
+                    {
+                        <tr>
+                            <td><a asp-controller="Requests" asp-action="Details" asp-route-id="@r.Id">@r.RequestNo</a></td>
+                            <td><span class="person"><partial name="_Avatar" model="r.EmployeeName" />@r.EmployeeName</span></td>
+                            <td>@r.Type</td>
+                            <td><partial name="~/Views/Requests/_RequestStatusBadge.cshtml" model="r.Status" /></td>
+                            <td class="text-muted">@r.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            }
         </div>
-    }
-    @if (User.Identity?.IsAuthenticated == true)
-    {
-        <div class="col-md-4">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5 class="card-title">Account Requests</h5>
-                    <p class="card-text">Request new accounts or changes (e.g. email, trading system access), approve your team's requests, and track status.</p>
-                    <a class="btn btn-primary" asp-controller="Requests" asp-action="Index">Open</a>
-                </div>
-            </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card h-100">
+            <div class="card-header">Quick actions</div>
+            <a class="quick-action" asp-controller="Requests" asp-action="Create"><i class="bi bi-plus-circle"></i>New account request</a>
+            @if (User.HasPermission(Permissions.EmployeesManage))
+            {
+                <a class="quick-action" asp-controller="Employees" asp-action="Create"><i class="bi bi-person-add"></i>Add employee</a>
+            }
+            @if (User.HasPermission(Permissions.OnboardingManage))
+            {
+                <a class="quick-action" asp-controller="Onboarding" asp-action="Index"><i class="bi bi-person-plus"></i>Start onboarding</a>
+            }
+            @if (User.HasPermission(Permissions.DeparturesManage))
+            {
+                <a class="quick-action" asp-controller="Departures" asp-action="Index"><i class="bi bi-person-dash"></i>Start departure</a>
+            }
+            <a class="quick-action" asp-controller="ChecklistTasks" asp-action="Index"><i class="bi bi-list-check"></i>My checklist tasks</a>
         </div>
-    }
-    @if (User.Identity?.IsAuthenticated == true)
-    {
-        <div class="col-md-4">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5 class="card-title">My Tasks</h5>
-                    <p class="card-text">Process account tasks and onboarding/departure checklists assigned to you.</p>
-                    <a class="btn btn-primary" asp-controller="MyTasks" asp-action="Index">Open</a>
-                </div>
-            </div>
-        </div>
-    }
+    </div>
 </div>
