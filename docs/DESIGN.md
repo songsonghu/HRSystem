@@ -135,10 +135,11 @@ configuration only, no code change.
 ## 8. Project layout
 ```
 src/
-  HR.Domain/         Common, Enums, Entities
-  HR.Application/    Common, DTOs, Interfaces, Services, DependencyInjection
-  HR.Infrastructure/ Persistence (DbContext, Configs, Seeder), Identity, Services, DI
-  HR.Web/            Controllers, Views, Areas/Identity, Services (CurrentUser), Program.cs
+  HRSystem.sln
+  HRSystem.Domain/         Common, Enums, Entities
+  HRSystem.Application/    Common, DTOs (+ Validators), Interfaces, Services, DependencyInjection
+  HRSystem.Infrastructure/ Persistence (DbContext, Configs, Seeder), Identity, Services, DI
+  HRSystem.Web/            Controllers, Views, Areas/Identity, Services (CurrentUser), Program.cs
 database/            01_create_database.sql, 02_seed_data.sql, 03_useful_queries.sql
 docs/                DESIGN.md
 ```

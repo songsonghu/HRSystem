@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using HRSystem.Application.Security;
 using HRSystem.Domain.Entities;
 using HRSystem.Domain.Enums;
 using HRSystem.Infrastructure.Identity;
@@ -14,6 +16,18 @@ namespace HRSystem.Infrastructure.Persistence;
 /// </summary>
 public static class DbSeeder
 {
+    // Keep in sync with the migrations that grant the same permissions to existing databases
+    // (AddEmployeeUserLinkAndPermissions, AddDepartmentsAndGender, AddOnboardingChecklists).
+    private static readonly (string Role, string[] Permissions)[] DefaultRolePermissions =
+    {
+        (Roles.HR, new[]
+        {
+            Permissions.EmployeesManage, Permissions.DepartmentsManage, Permissions.AccountRequestsManage,
+            Permissions.OnboardingManage,
+            Permissions.DeparturesManage, Permissions.OffboardingExport
+        })
+    };
+
     public static async Task SeedAsync(IServiceProvider services)
     {
         using var scope = services.CreateScope();
@@ -25,16 +39,29 @@ public static class DbSeeder
 
         await db.Database.MigrateAsync();
 
-        // 1) Roles
-        foreach (var role in new[] { Roles.Admin, Roles.HR, Roles.DeptHead })
+        // Roles and users are managed in the UI after installation, so defaults are only
+        // created on a fresh database; otherwise deleted roles/users would reappear on restart.
+        bool freshInstall = !await roleManager.Roles.AnyAsync();
+
+        // 1) Roles. Admin is built in and implicitly holds every permission.
+        if (!await roleManager.RoleExistsAsync(Roles.Admin))
+            await roleManager.CreateAsync(new IdentityRole(Roles.Admin));
+
+        if (freshInstall)
         {
-            if (!await roleManager.RoleExistsAsync(role))
-                await roleManager.CreateAsync(new IdentityRole(role));
+            foreach (var (roleName, permissions) in DefaultRolePermissions)
+            {
+                var role = new IdentityRole(roleName);
+                await roleManager.CreateAsync(role);
+                foreach (var permission in permissions)
+                    await roleManager.AddClaimAsync(role, new Claim(Permissions.ClaimType, permission));
+            }
         }
 
-        // 2) Default admin account
+        // 2) Default admin account, only while no Admin user exists.
         const string adminEmail = "admin@hrsystem.local";
-        if (await userManager.FindByEmailAsync(adminEmail) is null)
+        if ((await userManager.GetUsersInRoleAsync(Roles.Admin)).Count == 0
+            && await userManager.FindByEmailAsync(adminEmail) is null)
         {
             var admin = new ApplicationUser
             {
@@ -47,15 +74,15 @@ public static class DbSeeder
             await userManager.AddToRoleAsync(admin, Roles.Admin);
         }
 
-        // 3) Departments (each with a placeholder head user email as HeadUserId).
-        // These mirror the sections printed on the two paper requisition forms.
+        // 3) Departments that own account types, mirroring the sections printed on the two
+        // paper requisition forms. Managers are assigned in the UI (Departments page).
         if (!await db.Departments.AnyAsync())
         {
             db.Departments.AddRange(
-                new Department { Name = "Client Service & Internet Trading", Code = "CSIT",   HeadUserId = "csit.head@hrsystem.local" },
-                new Department { Name = "Credit Department",                 Code = "CREDIT", HeadUserId = "credit.head@hrsystem.local" },
-                new Department { Name = "IT Department",                     Code = "IT",      HeadUserId = "it.head@hrsystem.local" },
-                new Department { Name = "HR & Administration Department",    Code = "HR",      HeadUserId = "hr.head@hrsystem.local" });
+                new Department { Name = "Client Service & Internet Trading", Code = "CSIT" },
+                new Department { Name = "Credit Department",                 Code = "CREDIT" },
+                new Department { Name = "IT Department",                     Code = "IT" },
+                new Department { Name = "HR & Administration Department",    Code = "HR" });
             await db.SaveChangesAsync();
         }
 
@@ -87,6 +114,7 @@ public static class DbSeeder
             "Administrator",
             "Institutional Sales",
             "Human Resources",
+            "HR & Administration",
             "Dealing - Futures"
         };
 
@@ -106,7 +134,8 @@ public static class DbSeeder
         // requisition form(s) they appear on (Staff / AE / Both).
         if (!await db.AccountTypes.AnyAsync())
         {
-            var depts = await db.Departments.ToDictionaryAsync(d => d.Code!, d => d.Id);
+            // Only the account-owning departments have codes; the corporate ones above do not.
+            var depts = await db.Departments.Where(d => d.Code != null).ToDictionaryAsync(d => d.Code!, d => d.Id);
             var s = AccountTypeAudience.StaffOnly;
             var ae = AccountTypeAudience.AEOnly;
             var both = AccountTypeAudience.Both;
@@ -162,5 +191,124 @@ public static class DbSeeder
 
             await db.SaveChangesAsync();
         }
+
+        await SeedChecklistTemplatesAsync(db, ChecklistKind.Departure, DepartureTemplates);
+        await SeedChecklistTemplatesAsync(db, ChecklistKind.Onboarding, OnboardingTemplates);
     }
+
+    private static readonly TemplateSeed[] DepartureTemplates =
+    {
+        new("Finance & Accounts", new[]
+        {
+            "Delete the login of the following systems: HSBC FX / SCB FX",
+            "Check if there is cash advance for opening external broker account / other purpose",
+            "Collect e-banking token(s)",
+            "Delete user account access to e-banking by admin user or submit deletion form to the banks",
+            "Check if there is Commission Rebate / Deficit held up by the Company",
+            "Others"
+        }),
+        new("Credit Control", new[]
+        {
+            "Delete login of Ayers / Sharp Point / 2Go",
+            "Update the Company's authorized dealer list with brokers (UOBKH Group and third-party brokers)",
+            "Others"
+        }),
+        new("Legal & Compliance", new[]
+        {
+            "Follow up on outstanding AML items (if any)",
+            "Follow up on acknowledgement of Quarterly Newsletters (if any)"
+        }),
+        new("Information Technology", new[]
+        {
+            "Disable all assigned IT accounts and system access",
+            "Collect and verify return of IT assets/equipment",
+            "Revoke network/VPN and email access",
+            "Others"
+        }),
+        new("HR & Administration", new[]
+        {
+            "Update Staff Movement Checklist and HR system",
+            "Calculate final payment and confirm with leaving staff",
+            "Terminate Medical Plan, Work Permit, and MPF",
+            "Prepare IR56F / IR56G and de-register SFC license as applicable",
+            "Send resignation acknowledgement / departure notifications and conduct exit interview",
+            "Collect staff access card / keys / equipment / e-banking token(s)",
+            "Release final payment within 7 days from the last employment date",
+            "Update photo album and intranet directory",
+            "Others"
+        })
+    };
+
+    private static readonly TemplateSeed[] OnboardingTemplates =
+    {
+        new("HR & Administration", new[]
+        {
+            "Sign employment contract and collect documents (ID, address proof, certificates)",
+            "Enrol in MPF and medical insurance",
+            "Arrange seat and issue staff access card / keys",
+            "Orientation and staff handbook",
+            "Update HR system and intranet directory",
+            "Others"
+        }, OptionalOthers: true),
+        new("Information Technology", new[]
+        {
+            "Prepare PC and peripherals",
+            "Set up telephone extension",
+            "IT security briefing",
+            "Others"
+        }, OptionalOthers: true),
+        new("Finance & Accounts", new[]
+        {
+            "Set up payroll and bank account details",
+            "Others"
+        }, OptionalOthers: true),
+        new("Legal & Compliance", new[]
+        {
+            "Compliance and AML training",
+            "Personal account dealing declaration",
+            "SFC licence registration / transfer (if applicable)",
+            "Code of conduct acknowledgement"
+        }, OptionalOthers: true)
+    };
+
+    /// <summary>
+    /// Seeds a kind's templates only while it has none, so edits made on the Checklist
+    /// Templates page are never overwritten. Departments missing by name are skipped.
+    /// </summary>
+    private static async Task SeedChecklistTemplatesAsync(AppDbContext db, ChecklistKind kind, IReadOnlyList<TemplateSeed> seeds)
+    {
+        if (await db.ChecklistTemplates.AnyAsync(t => t.Kind == kind)) return;
+
+        var departments = await db.Departments.ToDictionaryAsync(d => d.Name, d => d.Id, StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < seeds.Count; i++)
+        {
+            var seed = seeds[i];
+            if (!departments.TryGetValue(seed.DepartmentName, out var departmentId)) continue;
+
+            var template = new ChecklistTemplate
+            {
+                Kind = kind,
+                DepartmentId = departmentId,
+                SortOrder = i + 1,
+                IsActive = true,
+                IsRequired = true,
+                CreatedBy = "system"
+            };
+            for (int j = 0; j < seed.Items.Length; j++)
+            {
+                template.Items.Add(new ChecklistTemplateItem
+                {
+                    Description = seed.Items[j],
+                    SortOrder = j + 1,
+                    IsRequired = !(seed.OptionalOthers && seed.Items[j] == "Others"),
+                    CreatedBy = "system"
+                });
+            }
+            db.ChecklistTemplates.Add(template);
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+    private sealed record TemplateSeed(string DepartmentName, string[] Items, bool OptionalOthers = false);
 }

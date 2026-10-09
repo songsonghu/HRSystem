@@ -1,0 +1,14 @@
+@model RequestStatus
+@{
+    var (css, label) = Model switch
+    {
+        RequestStatus.Draft => ("bg-secondary", "Draft"),
+        RequestStatus.PendingApproval => ("bg-warning text-dark", "Pending Approval"),
+        RequestStatus.Rejected => ("bg-danger", "Rejected"),
+        RequestStatus.Submitted => ("bg-info text-dark", "Submitted"),
+        RequestStatus.InProgress => ("bg-primary", "In Progress"),
+        RequestStatus.Completed => ("bg-success", "Completed"),
+        _ => ("bg-dark", Model.ToString())
+    };
+}
+<span class="badge @css">@label</span>

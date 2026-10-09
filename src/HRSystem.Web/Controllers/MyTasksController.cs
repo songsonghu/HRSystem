@@ -1,3 +1,4 @@
+using HRSystem.Application.Security;
 using HRSystem.Application.DTOs;
 using HRSystem.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -9,7 +10,7 @@ namespace HRSystem.Web.Controllers;
 /// Department-head workbench (Module 3, department side). Shows only the items
 /// dispatched to the current user's department and lets them provision/close.
 /// </summary>
-[Authorize(Policy = "RequireDeptHead")]
+[Authorize]
 public class MyTasksController : Controller
 {
     private readonly IAccountRequestService _service;

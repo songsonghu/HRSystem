@@ -1,0 +1,25 @@
+@model RoleEditDto
+
+<div class="mb-3">
+    <label asp-for="Name" class="form-label">Role Name</label>
+    <input asp-for="Name" class="form-control" disabled="@Model.IsProtected" />
+    <span asp-validation-for="Name" class="text-danger"></span>
+</div>
+
+<label class="form-label d-block">Permissions</label>
+@foreach (var group in Permissions.All.GroupBy(p => p.Group))
+{
+    <fieldset class="border rounded p-3 mb-3">
+        <legend class="float-none w-auto px-2 fs-6 mb-0">@group.Key</legend>
+        @foreach (var p in group)
+        {
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="Permissions" value="@p.Name" id="perm-@p.Name"
+                       @(Model.Permissions.Contains(p.Name) ? "checked" : "") disabled="@Model.IsProtected" />
+                <label class="form-check-label" for="perm-@p.Name">
+                    @p.Description <code class="ms-1 small">@p.Name</code>
+                </label>
+            </div>
+        }
+    </fieldset>
+}
