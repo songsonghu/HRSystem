@@ -40,6 +40,7 @@ public class ChecklistCreateViewModel
 
     public IReadOnlyList<ChecklistTemplatePreviewDto> Templates { get; set; } = Array.Empty<ChecklistTemplatePreviewDto>();
     public IReadOnlyList<AccountTypeOptionDto> AccountTypeOptions { get; set; } = Array.Empty<AccountTypeOptionDto>();
+    public IReadOnlyDictionary<int, string?> ActiveAccounts { get; set; } = new Dictionary<int, string?>();
 }
 
 public class ChecklistTaskEditViewModel
@@ -84,7 +85,10 @@ public static class ChecklistViewModelMapper
         LastWorkingDate = dto.Kind == ChecklistKind.Departure ? DateTime.Today : null,
         LastEmploymentDate = dto.Kind == ChecklistKind.Departure ? DateTime.Today : null,
         Templates = dto.Templates,
-        AccountTypeOptions = dto.AccountTypeOptions
+        AccountTypeOptions = dto.AccountTypeOptions,
+        ActiveAccounts = dto.ActiveAccounts,
+        // Departure: every account the employee holds is ticked for disabling by default.
+        AccountTypeIds = dto.ActiveAccounts.Keys.ToList()
     };
 
     /// <summary>Refresh the read-only parts of a posted form that is shown again.</summary>
@@ -97,6 +101,7 @@ public static class ChecklistViewModelMapper
         vm.JoinDate = dto.JoinDate;
         vm.Templates = dto.Templates;
         vm.AccountTypeOptions = dto.AccountTypeOptions;
+        vm.ActiveAccounts = dto.ActiveAccounts;
     }
 
     public static CreateChecklistRequestDto ToCreateDto(this ChecklistCreateViewModel vm) => new()

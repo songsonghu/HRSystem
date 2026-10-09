@@ -50,7 +50,7 @@ public class AccountRequestService : IAccountRequestService
     // ------------------------------------------------------------------ access
 
     /// <summary>The current user as the workflow sees them.</summary>
-    private sealed record Actor(string? UserId, bool IsHr, bool IsAdmin, bool CanOnboard, int? EmployeeId, IReadOnlyList<int> ManagedDepartmentIds)
+    private sealed record Actor(string? UserId, bool IsHr, bool IsAdmin, bool CanOnboard, bool CanDepart, int? EmployeeId, IReadOnlyList<int> ManagedDepartmentIds)
     {
         public bool Manages(Employee employee)
             => employee.DepartmentId is int d && ManagedDepartmentIds.Contains(d);
@@ -91,7 +91,8 @@ public class AccountRequestService : IAccountRequestService
             : await _db.Departments.Where(d => d.ManagerEmployeeId == employeeId).Select(d => d.Id).ToListAsync(ct);
 
         return new Actor(userId, _currentUser.HasPermission(Permissions.AccountRequestsManage),
-            _currentUser.IsAdmin, _currentUser.HasPermission(Permissions.OnboardingManage), employeeId, managed);
+            _currentUser.IsAdmin, _currentUser.HasPermission(Permissions.OnboardingManage),
+            _currentUser.HasPermission(Permissions.DeparturesManage), employeeId, managed);
     }
 
     // ------------------------------------------------------------------ create
@@ -111,7 +112,8 @@ public class AccountRequestService : IAccountRequestService
                 .OrderBy(e => e.Name)
                 .Select(e => new EmployeeOptionDto(e.Id, e.Name + " (" + e.EmployeeNo + ")"))
                 .ToListAsync(ct),
-            RequestTypes = actor.IsHr ? Enum.GetValues<RequestType>() : InServiceTypes
+            // Offboard requests are raised by the departure workflow, not by hand.
+            RequestTypes = actor.IsHr ? new[] { RequestType.Onboard, RequestType.Add, RequestType.Remove } : InServiceTypes
         };
     }
 
@@ -119,20 +121,30 @@ public class AccountRequestService : IAccountRequestService
     {
         var actor = await GetActorAsync(ct);
 
-        // Onboarding staff may raise the Onboard request that accompanies an onboarding checklist.
-        bool onboardingRequest = dto.RequestType == RequestType.Onboard && actor.CanOnboard;
+        // Onboarding/departure staff may raise the account request that accompanies their checklist.
+        bool checklistRequest = (dto.RequestType == RequestType.Onboard && actor.CanOnboard)
+                                || (dto.RequestType == RequestType.Offboard && actor.CanDepart);
 
         var employee = await _db.Employees.FirstOrDefaultAsync(e => e.Id == dto.EmployeeId, ct);
-        if (employee is null || !(onboardingRequest || actor.CanRaiseFor(employee))) return Result<int>.Fail("Employee not found.");
-        if (!actor.IsHr && !onboardingRequest && !InServiceTypes.Contains(dto.RequestType))
+        if (employee is null || !(checklistRequest || actor.CanRaiseFor(employee))) return Result<int>.Fail("Employee not found.");
+        if (!actor.IsHr && !checklistRequest && !InServiceTypes.Contains(dto.RequestType))
             return Result<int>.Fail("Only HR can raise onboarding or offboarding requests.");
         if (dto.AccountTypeIds.Count == 0) return Result<int>.Fail("Select at least one account type.");
 
-        // Only account types printed on this employee's requisition form (Staff or AE/Sales/SA).
+        // Account types printed on this employee's requisition form (Staff or AE/Sales/SA); removals
+        // may also target any account the employee currently holds, even one outside that form.
         var audience = employee.Category.ToAudience();
+        var isRemoval = dto.RequestType is RequestType.Remove or RequestType.Offboard;
+        var heldTypeIds = isRemoval
+            ? await _db.EmployeeAccounts
+                .Where(a => a.EmployeeId == employee.Id && a.Status == AccountStatus.Active)
+                .Select(a => a.AccountTypeId)
+                .ToListAsync(ct)
+            : new List<int>();
         var accountTypes = await _db.AccountTypes
-            .Where(a => dto.AccountTypeIds.Contains(a.Id) && a.IsActive
-                        && (a.Audience == AccountTypeAudience.Both || a.Audience == audience))
+            .Where(a => dto.AccountTypeIds.Contains(a.Id)
+                        && ((a.IsActive && (a.Audience == AccountTypeAudience.Both || a.Audience == audience))
+                            || heldTypeIds.Contains(a.Id)))
             .ToListAsync(ct);
 
         if (accountTypes.Count == 0) return Result<int>.Fail("No valid account types selected.");

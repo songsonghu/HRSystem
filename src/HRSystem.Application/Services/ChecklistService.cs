@@ -110,19 +110,46 @@ public class ChecklistService : IChecklistService
         var error = await CheckEligibleAsync(kind, employee, ct);
         if (error is not null) return Result<ChecklistCreatePageDto>.Fail(error);
 
+        var options = (await _accountRequests.GetAccountTypeOptionsAsync(employee!.Id, ct)).ToList();
+        var activeAccounts = new Dictionary<int, string?>();
+        if (kind == ChecklistKind.Departure)
+        {
+            var held = await _db.EmployeeAccounts.AsNoTracking()
+                .Where(a => a.EmployeeId == employee.Id && a.Status == AccountStatus.Active)
+                .Select(a => new
+                {
+                    a.AccountTypeId,
+                    a.AccountValue,
+                    Option = new AccountTypeOptionDto
+                    {
+                        Id = a.AccountTypeId,
+                        Name = a.AccountType!.Name,
+                        DeptId = a.AccountType.ResponsibleDeptId,
+                        DeptName = a.AccountType.ResponsibleDept!.Name,
+                        SortOrder = a.AccountType.SortOrder
+                    }
+                })
+                .ToListAsync(ct);
+            foreach (var account in held)
+            {
+                activeAccounts[account.AccountTypeId] = account.AccountValue;
+                // Accounts outside the employee's current form (category changed, type retired) must still be disabled.
+                if (options.All(o => o.Id != account.AccountTypeId)) options.Add(account.Option);
+            }
+        }
+
         return Result<ChecklistCreatePageDto>.Success(new ChecklistCreatePageDto
         {
             Kind = kind,
-            EmployeeId = employee!.Id,
+            EmployeeId = employee.Id,
             EmployeeNo = employee.EmployeeNo,
             EmployeeName = employee.Name,
             Department = employee.Department?.Name,
             Position = employee.Position,
             JoinDate = employee.JoinDate,
             Templates = await GetTemplatePreviewAsync(kind, ct),
-            AccountTypeOptions = kind == ChecklistKind.Onboarding
-                ? await _accountRequests.GetAccountTypeOptionsAsync(employee.Id, ct)
-                : Array.Empty<AccountTypeOptionDto>()
+            AccountTypeOptions = options,
+            ActiveAccounts = activeAccounts
         });
     }
 
@@ -164,17 +191,17 @@ public class ChecklistService : IChecklistService
         request.RequestNo = $"{(dto.Kind == ChecklistKind.Onboarding ? "ONB" : "DEP")}-{DateTime.UtcNow.Year}-{request.Id:D5}";
         await _db.SaveChangesAsync(ct);
 
-        // Onboarding: the accounts to open travel as a linked Onboard account request.
-        if (dto.Kind == ChecklistKind.Onboarding && dto.AccountTypeIds.Count > 0)
+        // The accounts to open (onboarding) or disable (departure) travel as a linked account request.
+        if (dto.AccountTypeIds.Count > 0)
         {
             var accountRequest = await _accountRequests.CreateAsync(new CreateRequestDto
             {
                 EmployeeId = dto.EmployeeId,
-                RequestType = RequestType.Onboard,
+                RequestType = dto.Kind == ChecklistKind.Onboarding ? RequestType.Onboard : RequestType.Offboard,
                 AccountTypeIds = dto.AccountTypeIds,
-                Details = dto.AccountDetails,
-                IsNewHeadcount = true,
-                Remark = $"Raised with onboarding {request.RequestNo}."
+                Details = dto.Kind == ChecklistKind.Onboarding ? dto.AccountDetails : new Dictionary<int, string>(),
+                IsNewHeadcount = dto.Kind == ChecklistKind.Onboarding ? true : null,
+                Remark = $"Raised with {Label(dto.Kind)} {request.RequestNo}."
             }, ct);
             if (!accountRequest.Succeeded)
             {
@@ -245,7 +272,7 @@ public class ChecklistService : IChecklistService
             assignees[userId] = user;
         }
 
-        // Onboarding: submit the linked account request first; if its routing fails nothing is dispatched.
+        // Submit the linked account request first; if its routing fails nothing is dispatched.
         if (snapshot.AccountRequest is { Status: RequestStatus.Draft })
         {
             var submitted = await _accountRequests.SubmitAsync(snapshot.AccountRequest.Id, ct);

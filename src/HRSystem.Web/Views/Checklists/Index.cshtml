@@ -43,13 +43,13 @@ else
                 @if (isOnboarding)
                 {
                     <th>Start Date</th>
-                    <th>Accounts</th>
                 }
                 else
                 {
                     <th>Last Working Date</th>
                     <th>Last Employment Date</th>
                 }
+                <th>Accounts</th>
                 <th>Tasks Done</th>
                 <th>Submitted</th>
                 <th></th>
@@ -66,13 +66,13 @@ else
                 @if (isOnboarding)
                 {
                     <td>@r.StartDate?.ToString("yyyy-MM-dd")</td>
-                    <td>@(r.AccountRequestStatus?.ToString() ?? "—")</td>
                 }
                 else
                 {
                     <td>@r.LastWorkingDate?.ToString("yyyy-MM-dd")</td>
                     <td>@r.LastEmploymentDate?.ToString("yyyy-MM-dd")</td>
                 }
+                <td>@(r.AccountRequestStatus?.ToString() ?? "—")</td>
                 <td>@done / @r.Tasks.Count</td>
                 <td>@r.SubmittedAt?.ToString("yyyy-MM-dd HH:mm")</td>
                 <td><a asp-action="Details" asp-route-id="@r.Id" class="btn btn-sm btn-outline-primary">Details</a></td>

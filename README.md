@@ -15,8 +15,8 @@ built on **ASP.NET Core 8.0 (MVC + Razor Pages)** using **Clean Architecture**.
 | 2 | **Organization & Employees** | Departments with a manager (an employee) and their members; employee records (staff no., name, gender, position, department, email, category, join date, attachments) with search and soft delete. Account and departure tasks for a department are assigned to its manager's login. |
 | 3 | **Account Provisioning Workflow** | A request fans out into per-account-type items → dispatched to each responsible department's manager → they open the account & submit → master status auto-recomputes (safe under parallel updates). Notifies the employee and each manager. Scanned signed approval upload. |
 | 4 | **Account requests (self-service)** | `Add / Remove` requests can be raised by HR (anyone), a department manager (their team, dispatched directly) or an employee for themself — which first needs their department manager's approval or rejection (with reason). |
-| 5 | **Onboarding & Departure checklists** | HR starts onboarding (with the accounts to open, raised as a linked onboarding account request) or departure for an employee; each active department checklist template becomes a task for that department's manager, processed in parallel on My Checklist Tasks; HR finalizes once all required tasks (and, for onboarding, the accounts) are done. Templates are managed per department on the Checklist Templates page. |
-| 6 | **Offboarding & Export** | List all active accounts of a leaver and export an Excel de-provisioning checklist (ClosedXML). |
+| 5 | **Onboarding & Departure checklists** | HR starts onboarding (with the accounts to open) or departure (with the accounts to disable — every account the employee holds is ticked) for an employee; the accounts travel as a linked Onboard/Offboard account request; each active department checklist template becomes a task for that department's manager, processed in parallel on My Checklist Tasks; HR finalizes once all required tasks and the linked account request are done (departure then marks the employee resigned). Templates are managed per department on the Checklist Templates page. |
+| 6 | **Account list & Export** | List an employee's active accounts and export them to Excel (ClosedXML); linked from the departure page. |
 
 ---
 
@@ -124,7 +124,7 @@ always holds every permission and cannot be renamed or deleted.
 | `system.jobs` | Hangfire dashboard `/hangfire` | Admin |
 | `employees.manage` | Employees | Admin, HR |
 | `departments.manage` | Departments and department managers | Admin, HR |
-| `account-requests.manage` | Account requests for any employee, including onboarding/offboarding types | Admin, HR |
+| `account-requests.manage` | Account requests for any employee (Offboard requests come only from departures) | Admin, HR |
 | `onboarding.manage` | Onboarding requests and onboarding checklist templates | Admin, HR |
 | `departures.manage` | Departure requests and departure checklist templates | Admin, HR |
 | `offboarding.export` | Employee account list & Excel export | Admin, HR |

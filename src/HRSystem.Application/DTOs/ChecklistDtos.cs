@@ -105,8 +105,14 @@ public class ChecklistCreatePageDto
     public DateTime JoinDate { get; set; }
     public IReadOnlyList<ChecklistTemplatePreviewDto> Templates { get; set; } = Array.Empty<ChecklistTemplatePreviewDto>();
 
-    /// <summary>Onboarding: account types on this employee's requisition form.</summary>
+    /// <summary>
+    /// Onboarding: account types to open. Departure: account types to disable — the employee's
+    /// form plus any account they currently hold.
+    /// </summary>
     public IReadOnlyList<AccountTypeOptionDto> AccountTypeOptions { get; set; } = Array.Empty<AccountTypeOptionDto>();
+
+    /// <summary>Departure: the employee's active accounts (account type id -> account value), ticked by default.</summary>
+    public IReadOnlyDictionary<int, string?> ActiveAccounts { get; set; } = new Dictionary<int, string?>();
 }
 
 public class ChecklistTemplatePreviewDto

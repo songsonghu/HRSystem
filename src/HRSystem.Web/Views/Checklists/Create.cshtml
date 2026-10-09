@@ -52,30 +52,47 @@
             </div>
         </div>
 
+        <hr />
         @if (isOnboarding)
         {
-            <hr />
             <h5>Accounts to open</h5>
             <p class="text-muted small">Ticked accounts become an onboarding account request that is dispatched together with the checklist. Leave all unticked if no accounts are needed.</p>
-            @foreach (var group in accountGroups)
+        }
+        else
+        {
+            <h5>Accounts to disable</h5>
+            <p class="text-muted small">
+                Accounts recorded for this employee are ticked. Tick any other account they hold that was opened outside this system.
+                Ticked accounts become an offboarding account request dispatched with the checklist; the departure can only be finalized once they are all disabled.
+            </p>
+            @if (Model.ActiveAccounts.Count == 0)
             {
-                <div class="mb-2">
-                    <div class="fw-semibold">@group.Key</div>
-                    @foreach (var at in group.OrderBy(a => a.SortOrder))
-                    {
-                        <div class="form-check d-flex align-items-center gap-2 flex-wrap">
-                            <input class="form-check-input" type="checkbox" name="AccountTypeIds" value="@at.Id" id="at_@at.Id"
-                                   @(Model.AccountTypeIds.Contains(at.Id) ? "checked" : "") />
-                            <label class="form-check-label" for="at_@at.Id">@at.Name</label>
-                            @if (at.RequiresDetail)
-                            {
-                                <input name="AccountDetails[@at.Id]" value="@(Model.AccountDetails.GetValueOrDefault(at.Id))"
-                                       class="form-control form-control-sm" style="max-width:260px" placeholder="@at.DetailLabel" />
-                            }
-                        </div>
-                    }
-                </div>
+                <div class="alert alert-info py-2">No active accounts are recorded for this employee.</div>
             }
+        }
+        @foreach (var group in accountGroups)
+        {
+            <div class="mb-2">
+                <div class="fw-semibold">@group.Key</div>
+                @foreach (var at in group.OrderBy(a => a.SortOrder))
+                {
+                    var held = Model.ActiveAccounts.TryGetValue(at.Id, out var accountValue);
+                    <div class="form-check d-flex align-items-center gap-2 flex-wrap">
+                        <input class="form-check-input" type="checkbox" name="AccountTypeIds" value="@at.Id" id="at_@at.Id"
+                               @(Model.AccountTypeIds.Contains(at.Id) ? "checked" : "") />
+                        <label class="form-check-label" for="at_@at.Id">@at.Name</label>
+                        @if (held)
+                        {
+                            <span class="badge bg-info text-dark">held@(string.IsNullOrWhiteSpace(accountValue) ? "" : ": " + accountValue)</span>
+                        }
+                        @if (isOnboarding && at.RequiresDetail)
+                        {
+                            <input name="AccountDetails[@at.Id]" value="@(Model.AccountDetails.GetValueOrDefault(at.Id))"
+                                   class="form-control form-control-sm" style="max-width:260px" placeholder="@at.DetailLabel" />
+                        }
+                    </div>
+                }
+            </div>
         }
 
         <hr />
