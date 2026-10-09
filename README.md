@@ -135,7 +135,7 @@ If you prefer to create the schema by hand instead of EF migrations, run in orde
 
 ## 🔐 Roles & permissions
 
-Roles are managed under **Administration → Roles & Permissions**; each role is granted a
+Roles are managed under **Settings → Roles & Permissions**; each role is granted a
 subset of the fixed permissions in `HRSystem.Application/Security/Permissions.cs` (stored as
 role claims). Changes reach signed-in users within about a minute. The built-in `Admin` role
 always holds every permission and cannot be renamed or deleted.
