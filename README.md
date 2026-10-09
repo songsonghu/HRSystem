@@ -126,14 +126,13 @@ always holds every permission and cannot be renamed or deleted.
 | `account-requests.manage` | Account requests for any employee, including onboarding/offboarding types | Admin, HR |
 | `departures.manage` | Departure requests (create / submit / finalize) | Admin, HR |
 | `offboarding.export` | Employee account list & Excel export | Admin, HR |
-| `tasks.process` | My Tasks / My Departure Tasks | Admin, DeptHead |
 
 Default roles and users are only seeded into an empty database; after that they are managed in the UI.
 
 Some access comes from the organization data rather than a permission: any user whose login is
 linked to an employee can raise Add/Remove account requests for themself; the manager of a
 department can raise them for its employees and approves the self-service ones; whoever an item
-is assigned to can process it.
+is assigned to can process it on My Tasks / My Departure Tasks (no permission needed).
 
 ---
 
@@ -151,7 +150,7 @@ See `docs/DESIGN.md` for the full flow and ER overview.
 
 ## 📝 Notes for production
 
-- Replace placeholder department `HeadUserId` emails with real Identity users.
+- Give every department that owns account types or a departure checklist a manager whose employee record is linked to a login; otherwise requests for it cannot be submitted.
 - Configure real SMTP settings under the `Smtp` section.
 - Point `FileStorage:RootPath` to a secured SMB/blob location.
 - All key actions are written to `AuditLogs` for compliance traceability.

@@ -24,8 +24,7 @@ public static class DbSeeder
         {
             Permissions.EmployeesManage, Permissions.DepartmentsManage, Permissions.AccountRequestsManage,
             Permissions.DeparturesManage, Permissions.OffboardingExport
-        }),
-        (Roles.DeptHead, new[] { Permissions.TasksProcess })
+        })
     };
 
     public static async Task SeedAsync(IServiceProvider services)

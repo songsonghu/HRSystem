@@ -32,13 +32,13 @@
             </div>
         </div>
     }
-    @if (User.HasPermission(Permissions.TasksProcess))
+    @if (User.Identity?.IsAuthenticated == true)
     {
         <div class="col-md-4">
             <div class="card h-100">
                 <div class="card-body">
                     <h5 class="card-title">My Tasks</h5>
-                    <p class="card-text">Process account provisioning items assigned to your department.</p>
+                    <p class="card-text">Process account and departure tasks assigned to you.</p>
                     <a class="btn btn-primary" asp-controller="MyTasks" asp-action="Index">Open</a>
                 </div>
             </div>

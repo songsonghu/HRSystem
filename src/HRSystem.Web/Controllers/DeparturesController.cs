@@ -108,14 +108,12 @@ public class DeparturesController : Controller
         return RedirectToAction(nameof(Details), new { id });
     }
 
-    [Authorize(Policy = Permissions.TasksProcess)]
     public async Task<IActionResult> MyTasks()
     {
         var tasks = await _service.GetMyPendingTasksAsync();
         return View(tasks);
     }
 
-    [Authorize(Policy = Permissions.TasksProcess)]
     public async Task<IActionResult> Task(int id)
     {
         var task = await _service.GetTaskAsync(id);
@@ -124,7 +122,6 @@ public class DeparturesController : Controller
     }
 
     [HttpPost]
-    [Authorize(Policy = Permissions.TasksProcess)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Task(DepartureTaskEditViewModel vm)
     {

@@ -18,7 +18,6 @@ public static class Permissions
     public const string AccountRequestsManage = "account-requests.manage";
     public const string DeparturesManage = "departures.manage";
     public const string OffboardingExport = "offboarding.export";
-    public const string TasksProcess = "tasks.process";
     public const string SystemJobs = "system.jobs";
 
     public static readonly IReadOnlyList<PermissionDefinition> All = new[]
@@ -31,7 +30,6 @@ public static class Permissions
         new PermissionDefinition(AccountRequestsManage, "HR", "Create, submit and track account requests"),
         new PermissionDefinition(DeparturesManage, "HR", "Create, submit and finalize departure requests"),
         new PermissionDefinition(OffboardingExport, "HR", "View and export an employee's accounts for offboarding"),
-        new PermissionDefinition(TasksProcess, "Department", "Process account and departure tasks assigned to me"),
     };
 
     public static bool IsDefined(string name) => All.Any(p => p.Name == name);
