@@ -134,7 +134,8 @@ public static class DbSeeder
         // requisition form(s) they appear on (Staff / AE / Both).
         if (!await db.AccountTypes.AnyAsync())
         {
-            var depts = await db.Departments.ToDictionaryAsync(d => d.Code!, d => d.Id);
+            // Only the account-owning departments have codes; the corporate ones above do not.
+            var depts = await db.Departments.Where(d => d.Code != null).ToDictionaryAsync(d => d.Code!, d => d.Id);
             var s = AccountTypeAudience.StaffOnly;
             var ae = AccountTypeAudience.AEOnly;
             var both = AccountTypeAudience.Both;

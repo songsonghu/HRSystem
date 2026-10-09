@@ -49,3 +49,6 @@ Thumbs.db
 
 # ---- User secrets (never commit) ----
 secrets.json
+
+# ---- Test results ----
+TestResults/

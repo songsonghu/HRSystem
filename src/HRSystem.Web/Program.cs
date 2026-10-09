@@ -73,6 +73,9 @@ await DbSeeder.SeedAsync(app.Services);
 
 app.Run();
 
+/// <summary>Exposed so integration tests can host the app with WebApplicationFactory.</summary>
+public partial class Program { }
+
 /// <summary>Restricts the Hangfire dashboard to users with the system.jobs permission.</summary>
 public class HangfireAdminAuthorizationFilter : Hangfire.Dashboard.IDashboardAuthorizationFilter
 {

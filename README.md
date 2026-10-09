@@ -98,6 +98,29 @@ Password: Admin@12345
 
 ---
 
+## 🧪 Running tests
+
+```bash
+dotnet test src/HRSystem.sln
+```
+
+`tests/HRSystem.Tests` contains unit tests (no database needed) and integration tests that host the
+real app — migrations, seeding, permissions and the account/onboarding/departure workflows,
+including deterministic tests for two departments finishing at the same moment. Integration tests
+run only when `HRSYSTEM_TEST_SQL` holds a SQL Server connection string whose login may create
+databases; each run creates a throw-away `HRSystem_Test_*` database and drops it afterwards.
+Otherwise they are reported as skipped.
+
+```powershell
+$env:HRSYSTEM_TEST_SQL = "Server=localhost;User Id=...;Password=...;TrustServerCertificate=True"
+dotnet test src/HRSystem.sln
+```
+
+GitHub Actions (`.github/workflows/ci.yml`) builds and runs all tests, against a SQL Server
+container, on every push and pull request.
+
+---
+
 ## 🗃️ Database scripts (optional / manual deployment)
 
 If you prefer to create the schema by hand instead of EF migrations, run in order:
