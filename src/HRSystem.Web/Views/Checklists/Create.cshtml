@@ -1,0 +1,108 @@
+@model ChecklistCreateViewModel
+@{
+    var isOnboarding = Model.Kind == ChecklistKind.Onboarding;
+    ViewData["Title"] = isOnboarding ? "Start Onboarding" : "Start Departure";
+    var accountGroups = Model.AccountTypeOptions.GroupBy(a => a.DeptName).ToList();
+}
+
+<h2>@ViewData["Title"]</h2>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2">
+            <div class="col-md-3"><b>Employee No.</b><br />@Model.EmployeeNo</div>
+            <div class="col-md-3"><b>Name</b><br />@Model.EmployeeName</div>
+            <div class="col-md-3"><b>Department</b><br />@(Model.Department ?? "—")</div>
+            <div class="col-md-3"><b>Position</b><br />@Model.Position</div>
+        </div>
+    </div>
+</div>
+
+<form asp-action="Create" method="post" class="card">
+    <div class="card-body">
+        <input type="hidden" asp-for="EmployeeId" />
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+        <div class="row g-3">
+            @if (isOnboarding)
+            {
+                <div class="col-md-4">
+                    <label asp-for="StartDate" class="form-label"></label>
+                    <input asp-for="StartDate" class="form-control" type="date" required />
+                </div>
+            }
+            else
+            {
+                <div class="col-md-4">
+                    <label asp-for="LastWorkingDate" class="form-label"></label>
+                    <input asp-for="LastWorkingDate" class="form-control" type="date" required />
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="LastEmploymentDate" class="form-label"></label>
+                    <input asp-for="LastEmploymentDate" class="form-control" type="date" required />
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="Reason" class="form-label"></label>
+                    <input asp-for="Reason" class="form-control" />
+                </div>
+            }
+            <div class="col-12">
+                <label asp-for="Remark" class="form-label"></label>
+                <textarea asp-for="Remark" class="form-control" rows="2"></textarea>
+            </div>
+        </div>
+
+        @if (isOnboarding)
+        {
+            <hr />
+            <h5>Accounts to open</h5>
+            <p class="text-muted small">Ticked accounts become an onboarding account request that is dispatched together with the checklist. Leave all unticked if no accounts are needed.</p>
+            @foreach (var group in accountGroups)
+            {
+                <div class="mb-2">
+                    <div class="fw-semibold">@group.Key</div>
+                    @foreach (var at in group.OrderBy(a => a.SortOrder))
+                    {
+                        <div class="form-check d-flex align-items-center gap-2 flex-wrap">
+                            <input class="form-check-input" type="checkbox" name="AccountTypeIds" value="@at.Id" id="at_@at.Id"
+                                   @(Model.AccountTypeIds.Contains(at.Id) ? "checked" : "") />
+                            <label class="form-check-label" for="at_@at.Id">@at.Name</label>
+                            @if (at.RequiresDetail)
+                            {
+                                <input name="AccountDetails[@at.Id]" value="@(Model.AccountDetails.GetValueOrDefault(at.Id))"
+                                       class="form-control form-control-sm" style="max-width:260px" placeholder="@at.DetailLabel" />
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        }
+
+        <hr />
+        <h5>Department checklists</h5>
+        @if (Model.Templates.Count == 0)
+        {
+            <div class="alert alert-warning">No active checklist templates. Add them under Checklist Templates before submitting.</div>
+        }
+        <ul>
+            @foreach (var t in Model.Templates)
+            {
+                <li>
+                    @t.DepartmentName (@t.ItemCount items)
+                    @if (!t.CanReceiveTasks)
+                    {
+                        <span class="badge bg-warning text-dark">no manager with login — submitting will fail</span>
+                    }
+                </li>
+            }
+        </ul>
+    </div>
+    <div class="card-footer">
+        <button class="btn btn-primary">Create Draft</button>
+        <a asp-action="Index" class="btn btn-outline-secondary">Cancel</a>
+    </div>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

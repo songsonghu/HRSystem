@@ -91,8 +91,15 @@ public enum AccountStatus
     Disabled = 1    // Account has been disabled
 }
 
-/// <summary>Overall status of a departure request (master workflow).</summary>
-public enum DepartureRequestStatus
+/// <summary>Which lifecycle process a checklist request belongs to.</summary>
+public enum ChecklistKind
+{
+    Onboarding = 1,
+    Departure = 2
+}
+
+/// <summary>Overall status of a checklist request (onboarding or departure).</summary>
+public enum ChecklistStatus
 {
     Draft = 0,
     Submitted = 1,
@@ -102,8 +109,8 @@ public enum DepartureRequestStatus
     Cancelled = 5
 }
 
-/// <summary>Status of one department departure task.</summary>
-public enum DepartureTaskStatus
+/// <summary>Status of one department's checklist task.</summary>
+public enum ChecklistTaskStatus
 {
     NotStarted = 0,
     InProgress = 1,

@@ -2,9 +2,9 @@ using HRSystem.Domain.Common;
 
 namespace HRSystem.Domain.Entities;
 
-public class DepartureTaskItem : BaseEntity
+public class ChecklistTaskItem : BaseEntity
 {
-    public int DepartureTaskId { get; set; }
+    public int ChecklistTaskId { get; set; }
     public string Description { get; set; } = string.Empty;
     public int SortOrder { get; set; }
     public bool IsRequired { get; set; } = true;
@@ -14,5 +14,5 @@ public class DepartureTaskItem : BaseEntity
     public string? CompletedBy { get; set; }
     public DateTime? CompletedAt { get; set; }
 
-    public DepartureTask? DepartureTask { get; set; }
+    public ChecklistTask? ChecklistTask { get; set; }
 }

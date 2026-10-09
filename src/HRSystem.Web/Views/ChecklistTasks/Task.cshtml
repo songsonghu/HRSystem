@@ -1,13 +1,12 @@
-@model DepartureTaskEditViewModel
+@model ChecklistTaskEditViewModel
 @{
-    ViewData["Title"] = "Departure Task";
+    ViewData["Title"] = Model.Kind + " Task";
 }
 
-<h2>Departure Task - @Model.DepartmentName</h2>
+<h2>@Model.Kind Task - @Model.DepartmentName</h2>
 <p class="text-muted">Request @Model.RequestNo · @Model.EmployeeName (@Model.EmployeeNo)</p>
 
 <form asp-action="Task" method="post">
-    @Html.AntiForgeryToken()
     <input type="hidden" asp-for="TaskId" />
     <input type="hidden" asp-for="RequestId" />
     <div asp-validation-summary="ModelOnly" class="text-danger"></div>
@@ -56,7 +55,7 @@
     </div>
 
     <button class="btn btn-primary">Save</button>
-    <a asp-action="MyTasks" class="btn btn-outline-secondary">Back</a>
+    <a asp-action="Index" class="btn btn-outline-secondary">Back</a>
 </form>
 
 @section Scripts {

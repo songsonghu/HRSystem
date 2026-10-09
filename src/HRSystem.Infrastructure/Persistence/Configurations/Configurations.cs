@@ -34,7 +34,7 @@ public class DepartmentConfig : IEntityTypeConfiguration<Department>
         b.HasKey(x => x.Id);
         b.Property(x => x.Name).HasMaxLength(100).IsRequired();
         b.Property(x => x.Code).HasMaxLength(50);
-        b.HasIndex(x => x.Name).IsUnique(); // departure templates are matched by department name
+        b.HasIndex(x => x.Name).IsUnique();
         b.HasOne(x => x.Manager).WithMany()
             .HasForeignKey(x => x.ManagerEmployeeId)
             .OnDelete(DeleteBehavior.Restrict);
@@ -168,86 +168,93 @@ public class EmployeeAccountConfig : IEntityTypeConfiguration<EmployeeAccount>
     }
 }
 
-public class DepartureRequestConfig : IEntityTypeConfiguration<DepartureRequest>
+public class ChecklistRequestConfig : IEntityTypeConfiguration<ChecklistRequest>
 {
-    public void Configure(EntityTypeBuilder<DepartureRequest> b)
+    public void Configure(EntityTypeBuilder<ChecklistRequest> b)
     {
-        b.ToTable("DepartureRequests");
+        b.ToTable("ChecklistRequests");
         b.HasKey(x => x.Id);
         b.Property(x => x.RowVersion).IsRowVersion();
         b.Property(x => x.RequestNo).HasMaxLength(30).IsRequired();
         b.HasIndex(x => x.RequestNo).IsUnique();
-        b.HasIndex(x => new { x.EmployeeId, x.Status });
+        b.HasIndex(x => new { x.Kind, x.EmployeeId, x.Status });
         b.Property(x => x.Reason).HasMaxLength(500);
         b.Property(x => x.Remark).HasMaxLength(1000);
         b.Property(x => x.SubmittedBy).HasMaxLength(450);
         b.Property(x => x.FinalizedBy).HasMaxLength(450);
         b.HasOne(x => x.Employee)
-            .WithMany(e => e.DepartureRequests)
+            .WithMany(e => e.ChecklistRequests)
             .HasForeignKey(x => x.EmployeeId)
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne(x => x.AccountRequest)
+            .WithMany()
+            .HasForeignKey(x => x.AccountRequestId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }
 
-public class DepartureTaskConfig : IEntityTypeConfiguration<DepartureTask>
+public class ChecklistTaskConfig : IEntityTypeConfiguration<ChecklistTask>
 {
-    public void Configure(EntityTypeBuilder<DepartureTask> b)
+    public void Configure(EntityTypeBuilder<ChecklistTask> b)
     {
-        b.ToTable("DepartureTasks");
+        b.ToTable("ChecklistTasks");
         b.HasKey(x => x.Id);
         b.Property(x => x.DepartmentName).HasMaxLength(100).IsRequired();
         b.Property(x => x.AssignedUserId).HasMaxLength(450);
         b.Property(x => x.AssignedUserName).HasMaxLength(256);
         b.Property(x => x.TaskRemark).HasMaxLength(1000);
         b.Property(x => x.HandledBy).HasMaxLength(450);
-        b.HasIndex(x => new { x.DepartureRequestId, x.SortOrder });
+        b.HasIndex(x => new { x.ChecklistRequestId, x.SortOrder });
         b.HasIndex(x => new { x.AssignedUserId, x.Status });
-        b.HasOne(x => x.DepartureRequest)
+        b.HasOne(x => x.ChecklistRequest)
             .WithMany(r => r.Tasks)
-            .HasForeignKey(x => x.DepartureRequestId)
+            .HasForeignKey(x => x.ChecklistRequestId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }
 
-public class DepartureTaskItemConfig : IEntityTypeConfiguration<DepartureTaskItem>
+public class ChecklistTaskItemConfig : IEntityTypeConfiguration<ChecklistTaskItem>
 {
-    public void Configure(EntityTypeBuilder<DepartureTaskItem> b)
+    public void Configure(EntityTypeBuilder<ChecklistTaskItem> b)
     {
-        b.ToTable("DepartureTaskItems");
+        b.ToTable("ChecklistTaskItems");
         b.HasKey(x => x.Id);
         b.Property(x => x.Description).HasMaxLength(500).IsRequired();
         b.Property(x => x.Remark).HasMaxLength(1000);
         b.Property(x => x.CompletedBy).HasMaxLength(450);
-        b.HasIndex(x => new { x.DepartureTaskId, x.SortOrder });
-        b.HasOne(x => x.DepartureTask)
+        b.HasIndex(x => new { x.ChecklistTaskId, x.SortOrder });
+        b.HasOne(x => x.ChecklistTask)
             .WithMany(t => t.Items)
-            .HasForeignKey(x => x.DepartureTaskId)
+            .HasForeignKey(x => x.ChecklistTaskId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }
 
-public class DepartureTaskTemplateConfig : IEntityTypeConfiguration<DepartureTaskTemplate>
+public class ChecklistTemplateConfig : IEntityTypeConfiguration<ChecklistTemplate>
 {
-    public void Configure(EntityTypeBuilder<DepartureTaskTemplate> b)
+    public void Configure(EntityTypeBuilder<ChecklistTemplate> b)
     {
-        b.ToTable("DepartureTaskTemplates");
+        b.ToTable("ChecklistTemplates");
         b.HasKey(x => x.Id);
-        b.Property(x => x.DepartmentName).HasMaxLength(100).IsRequired();
-        b.HasIndex(x => new { x.DepartmentName, x.IsDeleted }).IsUnique();
+        b.HasIndex(x => new { x.Kind, x.DepartmentId }).IsUnique().HasFilter("[IsDeleted] = 0");
+        b.HasOne(x => x.Department)
+            .WithMany()
+            .HasForeignKey(x => x.DepartmentId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
 
-public class DepartureTaskTemplateItemConfig : IEntityTypeConfiguration<DepartureTaskTemplateItem>
+public class ChecklistTemplateItemConfig : IEntityTypeConfiguration<ChecklistTemplateItem>
 {
-    public void Configure(EntityTypeBuilder<DepartureTaskTemplateItem> b)
+    public void Configure(EntityTypeBuilder<ChecklistTemplateItem> b)
     {
-        b.ToTable("DepartureTaskTemplateItems");
+        b.ToTable("ChecklistTemplateItems");
         b.HasKey(x => x.Id);
         b.Property(x => x.Description).HasMaxLength(500).IsRequired();
-        b.HasIndex(x => new { x.DepartureTaskTemplateId, x.SortOrder });
-        b.HasOne(x => x.DepartureTaskTemplate)
+        b.HasIndex(x => new { x.ChecklistTemplateId, x.SortOrder });
+        b.HasOne(x => x.ChecklistTemplate)
             .WithMany(t => t.Items)
-            .HasForeignKey(x => x.DepartureTaskTemplateId)
+            .HasForeignKey(x => x.ChecklistTemplateId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }

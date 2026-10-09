@@ -232,12 +232,12 @@ public class UserAdminService : IUserAdminService
 
         bool hasOpenAccountTasks = await _db.AccountRequestItems.AnyAsync(i =>
             i.AssignedUserId == id && i.Status != ItemStatus.Completed && i.Status != ItemStatus.Rejected, ct);
-        bool hasOpenDepartureTasks = await _db.DepartureTasks.AnyAsync(t =>
+        bool hasOpenChecklistTasks = await _db.ChecklistTasks.AnyAsync(t =>
             t.AssignedUserId == id
-            && t.Status != DepartureTaskStatus.Completed && t.Status != DepartureTaskStatus.NotApplicable
-            && t.DepartureRequest!.Status != DepartureRequestStatus.Completed
-            && t.DepartureRequest.Status != DepartureRequestStatus.Cancelled, ct);
-        if (hasOpenAccountTasks || hasOpenDepartureTasks)
+            && t.Status != ChecklistTaskStatus.Completed && t.Status != ChecklistTaskStatus.NotApplicable
+            && t.ChecklistRequest!.Status != ChecklistStatus.Completed
+            && t.ChecklistRequest.Status != ChecklistStatus.Cancelled, ct);
+        if (hasOpenAccountTasks || hasOpenChecklistTasks)
             return Result.Fail("This user still has open tasks assigned. Reassign or complete them first, or disable the user instead.");
 
         return await _db.InTransactionAsync(async () =>

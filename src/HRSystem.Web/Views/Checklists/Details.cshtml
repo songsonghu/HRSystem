@@ -1,0 +1,94 @@
+@model ChecklistRequestDto
+@{
+    var isOnboarding = Model.Kind == ChecklistKind.Onboarding;
+    ViewData["Title"] = (isOnboarding ? "Onboarding " : "Departure ") + Model.RequestNo;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>@ViewData["Title"]</h2>
+    <span class="fs-6"><partial name="_ChecklistStatusBadge" model="Model.Status" /></span>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-md-3"><b>Employee</b><br />@Model.EmployeeName (@Model.EmployeeNo)</div>
+    @if (isOnboarding)
+    {
+        <div class="col-md-3"><b>Start Date</b><br />@Model.StartDate?.ToString("yyyy-MM-dd")</div>
+        <div class="col-md-6">
+            <b>Account Request</b><br />
+            @if (Model.AccountRequestId is int accountRequestId)
+            {
+                <a asp-controller="Requests" asp-action="Details" asp-route-id="@accountRequestId">@Model.AccountRequestNo</a>
+                <partial name="~/Views/Requests/_RequestStatusBadge.cshtml" model="Model.AccountRequestStatus!.Value" />
+            }
+            else
+            {
+                <span class="text-muted">No accounts requested</span>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="col-md-3"><b>Last Working Date</b><br />@Model.LastWorkingDate?.ToString("yyyy-MM-dd")</div>
+        <div class="col-md-3"><b>Last Employment Date</b><br />@Model.LastEmploymentDate?.ToString("yyyy-MM-dd")</div>
+        <div class="col-md-3"><b>Reason</b><br />@Model.Reason</div>
+    }
+</div>
+
+@if (!string.IsNullOrWhiteSpace(Model.Remark))
+{
+    <p><b>Remark:</b> @Model.Remark</p>
+}
+
+<div class="mb-3 d-flex gap-2 align-items-center">
+    @if (Model.CanSubmit)
+    {
+        <form asp-action="Submit" asp-route-id="@Model.Id" method="post"
+              onsubmit="return confirm('Submit and notify each department manager?');">
+            <button class="btn btn-primary">Submit &amp; Dispatch</button>
+        </form>
+        @if (isOnboarding && Model.AccountRequestId is not null)
+        {
+            <span class="text-muted small">The account request is submitted at the same time.</span>
+        }
+    }
+    @if (Model.CanFinalize)
+    {
+        <form asp-action="Finalize" asp-route-id="@Model.Id" method="post">
+            <button class="btn btn-success">@(isOnboarding ? "Finalize Onboarding" : "Finalize Departure")</button>
+        </form>
+        @if (isOnboarding && Model.AccountRequestStatus is not null and not RequestStatus.Completed)
+        {
+            <span class="text-muted small">Finalizing also requires the account request to be completed.</span>
+        }
+    }
+</div>
+
+<h4>Department Tasks</h4>
+@if (Model.Tasks.Count == 0)
+{
+    <p class="text-muted">Tasks are created for each department when the request is submitted.</p>
+}
+else
+{
+    <table class="table table-bordered align-middle">
+        <thead class="table-light">
+            <tr><th>Department</th><th>Required</th><th>Status</th><th>Progress</th><th>Completed At</th></tr>
+        </thead>
+        <tbody>
+        @foreach (var t in Model.Tasks.OrderBy(x => x.SortOrder))
+        {
+            var done = t.Items.Count(i => i.IsCompleted || i.IsNotApplicable);
+            <tr>
+                <td>@t.DepartmentName</td>
+                <td>@(t.IsRequired ? "Yes" : "No")</td>
+                <td>@t.Status</td>
+                <td>@done / @t.Items.Count</td>
+                <td>@t.CompletedAt?.ToString("yyyy-MM-dd HH:mm")</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+<a asp-action="Index" class="btn btn-outline-secondary">Back</a>

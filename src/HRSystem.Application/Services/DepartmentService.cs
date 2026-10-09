@@ -124,13 +124,6 @@ public class DepartmentService : IDepartmentService
         var managerError = await ValidateManagerAsync(dto.ManagerEmployeeId, ct);
         if (managerError is not null) return Result.Fail(managerError);
 
-        if (name != entity.Name)
-        {
-            // Departure checklist templates reference departments by name.
-            var templates = await _db.DepartureTaskTemplates.Where(t => t.DepartmentName == entity.Name).ToListAsync(ct);
-            foreach (var template in templates) template.DepartmentName = name;
-        }
-
         entity.Name = name;
         entity.Code = string.IsNullOrWhiteSpace(dto.Code) ? null : dto.Code.Trim();
         entity.ManagerEmployeeId = dto.ManagerEmployeeId;
@@ -152,8 +145,8 @@ public class DepartmentService : IDepartmentService
         if (await _db.Employees.IgnoreQueryFilters().AnyAsync(e => e.DepartmentId == id, ct)) usages.Add("employees");
         if (await _db.AccountTypes.AnyAsync(a => a.ResponsibleDeptId == id, ct)) usages.Add("account types");
         if (await _db.AccountRequestItems.AnyAsync(i => i.AssignedDeptId == id, ct)) usages.Add("account requests");
-        if (await _db.DepartureTasks.AnyAsync(t => t.AssignedDepartmentId == id, ct)) usages.Add("departure tasks");
-        if (await _db.DepartureTaskTemplates.AnyAsync(t => t.DepartmentName == entity.Name && !t.IsDeleted, ct)) usages.Add("departure checklist templates");
+        if (await _db.ChecklistTasks.AnyAsync(t => t.AssignedDepartmentId == id, ct)) usages.Add("onboarding/departure tasks");
+        if (await _db.ChecklistTemplates.AnyAsync(t => t.DepartmentId == id && !t.IsDeleted, ct)) usages.Add("checklist templates");
         if (usages.Count > 0)
             return Result.Fail($"This department is used by {string.Join(", ", usages)}. Deactivate it instead.");
 

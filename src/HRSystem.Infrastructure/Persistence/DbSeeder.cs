@@ -17,12 +17,13 @@ namespace HRSystem.Infrastructure.Persistence;
 public static class DbSeeder
 {
     // Keep in sync with the migrations that grant the same permissions to existing databases
-    // (AddEmployeeUserLinkAndPermissions, AddDepartmentsAndGender).
+    // (AddEmployeeUserLinkAndPermissions, AddDepartmentsAndGender, AddOnboardingChecklists).
     private static readonly (string Role, string[] Permissions)[] DefaultRolePermissions =
     {
         (Roles.HR, new[]
         {
             Permissions.EmployeesManage, Permissions.DepartmentsManage, Permissions.AccountRequestsManage,
+            Permissions.OnboardingManage,
             Permissions.DeparturesManage, Permissions.OffboardingExport
         })
     };
@@ -190,112 +191,123 @@ public static class DbSeeder
             await db.SaveChangesAsync();
         }
 
-        await SeedDepartureTemplatesAsync(db);
+        await SeedChecklistTemplatesAsync(db, ChecklistKind.Departure, DepartureTemplates);
+        await SeedChecklistTemplatesAsync(db, ChecklistKind.Onboarding, OnboardingTemplates);
     }
 
-    private static async Task SeedDepartureTemplatesAsync(AppDbContext db)
+    private static readonly TemplateSeed[] DepartureTemplates =
     {
-        var templates = new[]
+        new("Finance & Accounts", new[]
         {
-            new DepartureTemplateSeed("Finance & Accounts", 1, new[]
-            {
-                "Delete the login of the following systems: HSBC FX / SCB FX",
-                "Check if there is cash advance for opening external broker account / other purpose",
-                "Collect e-banking token(s)",
-                "Delete user account access to e-banking by admin user or submit deletion form to the banks",
-                "Check if there is Commission Rebate / Deficit held up by the Company",
-                "Others"
-            }),
-            new DepartureTemplateSeed("Credit Control", 2, new[]
-            {
-                "Delete login of Ayers / Sharp Point / 2Go",
-                "Update the Company's authorized dealer list with brokers (UOBKH Group and third-party brokers)",
-                "Others"
-            }),
-            new DepartureTemplateSeed("Legal & Compliance", 3, new[]
-            {
-                "Follow up on outstanding AML items (if any)",
-                "Follow up on acknowledgement of Quarterly Newsletters (if any)"
-            }),
-            new DepartureTemplateSeed("Information Technology", 4, new[]
-            {
-                "Disable all assigned IT accounts and system access",
-                "Collect and verify return of IT assets/equipment",
-                "Revoke network/VPN and email access",
-                "Others"
-            }),
-            new DepartureTemplateSeed("HR & Administration", 5, new[]
-            {
-                "Update Staff Movement Checklist and HR system",
-                "Calculate final payment and confirm with leaving staff",
-                "Terminate Medical Plan, Work Permit, and MPF",
-                "Prepare IR56F / IR56G and de-register SFC license as applicable",
-                "Send resignation acknowledgement / departure notifications and conduct exit interview",
-                "Collect staff access card / keys / equipment / e-banking token(s)",
-                "Release final payment within 7 days from the last employment date",
-                "Update photo album and intranet directory",
-                "Others"
-            })
-        };
-
-        foreach (var templateSeed in templates)
+            "Delete the login of the following systems: HSBC FX / SCB FX",
+            "Check if there is cash advance for opening external broker account / other purpose",
+            "Collect e-banking token(s)",
+            "Delete user account access to e-banking by admin user or submit deletion form to the banks",
+            "Check if there is Commission Rebate / Deficit held up by the Company",
+            "Others"
+        }),
+        new("Credit Control", new[]
         {
-            var template = await db.DepartureTaskTemplates
-                .Include(t => t.Items)
-                .FirstOrDefaultAsync(t => t.DepartmentName == templateSeed.DepartmentName && !t.IsDeleted);
+            "Delete login of Ayers / Sharp Point / 2Go",
+            "Update the Company's authorized dealer list with brokers (UOBKH Group and third-party brokers)",
+            "Others"
+        }),
+        new("Legal & Compliance", new[]
+        {
+            "Follow up on outstanding AML items (if any)",
+            "Follow up on acknowledgement of Quarterly Newsletters (if any)"
+        }),
+        new("Information Technology", new[]
+        {
+            "Disable all assigned IT accounts and system access",
+            "Collect and verify return of IT assets/equipment",
+            "Revoke network/VPN and email access",
+            "Others"
+        }),
+        new("HR & Administration", new[]
+        {
+            "Update Staff Movement Checklist and HR system",
+            "Calculate final payment and confirm with leaving staff",
+            "Terminate Medical Plan, Work Permit, and MPF",
+            "Prepare IR56F / IR56G and de-register SFC license as applicable",
+            "Send resignation acknowledgement / departure notifications and conduct exit interview",
+            "Collect staff access card / keys / equipment / e-banking token(s)",
+            "Release final payment within 7 days from the last employment date",
+            "Update photo album and intranet directory",
+            "Others"
+        })
+    };
 
-            if (template is null)
-            {
-                template = new DepartureTaskTemplate
-                {
-                    DepartmentName = templateSeed.DepartmentName,
-                    SortOrder = templateSeed.SortOrder,
-                    IsActive = true,
-                    IsRequired = true,
-                    CreatedBy = "system"
-                };
-                db.DepartureTaskTemplates.Add(template);
-            }
-            else
-            {
-                template.SortOrder = templateSeed.SortOrder;
-                template.IsActive = true;
-                template.IsRequired = true;
-                template.ModifiedAt = DateTime.UtcNow;
-                template.ModifiedBy = "system";
-            }
+    private static readonly TemplateSeed[] OnboardingTemplates =
+    {
+        new("HR & Administration", new[]
+        {
+            "Sign employment contract and collect documents (ID, address proof, certificates)",
+            "Enrol in MPF and medical insurance",
+            "Arrange seat and issue staff access card / keys",
+            "Orientation and staff handbook",
+            "Update HR system and intranet directory",
+            "Others"
+        }, OptionalOthers: true),
+        new("Information Technology", new[]
+        {
+            "Prepare PC and peripherals",
+            "Set up telephone extension",
+            "IT security briefing",
+            "Others"
+        }, OptionalOthers: true),
+        new("Finance & Accounts", new[]
+        {
+            "Set up payroll and bank account details",
+            "Others"
+        }, OptionalOthers: true),
+        new("Legal & Compliance", new[]
+        {
+            "Compliance and AML training",
+            "Personal account dealing declaration",
+            "SFC licence registration / transfer (if applicable)",
+            "Code of conduct acknowledgement"
+        }, OptionalOthers: true)
+    };
 
-            var existingItems = template.Items.ToDictionary(i => i.SortOrder);
-            for (int index = 0; index < templateSeed.Items.Length; index++)
-            {
-                var sortOrder = index + 1;
-                if (existingItems.TryGetValue(sortOrder, out var existing))
-                {
-                    existing.Description = templateSeed.Items[index];
-                    existing.IsRequired = true;
-                    existing.ModifiedAt = DateTime.UtcNow;
-                    existing.ModifiedBy = "system";
-                    continue;
-                }
+    /// <summary>
+    /// Seeds a kind's templates only while it has none, so edits made on the Checklist
+    /// Templates page are never overwritten. Departments missing by name are skipped.
+    /// </summary>
+    private static async Task SeedChecklistTemplatesAsync(AppDbContext db, ChecklistKind kind, IReadOnlyList<TemplateSeed> seeds)
+    {
+        if (await db.ChecklistTemplates.AnyAsync(t => t.Kind == kind)) return;
 
-                template.Items.Add(new DepartureTaskTemplateItem
+        var departments = await db.Departments.ToDictionaryAsync(d => d.Name, d => d.Id, StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < seeds.Count; i++)
+        {
+            var seed = seeds[i];
+            if (!departments.TryGetValue(seed.DepartmentName, out var departmentId)) continue;
+
+            var template = new ChecklistTemplate
+            {
+                Kind = kind,
+                DepartmentId = departmentId,
+                SortOrder = i + 1,
+                IsActive = true,
+                IsRequired = true,
+                CreatedBy = "system"
+            };
+            for (int j = 0; j < seed.Items.Length; j++)
+            {
+                template.Items.Add(new ChecklistTemplateItem
                 {
-                    Description = templateSeed.Items[index],
-                    SortOrder = sortOrder,
-                    IsRequired = true,
+                    Description = seed.Items[j],
+                    SortOrder = j + 1,
+                    IsRequired = !(seed.OptionalOthers && seed.Items[j] == "Others"),
                     CreatedBy = "system"
                 });
             }
-
-            var obsoleteItems = template.Items
-                .Where(i => i.SortOrder > templateSeed.Items.Length)
-                .ToList();
-            if (obsoleteItems.Count > 0)
-                db.DepartureTaskTemplateItems.RemoveRange(obsoleteItems);
+            db.ChecklistTemplates.Add(template);
         }
 
         await db.SaveChangesAsync();
     }
 
-    private sealed record DepartureTemplateSeed(string DepartmentName, int SortOrder, string[] Items);
+    private sealed record TemplateSeed(string DepartmentName, string[] Items, bool OptionalOthers = false);
 }

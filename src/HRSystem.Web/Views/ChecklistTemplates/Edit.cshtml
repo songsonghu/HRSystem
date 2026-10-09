@@ -1,0 +1,62 @@
+@model ChecklistTemplateEditDto
+@{
+    var isNew = Model.Id == 0;
+    ViewData["Title"] = (isNew ? "New " : "Edit ") + Model.Kind + " Checklist Template";
+}
+
+<h2>@ViewData["Title"]</h2>
+<hr />
+
+<form asp-action="@(isNew ? "Create" : "Edit")" method="post">
+    <div asp-validation-summary="All" class="text-danger"></div>
+    <input type="hidden" asp-for="Id" />
+    <input type="hidden" asp-for="Kind" />
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-5">
+            <label asp-for="DepartmentId" class="form-label">Department</label>
+            <select asp-for="DepartmentId" class="form-select" asp-items="ViewBag.Departments" required>
+                <option value="">-- select department --</option>
+            </select>
+            <div class="form-text">The task goes to this department's manager.</div>
+        </div>
+        <div class="col-md-2">
+            <label asp-for="SortOrder" class="form-label">Order</label>
+            <input asp-for="SortOrder" class="form-control" type="number" />
+        </div>
+        <div class="col-md-5 d-flex flex-column justify-content-end">
+            <div class="form-check">
+                <input asp-for="IsRequired" class="form-check-input" />
+                <label asp-for="IsRequired" class="form-check-label">Required to finalize the request</label>
+            </div>
+            <div class="form-check">
+                <input asp-for="IsActive" class="form-check-input" />
+                <label asp-for="IsActive" class="form-check-label">Active</label>
+            </div>
+        </div>
+    </div>
+
+    <h5>Checklist items</h5>
+    <p class="text-muted small">Items are listed by their order number. Clear an item's text to remove it; fill a blank row to add one.</p>
+    <table class="table table-sm align-middle">
+        <thead class="table-light">
+            <tr><th style="width:90px">Order</th><th>Description</th><th style="width:110px">Required</th></tr>
+        </thead>
+        <tbody>
+        @for (int i = 0; i < Model.Items.Count; i++)
+        {
+            <tr>
+                <td>
+                    <input type="hidden" asp-for="Items[i].Id" />
+                    <input asp-for="Items[i].SortOrder" class="form-control form-control-sm" type="number" />
+                </td>
+                <td><input asp-for="Items[i].Description" class="form-control form-control-sm" maxlength="500" /></td>
+                <td class="text-center"><input asp-for="Items[i].IsRequired" class="form-check-input" /></td>
+            </tr>
+        }
+        </tbody>
+    </table>
+
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a class="btn btn-secondary" asp-action="Index" asp-route-kind="@Model.Kind">Cancel</a>
+</form>

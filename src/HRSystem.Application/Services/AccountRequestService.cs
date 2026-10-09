@@ -50,7 +50,7 @@ public class AccountRequestService : IAccountRequestService
     // ------------------------------------------------------------------ access
 
     /// <summary>The current user as the workflow sees them.</summary>
-    private sealed record Actor(string? UserId, bool IsHr, bool IsAdmin, int? EmployeeId, IReadOnlyList<int> ManagedDepartmentIds)
+    private sealed record Actor(string? UserId, bool IsHr, bool IsAdmin, bool CanOnboard, int? EmployeeId, IReadOnlyList<int> ManagedDepartmentIds)
     {
         public bool Manages(Employee employee)
             => employee.DepartmentId is int d && ManagedDepartmentIds.Contains(d);
@@ -91,7 +91,7 @@ public class AccountRequestService : IAccountRequestService
             : await _db.Departments.Where(d => d.ManagerEmployeeId == employeeId).Select(d => d.Id).ToListAsync(ct);
 
         return new Actor(userId, _currentUser.HasPermission(Permissions.AccountRequestsManage),
-            _currentUser.IsAdmin, employeeId, managed);
+            _currentUser.IsAdmin, _currentUser.HasPermission(Permissions.OnboardingManage), employeeId, managed);
     }
 
     // ------------------------------------------------------------------ create
@@ -119,9 +119,12 @@ public class AccountRequestService : IAccountRequestService
     {
         var actor = await GetActorAsync(ct);
 
+        // Onboarding staff may raise the Onboard request that accompanies an onboarding checklist.
+        bool onboardingRequest = dto.RequestType == RequestType.Onboard && actor.CanOnboard;
+
         var employee = await _db.Employees.FirstOrDefaultAsync(e => e.Id == dto.EmployeeId, ct);
-        if (employee is null || !actor.CanRaiseFor(employee)) return Result<int>.Fail("Employee not found.");
-        if (!actor.IsHr && !InServiceTypes.Contains(dto.RequestType))
+        if (employee is null || !(onboardingRequest || actor.CanRaiseFor(employee))) return Result<int>.Fail("Employee not found.");
+        if (!actor.IsHr && !onboardingRequest && !InServiceTypes.Contains(dto.RequestType))
             return Result<int>.Fail("Only HR can raise onboarding or offboarding requests.");
         if (dto.AccountTypeIds.Count == 0) return Result<int>.Fail("Select at least one account type.");
 

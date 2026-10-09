@@ -24,11 +24,11 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
     public DbSet<EmployeeAttachment> EmployeeAttachments => Set<EmployeeAttachment>();
     public DbSet<EmployeeAccount> EmployeeAccounts => Set<EmployeeAccount>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
-    public DbSet<DepartureRequest> DepartureRequests => Set<DepartureRequest>();
-    public DbSet<DepartureTask> DepartureTasks => Set<DepartureTask>();
-    public DbSet<DepartureTaskItem> DepartureTaskItems => Set<DepartureTaskItem>();
-    public DbSet<DepartureTaskTemplate> DepartureTaskTemplates => Set<DepartureTaskTemplate>();
-    public DbSet<DepartureTaskTemplateItem> DepartureTaskTemplateItems => Set<DepartureTaskTemplateItem>();
+    public DbSet<ChecklistRequest> ChecklistRequests => Set<ChecklistRequest>();
+    public DbSet<ChecklistTask> ChecklistTasks => Set<ChecklistTask>();
+    public DbSet<ChecklistTaskItem> ChecklistTaskItems => Set<ChecklistTaskItem>();
+    public DbSet<ChecklistTemplate> ChecklistTemplates => Set<ChecklistTemplate>();
+    public DbSet<ChecklistTemplateItem> ChecklistTemplateItems => Set<ChecklistTemplateItem>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
