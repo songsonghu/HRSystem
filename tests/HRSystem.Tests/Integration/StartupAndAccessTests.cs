@@ -62,6 +62,11 @@ public class StartupAndAccessTests : IntegrationTest
         var users = await client.GetAsync("/Users");
         Assert.Equal(HttpStatusCode.Redirect, users.StatusCode);
         Assert.Contains("AccessDenied", users.Headers.Location!.ToString());
+        // HR runs departures but needs checklist-approvers.manage to choose the approvers.
+        var approvers = await client.GetAsync("/ChecklistApprovers");
+        Assert.Equal(HttpStatusCode.Redirect, approvers.StatusCode);
+        Assert.Contains("AccessDenied", approvers.Headers.Location!.ToString());
+        Assert.DoesNotContain("Checklist Approvers", await client.GetStringAsync("/Departures"));
     }
 
     [SkippableFact]

@@ -145,6 +145,7 @@ always holds every permission and cannot be renamed or deleted.
 | `users.manage` | Users page | Admin |
 | `roles.manage` | Roles & Permissions page | Admin |
 | `system.jobs` | Hangfire dashboard `/hangfire` | Admin |
+| `checklist-approvers.manage` | Settings → Checklist Approvers (approver account per department for onboarding/departure checklists) | Admin |
 | `employees.manage` | Employees | Admin, HR |
 | `departments.manage` | Departments and department managers | Admin, HR |
 | `account-requests.manage` | Account requests for any employee (Offboard requests come only from departures) | Admin, HR |

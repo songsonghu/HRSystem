@@ -20,12 +20,14 @@ public static class Permissions
     public const string DeparturesManage = "departures.manage";
     public const string OffboardingExport = "offboarding.export";
     public const string SystemJobs = "system.jobs";
+    public const string ChecklistApproversManage = "checklist-approvers.manage";
 
     public static readonly IReadOnlyList<PermissionDefinition> All = new[]
     {
         new PermissionDefinition(UsersManage, "System", "Manage users (create, edit, disable, delete, reset password)"),
         new PermissionDefinition(RolesManage, "System", "Manage roles and their permissions"),
         new PermissionDefinition(SystemJobs, "System", "View the background jobs dashboard"),
+        new PermissionDefinition(ChecklistApproversManage, "System", "Set the approver account of each department for onboarding and departure checklists"),
         new PermissionDefinition(EmployeesManage, "HR", "Manage employee records"),
         new PermissionDefinition(DepartmentsManage, "HR", "Manage departments and department managers"),
         new PermissionDefinition(AccountRequestsManage, "HR", "Create, submit and track account requests"),

@@ -9,7 +9,10 @@
     <h2>@ViewData["Title"]</h2>
     <div class="d-flex gap-2">
         <a class="btn btn-outline-secondary" asp-controller="@listController" asp-action="Index">Back to @(kind == ChecklistKind.Onboarding ? "Onboarding" : "Departures")</a>
-        <a class="btn btn-outline-secondary" asp-controller="ChecklistApprovers" asp-action="Index" asp-route-kind="@kind">Set Approvers</a>
+        @if (User.HasPermission(Permissions.ChecklistApproversManage))
+        {
+            <a class="btn btn-outline-secondary" asp-controller="ChecklistApprovers" asp-action="Index" asp-route-kind="@kind">Set Approvers</a>
+        }
         <a class="btn btn-success" asp-action="Create" asp-route-kind="@kind">+ New Template</a>
     </div>
 </div>

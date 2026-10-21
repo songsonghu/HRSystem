@@ -134,7 +134,15 @@ public class ChecklistTests : IntegrationTest
 
         try
         {
-            using (var settings = Data.As(hr.UserId, Permissions.DeparturesManage))
+            // Managing departures does not include choosing who approves them.
+            using (var departuresOnly = Data.As(hr.UserId, Permissions.DeparturesManage))
+            {
+                var service = departuresOnly.Get<IChecklistTemplateService>();
+                Assert.Empty(await service.GetApproversAsync(ChecklistKind.Departure));
+                Assert.False((await service.SetApproversAsync(ChecklistKind.Departure, new Dictionary<int, string?>())).Succeeded);
+            }
+
+            using (var settings = Data.As(hr.UserId, Permissions.ChecklistApproversManage))
             {
                 var service = settings.Get<IChecklistTemplateService>();
                 var rows = await service.GetApproversAsync(ChecklistKind.Departure);
@@ -152,7 +160,7 @@ public class ChecklistTests : IntegrationTest
             using (var acting = Data.As(approver.UserId))
                 Assert.True((await acting.Get<IChecklistService>().UpdateTaskAsync(CompleteAll(tasks[0]))).Succeeded);
 
-            using (var settings = Data.As(hr.UserId, Permissions.DeparturesManage))
+            using (var settings = Data.As(hr.UserId, Permissions.ChecklistApproversManage))
             {
                 var service = settings.Get<IChecklistTemplateService>();
                 var rows = await service.GetApproversAsync(ChecklistKind.Departure);

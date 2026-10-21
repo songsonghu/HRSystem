@@ -60,7 +60,7 @@ public interface IChecklistTemplateService
     Task<Result> UpdateAsync(ChecklistTemplateEditDto dto, CancellationToken ct = default);
     Task<Result> DeleteAsync(int id, CancellationToken ct = default);
 
-    /// <summary>Each template of this kind with the login that receives its department's task.</summary>
+    /// <summary>Each template of this kind with the login that receives its department's task (needs checklist-approvers.manage).</summary>
     Task<IReadOnlyList<ChecklistApproverDto>> GetApproversAsync(ChecklistKind kind, CancellationToken ct = default);
 
     /// <summary>

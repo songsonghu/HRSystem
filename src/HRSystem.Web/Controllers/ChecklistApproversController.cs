@@ -1,8 +1,7 @@
 using HRSystem.Application.DTOs;
 using HRSystem.Application.Interfaces;
-using HRSystem.Application.Services;
+using HRSystem.Application.Security;
 using HRSystem.Domain.Enums;
-using HRSystem.Web.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -10,7 +9,7 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 namespace HRSystem.Web.Controllers;
 
 /// <summary>Settings: which login receives each department's onboarding/departure checklist task.</summary>
-[Authorize]
+[Authorize(Policy = Permissions.ChecklistApproversManage)]
 public class ChecklistApproversController : Controller
 {
     private readonly IChecklistTemplateService _templates;
@@ -22,16 +21,9 @@ public class ChecklistApproversController : Controller
         _users = users;
     }
 
-    private bool CanManage(ChecklistKind kind)
-        => Enum.IsDefined(kind) && User.HasPermission(ChecklistService.ManagePermission(kind));
-
     public async Task<IActionResult> Index(ChecklistKind kind = ChecklistKind.Departure)
     {
-        if (!CanManage(kind))
-        {
-            var other = kind == ChecklistKind.Departure ? ChecklistKind.Onboarding : ChecklistKind.Departure;
-            return CanManage(other) ? RedirectToAction(nameof(Index), new { kind = other }) : Forbid();
-        }
+        if (!Enum.IsDefined(kind)) return NotFound();
         return await IndexViewAsync(kind, await _templates.GetApproversAsync(kind));
     }
 
@@ -39,7 +31,7 @@ public class ChecklistApproversController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Index(ChecklistKind kind, List<ChecklistApproverDto> rows)
     {
-        if (!CanManage(kind)) return Forbid();
+        if (!Enum.IsDefined(kind)) return NotFound();
 
         var result = await _templates.SetApproversAsync(kind, rows.ToDictionary(r => r.TemplateId, r => r.ApproverUserId));
         if (result.Succeeded)
@@ -60,7 +52,7 @@ public class ChecklistApproversController : Controller
     private async Task<IActionResult> IndexViewAsync(ChecklistKind kind, IReadOnlyList<ChecklistApproverDto> rows)
     {
         ViewBag.Kind = kind;
-        ViewBag.Kinds = new[] { ChecklistKind.Departure, ChecklistKind.Onboarding }.Where(CanManage).ToList();
+        ViewBag.Kinds = new List<ChecklistKind> { ChecklistKind.Departure, ChecklistKind.Onboarding };
         var users = (await _users.GetActiveUsersAsync())
             .Select(u => new SelectListItem(u.Display, u.UserId))
             .ToList();

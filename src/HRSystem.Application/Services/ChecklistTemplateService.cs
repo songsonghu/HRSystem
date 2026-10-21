@@ -1,6 +1,7 @@
 using HRSystem.Application.Common;
 using HRSystem.Application.DTOs;
 using HRSystem.Application.Interfaces;
+using HRSystem.Application.Security;
 using HRSystem.Domain.Entities;
 using HRSystem.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -59,9 +60,11 @@ public class ChecklistTemplateService : IChecklistTemplateService
 
     // -------------------------------------------------------------- approvers
 
+    private bool CanManageApprovers => _currentUser.HasPermission(Permissions.ChecklistApproversManage);
+
     public async Task<IReadOnlyList<ChecklistApproverDto>> GetApproversAsync(ChecklistKind kind, CancellationToken ct = default)
     {
-        if (!CanManage(kind)) return Array.Empty<ChecklistApproverDto>();
+        if (!CanManageApprovers) return Array.Empty<ChecklistApproverDto>();
 
         var rows = await _db.ChecklistTemplates.AsNoTracking()
             .Where(t => t.Kind == kind && !t.IsDeleted)
@@ -88,7 +91,7 @@ public class ChecklistTemplateService : IChecklistTemplateService
 
     public async Task<Result> SetApproversAsync(ChecklistKind kind, IReadOnlyDictionary<int, string?> approvers, CancellationToken ct = default)
     {
-        if (!Enum.IsDefined(kind) || !CanManage(kind)) return Result.Fail("You do not have permission to manage these approvers.");
+        if (!Enum.IsDefined(kind) || !CanManageApprovers) return Result.Fail("You do not have permission to manage checklist approvers.");
 
         var wanted = approvers.ToDictionary(a => a.Key, a => string.IsNullOrWhiteSpace(a.Value) ? null : a.Value.Trim());
         var users = await _users.GetByIdsAsync(wanted.Values.Where(v => v is not null).Select(v => v!), ct);
