@@ -1,0 +1,14 @@
+@model ChecklistStatus
+@{
+    var (css, label) = Model switch
+    {
+        ChecklistStatus.Draft => ("bg-secondary", "Draft"),
+        ChecklistStatus.Submitted => ("bg-info text-dark", "Submitted"),
+        ChecklistStatus.InProgress => ("bg-primary", "In Progress"),
+        ChecklistStatus.PendingFinalReview => ("bg-warning text-dark", "Pending Final Review"),
+        ChecklistStatus.Completed => ("bg-success", "Completed"),
+        ChecklistStatus.Cancelled => ("bg-dark", "Cancelled"),
+        _ => ("bg-dark", Model.ToString())
+    };
+}
+<span class="badge @css">@label</span>

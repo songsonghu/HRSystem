@@ -8,8 +8,19 @@
 <dl class="row col-md-6">
     <dt class="col-sm-4">Employee No.</dt><dd class="col-sm-8">@Model.EmployeeNo</dd>
     <dt class="col-sm-4">Name</dt><dd class="col-sm-8">@Model.Name</dd>
+    <dt class="col-sm-4">Gender</dt><dd class="col-sm-8">@(Model.Gender == Gender.Unspecified ? "—" : Model.Gender.ToString())</dd>
     <dt class="col-sm-4">Email</dt><dd class="col-sm-8">@Model.Email</dd>
-    <dt class="col-sm-4">Department</dt><dd class="col-sm-8">@Model.Department</dd>
+    <dt class="col-sm-4">Department</dt>
+    <dd class="col-sm-8">
+        @if (Model.DepartmentId is int deptId && User.HasPermission(Permissions.DepartmentsManage))
+        {
+            <a asp-controller="Departments" asp-action="Details" asp-route-id="@deptId">@Model.Department</a>
+        }
+        else
+        {
+            @(Model.Department ?? "—")
+        }
+    </dd>
     <dt class="col-sm-4">Position</dt><dd class="col-sm-8">@Model.Position</dd>
     <dt class="col-sm-4">Category</dt><dd class="col-sm-8">@(Model.Category == EmployeeCategory.AE ? "AE/Sales/SA" : "Staff")</dd>
     <dt class="col-sm-4">Join Date</dt><dd class="col-sm-8">@Model.JoinDate.ToString("yyyy-MM-dd")</dd>

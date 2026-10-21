@@ -1,0 +1,99 @@
+@using Microsoft.AspNetCore.Mvc.Rendering
+@model IReadOnlyList<ChecklistTaskDto>
+@{
+    ViewData["Title"] = "My Checklist Tasks - History";
+    var q = (ChecklistTaskHistoryQuery)ViewBag.Query;
+    var finalReviews = (IReadOnlyList<ChecklistRequestDto>)ViewBag.FinalReviews;
+}
+
+<h2>My Checklist Tasks</h2>
+<p class="page-subtitle">Onboarding and departure checklists assigned to you as department approver.</p>
+
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item"><a class="nav-link" asp-action="Index">Pending</a></li>
+    <li class="nav-item"><a class="nav-link active" asp-action="History">History</a></li>
+</ul>
+
+<form asp-action="History" method="get" class="row g-2 align-items-end">
+    <div class="col-md-4">
+        <label class="form-label" for="Keyword">Employee / Request No.</label>
+        <input class="form-control" id="Keyword" name="Keyword" value="@q.Keyword" placeholder="Name, employee no. or request no." />
+    </div>
+    <div class="col-md-2">
+        <label class="form-label" for="Kind">Type</label>
+        <select class="form-select" id="Kind" name="Kind"
+                asp-items="new[] { ChecklistKind.Departure, ChecklistKind.Onboarding }.Select(k => new SelectListItem(k.ToString(), k.ToString(), q.Kind == k))">
+            <option value="">All</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label" for="From">Submitted from</label>
+        <input class="form-control" type="date" id="From" name="From" value="@q.From?.ToString("yyyy-MM-dd")" />
+    </div>
+    <div class="col-md-2">
+        <label class="form-label" for="To">to</label>
+        <input class="form-control" type="date" id="To" name="To" value="@q.To?.ToString("yyyy-MM-dd")" />
+    </div>
+    <div class="col-md-2 d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Search</button>
+        <a asp-action="History" class="btn btn-outline-secondary">Reset</a>
+    </div>
+</form>
+
+@if (finalReviews.Count > 0)
+{
+    <h4>Final Reviews</h4>
+    <table class="table table-hover align-middle">
+        <thead>
+            <tr><th>Request</th><th>Employee</th><th>Submitted</th><th>Completed At</th><th>Request Status</th><th></th></tr>
+        </thead>
+        <tbody>
+        @foreach (var r in finalReviews)
+        {
+            <tr>
+                <td>@r.RequestNo</td>
+                <td>@r.EmployeeName (@r.EmployeeNo)</td>
+                <td>@r.SubmittedAt?.ToLocalTime().ToString("yyyy-MM-dd")</td>
+                <td>@r.CompletedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                <td><partial name="_ChecklistStatusBadge" model="r.Status" /></td>
+                <td class="text-end"><a class="btn btn-sm btn-outline-primary" asp-action="Review" asp-route-id="@r.Id">View</a></td>
+            </tr>
+        }
+        </tbody>
+    </table>
+    <h4>Department Tasks</h4>
+}
+
+<table class="table table-hover align-middle">
+    <thead>
+        <tr><th>Request</th><th>Type</th><th>Employee</th><th>Department</th><th>Task</th><th>Completed At</th><th>Request Status</th><th></th></tr>
+    </thead>
+    <tbody>
+    @foreach (var t in Model)
+    {
+        <tr>
+            <td>@t.RequestNo</td>
+            <td>@t.Kind</td>
+            <td>@t.EmployeeName (@t.EmployeeNo)</td>
+            <td>@t.DepartmentName</td>
+            <td>@t.Status</td>
+            <td>@t.CompletedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+            <td><partial name="_ChecklistStatusBadge" model="t.RequestStatus" /></td>
+            <td class="text-nowrap text-end">
+                <a class="btn btn-sm btn-outline-primary" asp-action="Task" asp-route-id="@t.Id">View</a>
+                @if (t.CanReopen)
+                {
+                    <form asp-action="Reopen" asp-route-id="@t.Id" method="post" class="d-inline"
+                          onsubmit="return confirm('Take this task back? The request returns to In Progress until you complete it again.');">
+                        <button type="submit" class="btn btn-sm btn-outline-danger">Take Back</button>
+                    </form>
+                }
+            </td>
+        </tr>
+    }
+    @if (Model.Count == 0)
+    {
+        <tr><td colspan="8" class="text-muted">No tasks found.</td></tr>
+    }
+    </tbody>
+</table>

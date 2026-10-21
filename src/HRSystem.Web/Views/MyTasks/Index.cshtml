@@ -15,7 +15,11 @@
 {
     <div class="card mb-3">
         <div class="card-header d-flex justify-content-between">
-            <span><b>@i.AccountTypeName</b></span>
+            <span>
+                <b>@(i.RequestType == RequestType.Remove || i.RequestType == RequestType.Offboard ? "Remove" : "Open"): @i.AccountTypeName</b>
+                · @i.EmployeeName (@i.EmployeeNo)
+                · <a asp-controller="Requests" asp-action="Details" asp-route-id="@i.RequestId">@i.RequestNo</a>
+            </span>
             <span class="badge bg-warning text-dark">@i.Status</span>
         </div>
         <div class="card-body">
@@ -33,8 +37,12 @@
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Status</label>
-                    <select name="Status" class="form-select"
-                            asp-items="Html.GetEnumSelectList<ItemStatus>()"></select>
+                    <select name="Status" class="form-select">
+                        @foreach (var s in Enum.GetValues<ItemStatus>())
+                        {
+                            <option value="@((int)s)" selected="@(s == i.Status)">@s</option>
+                        }
+                    </select>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Result Remark</label>

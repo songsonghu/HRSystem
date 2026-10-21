@@ -1,0 +1,44 @@
+using HRSystem.Application.Interfaces;
+using HRSystem.Infrastructure.Identity;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+
+namespace HRSystem.Infrastructure.Services;
+
+public class UserDirectoryService : IUserDirectoryService
+{
+    private readonly UserManager<ApplicationUser> _userManager;
+
+    public UserDirectoryService(UserManager<ApplicationUser> userManager) => _userManager = userManager;
+
+    public async Task<UserDirectoryEntry?> GetByIdAsync(string userId, CancellationToken ct = default)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+        return user is null ? null : ToEntry(user);
+    }
+
+    public async Task<IReadOnlyDictionary<string, UserDirectoryEntry>> GetByIdsAsync(IEnumerable<string> userIds, CancellationToken ct = default)
+    {
+        var ids = userIds.Distinct().ToList();
+        if (ids.Count == 0) return new Dictionary<string, UserDirectoryEntry>();
+
+        var users = await _userManager.Users.AsNoTracking().Where(u => ids.Contains(u.Id)).ToListAsync(ct);
+        return users.ToDictionary(u => u.Id, ToEntry);
+    }
+
+    public async Task<IReadOnlyList<UserDirectoryEntry>> GetActiveUsersAsync(CancellationToken ct = default)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var users = await _userManager.Users.AsNoTracking()
+            .Where(u => u.LockoutEnd == null || u.LockoutEnd <= now)
+            .ToListAsync(ct);
+        return users.Select(ToEntry).OrderBy(u => u.Display).ToList();
+    }
+
+    private static UserDirectoryEntry ToEntry(ApplicationUser user) => new()
+    {
+        UserId = user.Id,
+        UserName = user.FullName ?? user.UserName,
+        Email = user.Email
+    };
+}

@@ -15,11 +15,13 @@ public class Employee : BaseEntity
     /// <summary>Full name.</summary>
     public string Name { get; set; } = string.Empty;
 
+    public Gender Gender { get; set; } = Gender.Unspecified;
+
     /// <summary>Personal / work email used for the welcome notification.</summary>
     public string? Email { get; set; }
 
-    /// <summary>Department name the employee belongs to.</summary>
-    public string? Department { get; set; }
+    public int? DepartmentId { get; set; }
+    public Department? Department { get; set; }
 
     /// <summary>Job title / position.</summary>
     public string? Position { get; set; }
@@ -39,8 +41,12 @@ public class Employee : BaseEntity
     /// </summary>
     public EmployeeCategory Category { get; set; } = EmployeeCategory.Staff;
 
+    /// <summary>Identity user id of this employee's login account, if any (one-to-one).</summary>
+    public string? UserId { get; set; }
+
     // Navigation
     public ICollection<AccountRequest> AccountRequests { get; set; } = new List<AccountRequest>();
+    public ICollection<ChecklistRequest> ChecklistRequests { get; set; } = new List<ChecklistRequest>();
     public ICollection<EmployeeAccount> Accounts { get; set; } = new List<EmployeeAccount>();
     public ICollection<EmployeeAttachment> Attachments { get; set; } = new List<EmployeeAttachment>();
 }

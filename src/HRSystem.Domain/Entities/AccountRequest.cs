@@ -37,11 +37,22 @@ public class AccountRequest : BaseEntity
     /// <summary>Staff form only: last working day of the employee being replaced.</summary>
     public DateTime? LastDay { get; set; }
 
-    /// <summary>Identity user id of the HR person who applied.</summary>
+    /// <summary>Identity user id of whoever submitted the request.</summary>
     public string? AppliedBy { get; set; }
 
     /// <summary>UTC timestamp when the request was submitted.</summary>
     public DateTime? AppliedAt { get; set; }
+
+    /// <summary>Manager login that must approve a self-service request (snapshot at submit time).</summary>
+    public string? ApproverUserId { get; set; }
+
+    /// <summary>Who approved or rejected, when, and the reason given.</summary>
+    public string? DecidedBy { get; set; }
+    public DateTime? DecidedAt { get; set; }
+    public string? DecisionRemark { get; set; }
+
+    /// <summary>Optimistic concurrency token; departments update items of the same request in parallel.</summary>
+    public byte[] RowVersion { get; set; } = Array.Empty<byte>();
 
     /// <summary>UTC timestamp when the request was fully completed.</summary>
     public DateTime? CompletedAt { get; set; }

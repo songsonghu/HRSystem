@@ -1,0 +1,98 @@
+@model ChecklistTaskEditViewModel
+@{
+    ViewData["Title"] = Model.Kind + " Task";
+    var readOnly = !Model.CanEdit;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0">@Model.Kind Task - @Model.DepartmentName</h2>
+    <span class="badge @(Model.Status is ChecklistTaskStatus.Completed or ChecklistTaskStatus.NotApplicable ? "bg-success" : "bg-warning text-dark")">@Model.Status</span>
+</div>
+<p class="text-muted">Request @Model.RequestNo · @Model.EmployeeName (@Model.EmployeeNo)</p>
+
+@if (!readOnly && !string.IsNullOrWhiteSpace(Model.ReturnReason))
+{
+    <div class="alert alert-warning"><b>Returned by the final reviewer:</b> @Model.ReturnReason</div>
+}
+
+@if (readOnly)
+{
+    <div class="alert alert-info d-flex justify-content-between align-items-center">
+        <span>
+            @if (Model.CanReopen)
+            {
+                @:Submitted @(Model.CompletedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")). Take it back to make changes.
+            }
+            else
+            {
+                @:This request is closed, so the task is read-only.
+            }
+        </span>
+        @if (Model.CanReopen)
+        {
+            <form asp-action="Reopen" asp-route-id="@Model.TaskId" method="post"
+                  onsubmit="return confirm('Take this task back? The request returns to In Progress until you complete it again.');">
+                <button class="btn btn-sm btn-outline-danger">Take Back</button>
+            </form>
+        }
+    </div>
+}
+
+<form asp-action="Task" method="post">
+    <input type="hidden" asp-for="TaskId" />
+    <input type="hidden" asp-for="RequestId" />
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+    <fieldset disabled="@readOnly">
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Done</th>
+                        <th>N/A</th>
+                        <th>Checklist Item</th>
+                        <th>Remark</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @for (int i = 0; i < Model.Items.Count; i++)
+                {
+                    <tr>
+                        <td>
+                            <input type="hidden" asp-for="Items[i].Id" />
+                            <input asp-for="Items[i].IsCompleted" class="form-check-input" />
+                        </td>
+                        <td><input asp-for="Items[i].IsNotApplicable" class="form-check-input" /></td>
+                        <td>
+                            @Model.Items[i].Description
+                            @if (Model.Items[i].IsRequired)
+                            {
+                                <span class="text-danger">*</span>
+                            }
+                        </td>
+                        <td><input asp-for="Items[i].Remark" class="form-control" /></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="TaskRemark" class="form-label"></label>
+            <textarea asp-for="TaskRemark" class="form-control" rows="3"></textarea>
+        </div>
+    </fieldset>
+
+    @if (!readOnly)
+    {
+        <p class="text-muted small">Items marked <span class="text-danger">*</span> are required. "Complete Task" submits this department's part and updates the request.</p>
+        <button type="submit" name="MarkAsCompleted" value="true" class="btn btn-success"
+                onclick="return confirm('Complete this department task?');">Complete Task</button>
+        <button type="submit" name="MarkAsCompleted" value="false" class="btn btn-primary">Save Progress</button>
+    }
+    <a asp-action="@(readOnly ? "History" : "Index")" class="btn btn-outline-secondary">Back</a>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

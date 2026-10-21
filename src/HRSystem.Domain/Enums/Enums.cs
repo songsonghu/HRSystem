@@ -7,6 +7,14 @@ public enum EmployeeStatus
     Resigned = 1    // Left the company
 }
 
+/// <summary>Employee gender. Unspecified only exists for records created before the field was added.</summary>
+public enum Gender
+{
+    Unspecified = 0,
+    Male = 1,
+    Female = 2
+}
+
 /// <summary>
 /// The category of employee, which determines which paper form layout
 /// ("Staff Requisition Form" vs "AE/Sales/SA Requisition Form") and account
@@ -54,11 +62,13 @@ public enum RequestType
 /// <summary>Overall status of an account request (the master ticket).</summary>
 public enum RequestStatus
 {
-    Draft = 0,       // Being prepared by HR, not submitted
-    Submitted = 1,   // Submitted, emails dispatched to department heads
-    InProgress = 2,  // At least one item handled, not all completed
-    Completed = 3,   // All items completed
-    Closed = 4       // Archived
+    Draft = 0,            // Being prepared, not submitted
+    Submitted = 1,        // Dispatched to the responsible departments
+    InProgress = 2,       // At least one item handled, not all completed
+    Completed = 3,        // All items completed
+    Closed = 4,           // Archived
+    PendingApproval = 5,  // Raised by the employee; waiting for their department manager
+    Rejected = 6          // Rejected by the approving manager; never dispatched
 }
 
 /// <summary>
@@ -79,4 +89,32 @@ public enum AccountStatus
 {
     Active = 0,     // Account is live
     Disabled = 1    // Account has been disabled
+}
+
+/// <summary>Which lifecycle process a checklist request belongs to.</summary>
+public enum ChecklistKind
+{
+    Onboarding = 1,
+    Departure = 2
+}
+
+/// <summary>Overall status of a checklist request (onboarding or departure).</summary>
+public enum ChecklistStatus
+{
+    Draft = 0,
+    Submitted = 1,
+    InProgress = 2,
+    PendingFinalReview = 3,
+    Completed = 4,
+    Cancelled = 5
+}
+
+/// <summary>Status of one department's checklist task.</summary>
+public enum ChecklistTaskStatus
+{
+    NotStarted = 0,
+    InProgress = 1,
+    Completed = 2,
+    Returned = 3,
+    NotApplicable = 4
 }

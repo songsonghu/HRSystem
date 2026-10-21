@@ -1,3 +1,4 @@
+using HRSystem.Application.Security;
 using HRSystem.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -7,7 +8,7 @@ namespace HRSystem.Web.Controllers;
 /// <summary>
 /// Offboarding account listing and Excel export (Module 5). Restricted to Admin/HR.
 /// </summary>
-[Authorize(Policy = "RequireHR")]
+[Authorize(Policy = Permissions.OffboardingExport)]
 public class OffboardingController : Controller
 {
     private readonly IOffboardingService _service;
