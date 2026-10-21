@@ -48,6 +48,13 @@
     <p><b>Remark:</b> @Model.Remark</p>
 }
 
+@if (Model.Status == ChecklistStatus.Cancelled)
+{
+    <div class="alert alert-secondary">
+        <b>Cancelled</b> @Model.CancelledAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") — @Model.CancelReason
+    </div>
+}
+
 <div class="mb-3 d-flex gap-2 align-items-center">
     @if (Model.CanSubmit)
     {
@@ -70,7 +77,32 @@
             <span class="text-muted small">Finalizing also requires the account request to be completed.</span>
         }
     }
+    @if (Model.CanCancel)
+    {
+        <button type="button" class="btn btn-outline-danger ms-auto" data-bs-toggle="collapse" data-bs-target="#cancel-request">Cancel Request</button>
+    }
 </div>
+
+@if (Model.CanCancel)
+{
+    <div class="collapse mb-3" id="cancel-request">
+        <div class="card card-body">
+            <form asp-action="Cancel" asp-route-id="@Model.Id" method="post"
+                  onsubmit="return confirm('Cancel this request? This cannot be undone.');">
+                <label class="form-label" for="reason">Reason for cancelling</label>
+                <textarea class="form-control mb-2" id="reason" name="reason" rows="2" maxlength="500" required></textarea>
+                <p class="text-muted small mb-2">
+                    Department tasks still open are withdrawn and their approvers are notified.
+                    @if (Model.AccountRequestId is not null)
+                    {
+                        @:The linked account request @Model.AccountRequestNo is closed; accounts it has already changed stay as they are.
+                    }
+                </p>
+                <button type="submit" class="btn btn-danger">Confirm Cancel</button>
+            </form>
+        </div>
+    </div>
+}
 
 <h4>Department Tasks</h4>
 @if (Model.Tasks.Count == 0)

@@ -4,7 +4,12 @@
 }
 
 <h2>My Checklist Tasks</h2>
-<p class="text-muted">Onboarding and departure checklists assigned to you as department manager.</p>
+<p class="page-subtitle">Onboarding and departure checklists assigned to you as department approver.</p>
+
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item"><a class="nav-link active" asp-action="Index">Pending (@Model.Count)</a></li>
+    <li class="nav-item"><a class="nav-link" asp-action="History">History</a></li>
+</ul>
 
 @if (Model.Count == 0)
 {

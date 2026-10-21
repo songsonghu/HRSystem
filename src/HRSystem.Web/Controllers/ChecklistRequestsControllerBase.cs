@@ -97,4 +97,15 @@ public abstract class ChecklistRequestsControllerBase : Controller
             : result.Error;
         return RedirectToAction(nameof(Details), new { id });
     }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Cancel(int id, string? reason)
+    {
+        var result = await _service.CancelAsync(id, reason ?? string.Empty);
+        TempData[result.Succeeded ? "Success" : "Error"] = result.Succeeded
+            ? "Request cancelled. Open department tasks were withdrawn."
+            : result.Error;
+        return RedirectToAction(nameof(Details), new { id });
+    }
 }

@@ -53,9 +53,14 @@ public class ChecklistTaskEditViewModel
     public string EmployeeName { get; set; } = string.Empty;
     public string DepartmentName { get; set; } = string.Empty;
     public ChecklistTaskStatus Status { get; set; }
+    public DateTime? CompletedAt { get; set; }
+    public bool CanEdit { get; set; }
+    public bool CanReopen { get; set; }
 
     [StringLength(1000)]
     public string? TaskRemark { get; set; }
+
+    /// <summary>Set by the "Complete Task" button; "Save Progress" leaves it false.</summary>
     public bool MarkAsCompleted { get; set; }
     public List<ChecklistTaskItemEditViewModel> Items { get; set; } = new();
 }
@@ -129,6 +134,9 @@ public static class ChecklistViewModelMapper
         EmployeeName = dto.EmployeeName,
         DepartmentName = dto.DepartmentName,
         Status = dto.Status,
+        CompletedAt = dto.CompletedAt,
+        CanEdit = dto.CanEdit,
+        CanReopen = dto.CanReopen,
         TaskRemark = dto.TaskRemark,
         Items = dto.Items.Select(i => new ChecklistTaskItemEditViewModel
         {

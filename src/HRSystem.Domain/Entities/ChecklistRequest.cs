@@ -37,6 +37,9 @@ public class ChecklistRequest : BaseEntity
     public string? FinalizedBy { get; set; }
     public DateTime? FinalizedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
+    public string? CancelledBy { get; set; }
+    public DateTime? CancelledAt { get; set; }
+    public string? CancelReason { get; set; }
 
     public Employee? Employee { get; set; }
     public AccountRequest? AccountRequest { get; set; }

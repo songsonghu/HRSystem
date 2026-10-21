@@ -73,6 +73,7 @@ public class StartupAndAccessTests : IntegrationTest
 
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/MyTasks")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/ChecklistTasks")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/ChecklistTasks/History?Keyword=x&Kind=Departure")).StatusCode);
         Assert.Equal(HttpStatusCode.Redirect, (await client.GetAsync("/Employees")).StatusCode);
     }
 

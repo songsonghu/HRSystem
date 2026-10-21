@@ -38,6 +38,8 @@ public class ChecklistRequestDto
     public DateTime? SubmittedAt { get; set; }
     public DateTime? FinalizedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
+    public DateTime? CancelledAt { get; set; }
+    public string? CancelReason { get; set; }
 
     public int? AccountRequestId { get; set; }
     public string? AccountRequestNo { get; set; }
@@ -47,6 +49,7 @@ public class ChecklistRequestDto
 
     public bool CanSubmit => Status == ChecklistStatus.Draft;
     public bool CanFinalize => Status == ChecklistStatus.PendingFinalReview;
+    public bool CanCancel => Status is not (ChecklistStatus.Completed or ChecklistStatus.Cancelled);
 }
 
 public class ChecklistTaskDto
@@ -63,7 +66,27 @@ public class ChecklistTaskDto
     public int SortOrder { get; set; }
     public string? TaskRemark { get; set; }
     public DateTime? CompletedAt { get; set; }
+    public ChecklistStatus RequestStatus { get; set; }
     public List<ChecklistTaskItemDto> Items { get; set; } = new();
+
+    public bool IsDone => Status is ChecklistTaskStatus.Completed or ChecklistTaskStatus.NotApplicable;
+    public bool IsRequestOpen => RequestStatus is not (ChecklistStatus.Draft or ChecklistStatus.Completed or ChecklistStatus.Cancelled);
+
+    /// <summary>The assignee may still change the items.</summary>
+    public bool CanEdit => IsRequestOpen && !IsDone;
+
+    /// <summary>A submitted task can be taken back until the request is finalized or cancelled.</summary>
+    public bool CanReopen => IsRequestOpen && IsDone;
+}
+
+/// <summary>Filters for the current user's checklist task history.</summary>
+public class ChecklistTaskHistoryQuery
+{
+    /// <summary>Matches employee name, employee number or request number.</summary>
+    public string? Keyword { get; set; }
+    public ChecklistKind? Kind { get; set; }
+    public DateTime? From { get; set; }
+    public DateTime? To { get; set; }
 }
 
 public class ChecklistTaskItemDto

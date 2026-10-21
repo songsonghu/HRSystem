@@ -372,27 +372,121 @@ public class ChecklistService : IChecklistService
         return Result.Success();
     }
 
+    public Task<Result> CancelAsync(int requestId, string reason, CancellationToken ct = default)
+        => ConcurrencyRetry.RunAsync(_db, () => CancelOnceAsync(requestId, reason, ct));
+
+    private async Task<Result> CancelOnceAsync(int requestId, string reason, CancellationToken ct)
+    {
+        var request = await _db.ChecklistRequests
+            .Include(r => r.Employee)
+            .Include(r => r.AccountRequest)
+            .Include(r => r.Tasks)
+            .FirstOrDefaultAsync(r => r.Id == requestId, ct);
+        if (request is null || !CanManage(request.Kind)) return Result.Fail("Request not found.");
+        if (request.Status is ChecklistStatus.Completed or ChecklistStatus.Cancelled)
+            return Result.Fail("Only requests that are not finalized or cancelled can be cancelled.");
+        if (string.IsNullOrWhiteSpace(reason)) return Result.Fail("Enter a reason for cancelling.");
+
+        var now = DateTime.UtcNow;
+        var wasDispatched = request.Status != ChecklistStatus.Draft;
+        request.Status = ChecklistStatus.Cancelled;
+        request.CancelledAt = now;
+        request.CancelledBy = _currentUser.UserId;
+        request.CancelReason = reason.Trim();
+        request.ModifiedAt = now;
+
+        // Stop the linked account request too, so its items leave the handlers' My Tasks.
+        if (request.AccountRequest is { Status: not (RequestStatus.Completed or RequestStatus.Closed or RequestStatus.Rejected) } accountRequest)
+        {
+            accountRequest.Status = RequestStatus.Closed;
+            accountRequest.ModifiedBy = _currentUser.UserId;
+            accountRequest.ModifiedAt = now;
+        }
+
+        await _db.SaveChangesAsync(ct);
+
+        if (wasDispatched) await NotifyCancellationAsync(request, ct);
+        await _audit.LogAsync($"Cancel{request.Kind}", nameof(ChecklistRequest), request.Id.ToString(), $"{request.RequestNo}: {request.CancelReason}", ct);
+        return Result.Success();
+    }
+
     // ------------------------------------------------------------------ tasks
+
+    private IQueryable<ChecklistTask> MyTasks()
+    {
+        // Tasks belong to their assignee alone; administrators get no view of other people's tasks.
+        var userId = _currentUser.UserId;
+        return _db.ChecklistTasks.AsNoTracking()
+            .Include(t => t.ChecklistRequest)!.ThenInclude(r => r!.Employee)
+            .Include(t => t.Items)
+            .Where(t => userId != null && t.AssignedUserId == userId && t.ChecklistRequest!.Status != ChecklistStatus.Draft);
+    }
 
     public async Task<IReadOnlyList<ChecklistTaskDto>> GetMyPendingTasksAsync(CancellationToken ct = default)
     {
-        var userId = _currentUser.UserId;
-        if (string.IsNullOrWhiteSpace(userId)) return Array.Empty<ChecklistTaskDto>();
+        if (string.IsNullOrWhiteSpace(_currentUser.UserId)) return Array.Empty<ChecklistTaskDto>();
 
-        var query = _db.ChecklistTasks.AsNoTracking()
-            .Include(t => t.ChecklistRequest)!.ThenInclude(r => r!.Employee)
-            .Include(t => t.Items)
-            .Where(t => t.ChecklistRequest!.Status != ChecklistStatus.Draft
-                        && t.ChecklistRequest.Status != ChecklistStatus.Completed
+        var tasks = await MyTasks()
+            .Where(t => t.ChecklistRequest!.Status != ChecklistStatus.Completed
                         && t.ChecklistRequest.Status != ChecklistStatus.Cancelled
                         && t.Status != ChecklistTaskStatus.Completed
-                        && t.Status != ChecklistTaskStatus.NotApplicable);
-
-        if (!_currentUser.IsAdmin)
-            query = query.Where(t => t.AssignedUserId == userId);
-
-        var tasks = await query.OrderBy(t => t.ChecklistRequestId).ThenBy(t => t.SortOrder).ToListAsync(ct);
+                        && t.Status != ChecklistTaskStatus.NotApplicable)
+            .OrderBy(t => t.ChecklistRequestId).ThenBy(t => t.SortOrder)
+            .ToListAsync(ct);
         return tasks.Select(MapTask).ToList();
+    }
+
+    public async Task<IReadOnlyList<ChecklistTaskDto>> GetMyTaskHistoryAsync(ChecklistTaskHistoryQuery query, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(_currentUser.UserId)) return Array.Empty<ChecklistTaskDto>();
+
+        var q = MyTasks().Where(t => t.Status == ChecklistTaskStatus.Completed
+                                     || t.Status == ChecklistTaskStatus.NotApplicable
+                                     || t.ChecklistRequest!.Status == ChecklistStatus.Completed
+                                     || t.ChecklistRequest.Status == ChecklistStatus.Cancelled);
+
+        if (!string.IsNullOrWhiteSpace(query.Keyword))
+        {
+            var k = query.Keyword.Trim();
+            q = q.Where(t => t.ChecklistRequest!.RequestNo.Contains(k)
+                             || t.ChecklistRequest.Employee!.Name.Contains(k)
+                             || t.ChecklistRequest.Employee.EmployeeNo.Contains(k));
+        }
+        if (query.Kind is { } kind) q = q.Where(t => t.ChecklistRequest!.Kind == kind);
+        // Dates filter on when the request was dispatched.
+        if (query.From is { } from) q = q.Where(t => t.ChecklistRequest!.SubmittedAt >= from.Date);
+        if (query.To is { } to) q = q.Where(t => t.ChecklistRequest!.SubmittedAt < to.Date.AddDays(1));
+
+        var tasks = await q.OrderByDescending(t => t.ChecklistRequest!.SubmittedAt).ThenBy(t => t.SortOrder)
+            .Take(500)
+            .ToListAsync(ct);
+        return tasks.Select(MapTask).ToList();
+    }
+
+    public Task<Result> ReopenTaskAsync(int taskId, CancellationToken ct = default)
+        => ConcurrencyRetry.RunAsync(_db, () => ReopenTaskOnceAsync(taskId, ct));
+
+    private async Task<Result> ReopenTaskOnceAsync(int taskId, CancellationToken ct)
+    {
+        var task = await _db.ChecklistTasks
+            .Include(t => t.ChecklistRequest)
+            .Include(t => t.Items)
+            .FirstOrDefaultAsync(t => t.Id == taskId, ct);
+        if (task is null || !CanHandleTask(task.AssignedUserId)) return Result.Fail("Task not found.");
+        if (task.ChecklistRequest is null || task.ChecklistRequest.Status is ChecklistStatus.Completed or ChecklistStatus.Cancelled)
+            return Result.Fail("The request is already finalized or cancelled, so this task can no longer be changed.");
+        if (task.Status is not (ChecklistTaskStatus.Completed or ChecklistTaskStatus.NotApplicable))
+            return Result.Fail("Only submitted tasks can be taken back.");
+
+        task.Status = ChecklistTaskStatus.InProgress;
+        task.CompletedAt = null;
+        task.HandledBy = _currentUser.UserId;
+
+        await RecomputeRequestStatusAsync(task.ChecklistRequest, ct);
+        task.ChecklistRequest.ModifiedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        await _audit.LogAsync("ReopenChecklistTask", nameof(ChecklistTask), task.Id.ToString(), task.DepartmentName, ct);
+        return Result.Success();
     }
 
     public async Task<ChecklistTaskDto?> GetTaskAsync(int taskId, CancellationToken ct = default)
@@ -418,6 +512,8 @@ public class ChecklistService : IChecklistService
         if (!CanHandleTask(task.AssignedUserId)) return Result.Fail("You are not allowed to update this task.");
         if (task.ChecklistRequest is null || task.ChecklistRequest.Status is ChecklistStatus.Completed or ChecklistStatus.Cancelled)
             return Result.Fail("Request already closed.");
+        if (task.Status is ChecklistTaskStatus.Completed or ChecklistTaskStatus.NotApplicable)
+            return Result.Fail("This task is already submitted. Take it back first to change it.");
 
         var now = DateTime.UtcNow;
         foreach (var updateItem in dto.Items)
@@ -493,8 +589,30 @@ public class ChecklistService : IChecklistService
         request.Status = anyProgress ? ChecklistStatus.InProgress : ChecklistStatus.Submitted;
     }
 
+    /// <summary>Only the assignee; administrators deliberately get no override.</summary>
     private bool CanHandleTask(string? assignedUserId)
-        => _currentUser.IsAdmin || (!string.IsNullOrWhiteSpace(_currentUser.UserId) && _currentUser.UserId == assignedUserId);
+        => !string.IsNullOrWhiteSpace(_currentUser.UserId) && _currentUser.UserId == assignedUserId;
+
+    private async Task NotifyCancellationAsync(ChecklistRequest request, CancellationToken ct)
+    {
+        var label = Label(request.Kind);
+        var openAssignees = request.Tasks
+            .Where(t => t.AssignedUserId is not null && t.Status is not (ChecklistTaskStatus.Completed or ChecklistTaskStatus.NotApplicable))
+            .Select(t => t.AssignedUserId!)
+            .Distinct();
+        var emails = (await _users.GetByIdsAsync(openAssignees, ct)).Values
+            .Select(u => u.Email)
+            .Where(e => !string.IsNullOrWhiteSpace(e))
+            .Select(e => e!)
+            .ToList();
+        if (emails.Count == 0) return;
+
+        _email.Enqueue(new EmailMessage(
+            emails,
+            $"[Cancelled] {char.ToUpper(label[0]) + label[1..]} checklist ({request.RequestNo})",
+            $"<p>The {label} checklist for <b>{request.Employee?.Name}</b> ({request.Employee?.EmployeeNo}) was cancelled. No further action is needed.</p>" +
+            $"<p>Reason: {System.Net.WebUtility.HtmlEncode(request.CancelReason)}</p>"));
+    }
 
     private void NotifyAssignees(ChecklistRequest request, IReadOnlyList<ChecklistTask> tasks, IReadOnlyDictionary<string, UserDirectoryEntry> assignees)
     {
@@ -527,6 +645,8 @@ public class ChecklistService : IChecklistService
         SubmittedAt = request.SubmittedAt,
         FinalizedAt = request.FinalizedAt,
         CompletedAt = request.CompletedAt,
+        CancelledAt = request.CancelledAt,
+        CancelReason = request.CancelReason,
         AccountRequestId = request.AccountRequestId,
         AccountRequestNo = request.AccountRequest?.RequestNo,
         AccountRequestStatus = request.AccountRequest?.Status,
@@ -547,6 +667,7 @@ public class ChecklistService : IChecklistService
         SortOrder = task.SortOrder,
         TaskRemark = task.TaskRemark,
         CompletedAt = task.CompletedAt,
+        RequestStatus = task.ChecklistRequest?.Status ?? default,
         Items = task.Items.OrderBy(i => i.SortOrder).Select(i => new ChecklistTaskItemDto
         {
             Id = i.Id,

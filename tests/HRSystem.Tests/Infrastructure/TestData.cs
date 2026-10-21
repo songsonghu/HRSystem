@@ -29,6 +29,14 @@ public sealed class TestData
         return new Acting(scope);
     }
 
+    /// <summary>A DI scope whose services act as an administrator.</summary>
+    public Acting AsAdmin(string userId)
+    {
+        var scope = _app.Services.CreateScope();
+        scope.ServiceProvider.GetRequiredService<TestCurrentUser>().ActAsAdmin(userId);
+        return new Acting(scope);
+    }
+
     public async Task<int> DepartmentAsync()
     {
         using var scope = _app.Services.CreateScope();

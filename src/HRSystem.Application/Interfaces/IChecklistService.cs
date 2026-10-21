@@ -28,10 +28,23 @@ public interface IChecklistService
     /// <summary>Close a request whose required tasks are done. Departure marks the employee resigned.</summary>
     Task<Result> FinalizeAsync(int requestId, CancellationToken ct = default);
 
-    /// <summary>Open tasks of both kinds assigned to the current user.</summary>
+    /// <summary>Withdraw a request that is not finalized; its open tasks and linked account request are closed.</summary>
+    Task<Result> CancelAsync(int requestId, string reason, CancellationToken ct = default);
+
+    /// <summary>
+    /// Open tasks of both kinds assigned to the current user. Tasks are only ever visible to
+    /// their assignee — administrators included.
+    /// </summary>
     Task<IReadOnlyList<ChecklistTaskDto>> GetMyPendingTasksAsync(CancellationToken ct = default);
+
+    /// <summary>The current user's finished tasks, and tasks of requests that were finalized or cancelled.</summary>
+    Task<IReadOnlyList<ChecklistTaskDto>> GetMyTaskHistoryAsync(ChecklistTaskHistoryQuery query, CancellationToken ct = default);
+
     Task<ChecklistTaskDto?> GetTaskAsync(int taskId, CancellationToken ct = default);
     Task<Result> UpdateTaskAsync(ChecklistTaskUpdateDto dto, CancellationToken ct = default);
+
+    /// <summary>Take back a submitted task so it can be changed again (request not yet finalized).</summary>
+    Task<Result> ReopenTaskAsync(int taskId, CancellationToken ct = default);
 }
 
 /// <summary>Per-department checklist templates, editable by holders of the kind's permission.</summary>

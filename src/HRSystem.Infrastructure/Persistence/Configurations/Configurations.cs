@@ -182,6 +182,8 @@ public class ChecklistRequestConfig : IEntityTypeConfiguration<ChecklistRequest>
         b.Property(x => x.Remark).HasMaxLength(1000);
         b.Property(x => x.SubmittedBy).HasMaxLength(450);
         b.Property(x => x.FinalizedBy).HasMaxLength(450);
+        b.Property(x => x.CancelledBy).HasMaxLength(450);
+        b.Property(x => x.CancelReason).HasMaxLength(500);
         b.HasOne(x => x.Employee)
             .WithMany(e => e.ChecklistRequests)
             .HasForeignKey(x => x.EmployeeId)

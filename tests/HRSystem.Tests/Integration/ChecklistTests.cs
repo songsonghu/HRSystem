@@ -170,6 +170,90 @@ public class ChecklistTests : IntegrationTest
         }
     }
 
+    [SkippableFact]
+    public async Task Tasks_are_visible_to_their_assignee_only_not_even_to_admins()
+    {
+        RequireDatabase();
+        var hr = await Data.PersonAsync(null);
+        var checklistManager = await Data.PersonAsync(null);
+        var admin = await Data.PersonAsync(null);
+        await Data.SetTemplateManagersAsync(ChecklistKind.Departure, checklistManager.EmployeeId);
+        var requestId = await StartDepartureAsync(hr.UserId, await Data.EmployeeAsync(null));
+        var task = (await TasksOfAsync(checklistManager.UserId, requestId)).First();
+
+        using var asAdmin = Data.AsAdmin(admin.UserId);
+        var service = asAdmin.Get<IChecklistService>();
+        Assert.DoesNotContain(await service.GetMyPendingTasksAsync(), t => t.ChecklistRequestId == requestId);
+        Assert.Null(await service.GetTaskAsync(task.Id));
+        Assert.False((await service.UpdateTaskAsync(CompleteAll(task))).Succeeded);
+    }
+
+    [SkippableFact]
+    public async Task Completed_task_moves_to_history_and_can_be_taken_back()
+    {
+        RequireDatabase();
+        var hr = await Data.PersonAsync(null);
+        var checklistManager = await Data.PersonAsync(null);
+        await Data.SetTemplateManagersAsync(ChecklistKind.Departure, checklistManager.EmployeeId);
+        var requestId = await StartDepartureAsync(hr.UserId, await Data.EmployeeAsync(null));
+        var tasks = await TasksOfAsync(checklistManager.UserId, requestId);
+
+        using var manager = Data.As(checklistManager.UserId);
+        var service = manager.Get<IChecklistService>();
+        foreach (var task in tasks)
+            Assert.True((await service.UpdateTaskAsync(CompleteAll(task))).Succeeded);
+
+        Assert.Empty(await TasksOfAsync(checklistManager.UserId, requestId));
+        var requestNo = await Data.ReadAsync(db => db.ChecklistRequests.Where(r => r.Id == requestId).Select(r => r.RequestNo).SingleAsync());
+        var history = await service.GetMyTaskHistoryAsync(new ChecklistTaskHistoryQuery { Keyword = requestNo, Kind = ChecklistKind.Departure });
+        Assert.Equal(tasks.Count, history.Count);
+        Assert.All(history, t => Assert.True(t.CanReopen));
+        Assert.Equal(ChecklistStatus.PendingFinalReview,
+            await Data.ReadAsync(db => db.ChecklistRequests.Where(r => r.Id == requestId).Select(r => r.Status).SingleAsync()));
+
+        // A submitted task cannot be edited until it is taken back.
+        Assert.Contains("Take it back", (await service.UpdateTaskAsync(CompleteAll(tasks[0]))).Error);
+        Assert.True((await service.ReopenTaskAsync(tasks[0].Id)).Succeeded);
+
+        Assert.Single(await TasksOfAsync(checklistManager.UserId, requestId));
+        Assert.Equal(ChecklistStatus.InProgress,
+            await Data.ReadAsync(db => db.ChecklistRequests.Where(r => r.Id == requestId).Select(r => r.Status).SingleAsync()));
+    }
+
+    [SkippableFact]
+    public async Task Cancelling_a_departure_withdraws_open_tasks_and_the_account_request()
+    {
+        RequireDatabase();
+        var hr = await Data.PersonAsync(null);
+        var checklistManager = await Data.PersonAsync(null);
+        await Data.SetTemplateManagersAsync(ChecklistKind.Departure, checklistManager.EmployeeId);
+        var (itId, _) = await Data.ManagedDepartmentAsync();
+        var accountType = await Data.AccountTypeAsync(itId);
+        var leaver = await Data.EmployeeAsync(null);
+        await Data.AddHeldAccountAsync(leaver, accountType, "leaver-pc");
+        var requestId = await StartDepartureAsync(hr.UserId, leaver, accountType);
+
+        using (var hrScope = Data.As(hr.UserId, Permissions.DeparturesManage))
+        {
+            var service = hrScope.Get<IChecklistService>();
+            Assert.False((await service.CancelAsync(requestId, " ")).Succeeded);
+            var cancelled = await service.CancelAsync(requestId, "Employee withdrew resignation");
+            Assert.True(cancelled.Succeeded, cancelled.Error);
+            Assert.False((await service.CancelAsync(requestId, "again")).Succeeded);
+        }
+
+        Assert.Empty(await TasksOfAsync(checklistManager.UserId, requestId));
+        var request = await Data.ReadAsync(db => db.ChecklistRequests.Include(r => r.AccountRequest).SingleAsync(r => r.Id == requestId));
+        Assert.Equal(ChecklistStatus.Cancelled, request.Status);
+        Assert.Equal("Employee withdrew resignation", request.CancelReason);
+        Assert.Equal(RequestStatus.Closed, request.AccountRequest!.Status);
+        Assert.Equal(EmployeeStatus.Active, await Data.ReadAsync(db => db.Employees.Where(e => e.Id == leaver).Select(e => e.Status).SingleAsync()));
+
+        // The employee can be started on a new departure afterwards.
+        using var again = Data.As(hr.UserId, Permissions.DeparturesManage);
+        Assert.Null(await again.Get<IChecklistService>().GetOpenRequestIdAsync(ChecklistKind.Departure, leaver));
+    }
+
     /// <summary>
     /// B reads all department tasks while they are open; A then completes all but one; B completes
     /// the last from its stale view. The request must still reach final review.
