@@ -14,6 +14,9 @@ public class ChecklistTemplate : BaseEntity
     public bool IsRequired { get; set; } = true;
     public int SortOrder { get; set; }
 
+    /// <summary>Login that receives this department's task. When empty, the department manager's login does.</summary>
+    public string? ApproverUserId { get; set; }
+
     public Department? Department { get; set; }
     public ICollection<ChecklistTemplateItem> Items { get; set; } = new List<ChecklistTemplateItem>();
 }

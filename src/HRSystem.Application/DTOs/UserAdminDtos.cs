@@ -56,4 +56,9 @@ public class RoleEditDto
     public string Name { get; set; } = string.Empty;
     public List<string> Permissions { get; set; } = new();
     public bool IsProtected { get; set; }
+
+    /// <summary>Users holding the role (display only, never posted back).</summary>
+    public IReadOnlyList<RoleMemberDto> Members { get; set; } = Array.Empty<RoleMemberDto>();
 }
+
+public record RoleMemberDto(string UserId, string Email, string? FullName, bool IsActive);

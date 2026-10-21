@@ -106,9 +106,13 @@
             {
                 <li>
                     @t.DepartmentName (@t.ItemCount items)
-                    @if (!t.CanReceiveTasks)
+                    @if (t.CanReceiveTasks)
                     {
-                        <span class="badge bg-warning text-dark">no manager with login — submitting will fail</span>
+                        <span class="text-muted small">— approver: @t.AssigneeName</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-warning text-dark">no approver set — submitting will fail</span>
                     }
                 </li>
             }

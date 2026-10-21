@@ -120,8 +120,11 @@ public class ChecklistTemplatePreviewDto
     public string DepartmentName { get; set; } = string.Empty;
     public int ItemCount { get; set; }
 
-    /// <summary>False when the department has no manager with a login, so submitting would fail.</summary>
+    /// <summary>False when neither an approver nor a manager with a login is set, so submitting would fail.</summary>
     public bool CanReceiveTasks { get; set; }
+
+    /// <summary>Login that will receive the task.</summary>
+    public string? AssigneeName { get; set; }
 }
 
 // ------------------------------------------------------------- templates
@@ -136,6 +139,8 @@ public class ChecklistTemplateListItemDto
     public int SortOrder { get; set; }
     public int ItemCount { get; set; }
     public bool CanReceiveTasks { get; set; }
+    public string? AssigneeUserId { get; set; }
+    public string? AssigneeName { get; set; }
 }
 
 public class ChecklistTemplateEditDto
@@ -157,4 +162,21 @@ public class ChecklistTemplateItemEditDto
     public string? Description { get; set; }
     public bool IsRequired { get; set; } = true;
     public int SortOrder { get; set; }
+}
+
+// ------------------------------------------------------------- approvers
+
+/// <summary>Who receives one department's checklist task.</summary>
+public class ChecklistApproverDto
+{
+    public int TemplateId { get; set; }
+    public string DepartmentName { get; set; } = string.Empty;
+    public int ItemCount { get; set; }
+    public bool IsActive { get; set; }
+
+    /// <summary>The configured approver login; empty means the department manager's login.</summary>
+    public string? ApproverUserId { get; set; }
+
+    /// <summary>Department manager's login, used when no approver is configured.</summary>
+    public string? ManagerUserName { get; set; }
 }

@@ -46,4 +46,13 @@ public interface IChecklistTemplateService
     Task<Result<int>> CreateAsync(ChecklistTemplateEditDto dto, CancellationToken ct = default);
     Task<Result> UpdateAsync(ChecklistTemplateEditDto dto, CancellationToken ct = default);
     Task<Result> DeleteAsync(int id, CancellationToken ct = default);
+
+    /// <summary>Each template of this kind with the login that receives its department's task.</summary>
+    Task<IReadOnlyList<ChecklistApproverDto>> GetApproversAsync(ChecklistKind kind, CancellationToken ct = default);
+
+    /// <summary>
+    /// Set the approver login per template id (null/empty falls back to the department manager).
+    /// Unfinished tasks of open requests move to the new assignee.
+    /// </summary>
+    Task<Result> SetApproversAsync(ChecklistKind kind, IReadOnlyDictionary<int, string?> approvers, CancellationToken ct = default);
 }

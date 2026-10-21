@@ -44,17 +44,19 @@ public class RolesController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Edit(RoleEditDto dto)
     {
-        if (!ModelState.IsValid) return View(dto);
-
-        var result = await _service.UpdateAsync(dto);
-        if (!result.Succeeded)
+        if (ModelState.IsValid)
         {
+            var result = await _service.UpdateAsync(dto);
+            if (result.Succeeded)
+            {
+                TempData["Success"] = $"Role {dto.Name} updated. Signed-in users pick up the change within about a minute.";
+                return RedirectToAction(nameof(Index));
+            }
             ModelState.AddModelError(string.Empty, result.Error!);
-            return View(dto);
         }
 
-        TempData["Success"] = $"Role {dto.Name} updated. Signed-in users pick up the change within about a minute.";
-        return RedirectToAction(nameof(Index));
+        dto.Members = await _service.GetMembersAsync(dto.Id ?? string.Empty);
+        return View(dto);
     }
 
     [HttpPost]

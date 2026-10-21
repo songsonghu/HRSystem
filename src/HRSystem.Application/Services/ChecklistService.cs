@@ -10,7 +10,7 @@ namespace HRSystem.Application.Services;
 
 /// <summary>
 /// Onboarding and departure workflow: draft -> submit (one task per active template
-/// department, assigned to its manager) -> departments complete checklists in parallel
+/// department, assigned to its configured approver or else its manager) -> departments complete checklists in parallel
 /// -> pending final review -> finalize.
 /// </summary>
 public class ChecklistService : IChecklistService
@@ -228,17 +228,31 @@ public class ChecklistService : IChecklistService
 
     private async Task<IReadOnlyList<ChecklistTemplatePreviewDto>> GetTemplatePreviewAsync(ChecklistKind kind, CancellationToken ct)
     {
-        return await _db.ChecklistTemplates.AsNoTracking()
+        var templates = await _db.ChecklistTemplates.AsNoTracking()
             .Where(t => t.Kind == kind && t.IsActive && !t.IsDeleted)
             .OrderBy(t => t.SortOrder)
-            .Select(t => new ChecklistTemplatePreviewDto
+            .Select(t => new
             {
-                DepartmentName = t.Department!.Name,
-                ItemCount = t.Items.Count,
-                CanReceiveTasks = t.Department.Manager != null && t.Department.Manager.UserId != null
+                Dto = new ChecklistTemplatePreviewDto
+                {
+                    DepartmentName = t.Department!.Name,
+                    ItemCount = t.Items.Count(i => !i.IsDeleted)
+                },
+                AssigneeUserId = t.ApproverUserId ?? t.Department.Manager!.UserId
             })
             .ToListAsync(ct);
+
+        var users = await _users.GetByIdsAsync(templates.Where(t => t.AssigneeUserId != null).Select(t => t.AssigneeUserId!), ct);
+        foreach (var t in templates)
+        {
+            t.Dto.AssigneeName = t.AssigneeUserId is not null && users.TryGetValue(t.AssigneeUserId, out var user) ? user.Display : null;
+            t.Dto.CanReceiveTasks = t.Dto.AssigneeName is not null;
+        }
+        return templates.Select(t => t.Dto).ToList();
     }
+
+    /// <summary>The configured approver, or else the department manager's login.</summary>
+    private static string? AssigneeOf(ChecklistTemplate template) => template.ApproverUserId ?? template.Department?.Manager?.UserId;
 
     // -------------------------------------------------------- submit/finalize
 
@@ -259,16 +273,16 @@ public class ChecklistService : IChecklistService
         if (templates.Count == 0) return Result.Fail($"No active {Label(snapshot.Kind)} checklist templates found.");
 
         // Check every department can receive its task before anything is dispatched.
-        var unrouted = templates.Where(t => t.Department?.Manager?.UserId is null).Select(t => t.Department!.Name).ToList();
+        var unrouted = templates.Where(t => AssigneeOf(t) is null).Select(t => t.Department!.Name).ToList();
         if (unrouted.Count > 0)
-            return Result.Fail($"No manager with a login account is set for: {string.Join(", ", unrouted)}. Set one under Departments first.");
+            return Result.Fail($"No approver is set for: {string.Join(", ", unrouted)}. Set one under Settings > Checklist Approvers, or give the department a manager with a login.");
 
         var assignees = new Dictionary<string, UserDirectoryEntry>();
-        foreach (var userId in templates.Select(t => t.Department!.Manager!.UserId!).Distinct())
+        foreach (var userId in templates.Select(t => AssigneeOf(t)!).Distinct())
         {
             var user = await _users.GetByIdAsync(userId, ct);
             if (string.IsNullOrWhiteSpace(user?.Email))
-                return Result.Fail($"The manager login of {templates.First(t => t.Department!.Manager!.UserId == userId).Department!.Name} has no email.");
+                return Result.Fail($"The approver login of {templates.First(t => AssigneeOf(t) == userId).Department!.Name} has no email.");
             assignees[userId] = user;
         }
 
@@ -282,12 +296,12 @@ public class ChecklistService : IChecklistService
         var request = await _db.ChecklistRequests.Include(r => r.Employee).FirstAsync(r => r.Id == requestId, ct);
         var tasks = templates.Select(template =>
         {
-            var assignee = assignees[template.Department!.Manager!.UserId!];
+            var assignee = assignees[AssigneeOf(template)!];
             var task = new ChecklistTask
             {
                 ChecklistRequestId = request.Id,
                 AssignedDepartmentId = template.DepartmentId,
-                DepartmentName = template.Department.Name,
+                DepartmentName = template.Department!.Name,
                 AssignedUserId = assignee.UserId,
                 AssignedUserName = assignee.UserName,
                 Status = ChecklistTaskStatus.NotStarted,

@@ -20,6 +20,7 @@ public interface IRoleAdminService
 {
     Task<IReadOnlyList<RoleListItemDto>> GetListAsync(CancellationToken ct = default);
     Task<RoleEditDto?> GetAsync(string id, CancellationToken ct = default);
+    Task<IReadOnlyList<RoleMemberDto>> GetMembersAsync(string roleId, CancellationToken ct = default);
     Task<Result<string>> CreateAsync(RoleEditDto dto, CancellationToken ct = default);
     Task<Result> UpdateAsync(RoleEditDto dto, CancellationToken ct = default);
     Task<Result> DeleteAsync(string id, CancellationToken ct = default);

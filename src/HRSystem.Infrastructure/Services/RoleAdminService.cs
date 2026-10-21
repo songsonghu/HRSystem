@@ -61,8 +61,21 @@ public class RoleAdminService : IRoleAdminService
             IsProtected = IsProtected(role),
             Permissions = IsProtected(role)
                 ? Permissions.All.Select(p => p.Name).ToList()
-                : await GetPermissionsAsync(role)
+                : await GetPermissionsAsync(role),
+            Members = await GetMembersAsync(role.Id, ct)
         };
+    }
+
+    public async Task<IReadOnlyList<RoleMemberDto>> GetMembersAsync(string roleId, CancellationToken ct = default)
+    {
+        var now = DateTimeOffset.UtcNow;
+        return await (from ur in _db.UserRoles
+                      join u in _db.Users on ur.UserId equals u.Id
+                      where ur.RoleId == roleId
+                      orderby u.Email
+                      select new RoleMemberDto(u.Id, u.Email ?? u.UserName ?? string.Empty, u.FullName,
+                          u.LockoutEnd == null || u.LockoutEnd <= now))
+            .ToListAsync(ct);
     }
 
     public async Task<Result<string>> CreateAsync(RoleEditDto dto, CancellationToken ct = default)

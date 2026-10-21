@@ -85,5 +85,21 @@ public class StartupAndAccessTests : IntegrationTest
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/Users")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/Roles")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/ChecklistTemplates?kind=Departure")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/ChecklistApprovers?kind=Departure")).StatusCode);
+    }
+
+    [SkippableFact]
+    public async Task Role_page_lists_its_users_and_permissions_are_editable()
+    {
+        RequireDatabase();
+        var hr = await Data.PersonAsync(null, Roles.HR);
+        var hrRoleId = await Data.ReadAsync(db => db.Roles.Where(r => r.Name == Roles.HR).Select(r => r.Id).SingleAsync());
+        var client = await SignedInClientAsync("admin@hrsystem.local", "Admin@12345");
+
+        var html = await client.GetStringAsync($"/Roles/Edit/{hrRoleId}");
+
+        Assert.Contains(hr.Email, html);
+        Assert.DoesNotContain("disabled=\"False\"", html);
+        Assert.DoesNotContain("disabled=\"disabled\"", html);
     }
 }

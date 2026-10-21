@@ -1,0 +1,68 @@
+@using Microsoft.AspNetCore.Mvc.Rendering
+@model List<ChecklistApproverDto>
+@{
+    var kind = (ChecklistKind)ViewBag.Kind;
+    var kinds = (List<ChecklistKind>)ViewBag.Kinds;
+    var users = (List<SelectListItem>)ViewBag.Users;
+    ViewData["Title"] = "Checklist Approvers";
+}
+
+<h2>@ViewData["Title"]</h2>
+<p class="page-subtitle">
+    Choose the account that handles each department's @kind.ToString().ToLowerInvariant() checklist.
+    Their tasks appear under <b>My Checklist Tasks</b>. Leave empty to use the department manager's login.
+</p>
+
+@if (kinds.Count > 1)
+{
+    <ul class="nav nav-pills mb-3">
+        @foreach (var k in kinds)
+        {
+            <li class="nav-item">
+                <a class="nav-link @(k == kind ? "active" : "")" asp-action="Index" asp-route-kind="@k">@k</a>
+            </li>
+        }
+    </ul>
+}
+
+<form asp-action="Index" asp-route-kind="@kind" method="post">
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    <table class="table align-middle">
+        <thead>
+            <tr><th>Department</th><th>Items</th><th>Approver account</th></tr>
+        </thead>
+        <tbody>
+        @for (var i = 0; i < Model.Count; i++)
+        {
+            var row = Model[i];
+            <tr>
+                <td>
+                    @row.DepartmentName
+                    @if (!row.IsActive) { <span class="badge bg-secondary ms-1">inactive</span> }
+                </td>
+                <td>@row.ItemCount</td>
+                <td style="min-width: 320px">
+                    <input type="hidden" name="rows[@i].TemplateId" value="@row.TemplateId" />
+                    <select name="rows[@i].ApproverUserId" class="form-select"
+                            asp-items="users.Select(u => new SelectListItem(u.Text, u.Value, u.Value == row.ApproverUserId))">
+                        <option value="">@(row.ManagerUserName is null ? "— not set (no manager with login) —" : $"Department manager: {row.ManagerUserName}")</option>
+                    </select>
+                    @if (row.ApproverUserId is null && row.ManagerUserName is null)
+                    {
+                        <div class="form-text text-danger">Submitting a request will fail until an approver is set.</div>
+                    }
+                </td>
+            </tr>
+        }
+        @if (Model.Count == 0)
+        {
+            <tr><td colspan="3" class="text-muted">No @kind.ToString().ToLowerInvariant() checklist templates yet.</td></tr>
+        }
+        </tbody>
+    </table>
+    @if (Model.Count > 0)
+    {
+        <button type="submit" class="btn btn-primary">Save</button>
+    }
+    <a class="btn btn-secondary" asp-controller="ChecklistTemplates" asp-action="Index" asp-route-kind="@kind">Checklist Templates</a>
+</form>

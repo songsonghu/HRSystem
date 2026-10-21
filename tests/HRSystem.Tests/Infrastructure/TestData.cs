@@ -98,9 +98,13 @@ public sealed class TestData
     {
         using var scope = _app.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var departmentIds = await db.ChecklistTemplates.Where(t => t.Kind == kind && t.IsActive).Select(t => t.DepartmentId).ToListAsync();
+        var templates = await db.ChecklistTemplates.Where(t => t.Kind == kind && t.IsActive).ToListAsync();
+        var departmentIds = templates.Select(t => t.DepartmentId).ToList();
         foreach (var department in await db.Departments.Where(d => departmentIds.Contains(d.Id)).ToListAsync())
             department.ManagerEmployeeId = employeeId;
+        // Tasks follow the manager only while no approver is configured.
+        foreach (var template in templates)
+            template.ApproverUserId = null;
         await db.SaveChangesAsync();
     }
 

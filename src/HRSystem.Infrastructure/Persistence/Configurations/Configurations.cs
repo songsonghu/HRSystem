@@ -237,6 +237,7 @@ public class ChecklistTemplateConfig : IEntityTypeConfiguration<ChecklistTemplat
         b.ToTable("ChecklistTemplates");
         b.HasKey(x => x.Id);
         b.HasIndex(x => new { x.Kind, x.DepartmentId }).IsUnique().HasFilter("[IsDeleted] = 0");
+        b.Property(x => x.ApproverUserId).HasMaxLength(450);
         b.HasOne(x => x.Department)
             .WithMany()
             .HasForeignKey(x => x.DepartmentId)

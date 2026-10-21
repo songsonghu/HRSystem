@@ -16,12 +16,14 @@ public class ChecklistTemplateService : IChecklistTemplateService
     private readonly IAppDbContext _db;
     private readonly ICurrentUser _currentUser;
     private readonly IAuditService _audit;
+    private readonly IUserDirectoryService _users;
 
-    public ChecklistTemplateService(IAppDbContext db, ICurrentUser currentUser, IAuditService audit)
+    public ChecklistTemplateService(IAppDbContext db, ICurrentUser currentUser, IAuditService audit, IUserDirectoryService users)
     {
         _db = db;
         _currentUser = currentUser;
         _audit = audit;
+        _users = users;
     }
 
     private bool CanManage(ChecklistKind kind) => _currentUser.HasPermission(ChecklistService.ManagePermission(kind));
@@ -30,7 +32,7 @@ public class ChecklistTemplateService : IChecklistTemplateService
     {
         if (!CanManage(kind)) return Array.Empty<ChecklistTemplateListItemDto>();
 
-        return await _db.ChecklistTemplates.AsNoTracking()
+        var templates = await _db.ChecklistTemplates.AsNoTracking()
             .Where(t => t.Kind == kind && !t.IsDeleted)
             .OrderBy(t => t.SortOrder).ThenBy(t => t.Department!.Name)
             .Select(t => new ChecklistTemplateListItemDto
@@ -42,9 +44,101 @@ public class ChecklistTemplateService : IChecklistTemplateService
                 IsRequired = t.IsRequired,
                 SortOrder = t.SortOrder,
                 ItemCount = t.Items.Count(i => !i.IsDeleted),
-                CanReceiveTasks = t.Department.Manager != null && t.Department.Manager.UserId != null
+                AssigneeUserId = t.ApproverUserId ?? t.Department.Manager!.UserId
             })
             .ToListAsync(ct);
+
+        var names = await _users.GetByIdsAsync(templates.Where(t => t.AssigneeUserId != null).Select(t => t.AssigneeUserId!), ct);
+        foreach (var t in templates)
+        {
+            t.AssigneeName = t.AssigneeUserId is not null && names.TryGetValue(t.AssigneeUserId, out var user) ? user.Display : null;
+            t.CanReceiveTasks = t.AssigneeName is not null;
+        }
+        return templates;
+    }
+
+    // -------------------------------------------------------------- approvers
+
+    public async Task<IReadOnlyList<ChecklistApproverDto>> GetApproversAsync(ChecklistKind kind, CancellationToken ct = default)
+    {
+        if (!CanManage(kind)) return Array.Empty<ChecklistApproverDto>();
+
+        var rows = await _db.ChecklistTemplates.AsNoTracking()
+            .Where(t => t.Kind == kind && !t.IsDeleted)
+            .OrderBy(t => t.SortOrder).ThenBy(t => t.Department!.Name)
+            .Select(t => new
+            {
+                Dto = new ChecklistApproverDto
+                {
+                    TemplateId = t.Id,
+                    DepartmentName = t.Department!.Name,
+                    ItemCount = t.Items.Count(i => !i.IsDeleted),
+                    IsActive = t.IsActive,
+                    ApproverUserId = t.ApproverUserId
+                },
+                ManagerUserId = t.Department.Manager!.UserId
+            })
+            .ToListAsync(ct);
+
+        var managers = await _users.GetByIdsAsync(rows.Where(r => r.ManagerUserId != null).Select(r => r.ManagerUserId!), ct);
+        foreach (var row in rows)
+            row.Dto.ManagerUserName = row.ManagerUserId is not null && managers.TryGetValue(row.ManagerUserId, out var m) ? m.Display : null;
+        return rows.Select(r => r.Dto).ToList();
+    }
+
+    public async Task<Result> SetApproversAsync(ChecklistKind kind, IReadOnlyDictionary<int, string?> approvers, CancellationToken ct = default)
+    {
+        if (!Enum.IsDefined(kind) || !CanManage(kind)) return Result.Fail("You do not have permission to manage these approvers.");
+
+        var wanted = approvers.ToDictionary(a => a.Key, a => string.IsNullOrWhiteSpace(a.Value) ? null : a.Value.Trim());
+        var users = await _users.GetByIdsAsync(wanted.Values.Where(v => v is not null).Select(v => v!), ct);
+        var unknown = wanted.Values.FirstOrDefault(v => v is not null && !users.ContainsKey(v));
+        if (unknown is not null) return Result.Fail("A selected approver account no longer exists.");
+        var noEmail = users.Values.FirstOrDefault(u => string.IsNullOrWhiteSpace(u.Email));
+        if (noEmail is not null) return Result.Fail($"{noEmail.Display} has no email address, so it cannot receive tasks.");
+
+        var templates = await _db.ChecklistTemplates
+            .Include(t => t.Department).ThenInclude(d => d!.Manager)
+            .Where(t => t.Kind == kind && !t.IsDeleted && wanted.Keys.Contains(t.Id))
+            .ToListAsync(ct);
+
+        var changed = new List<string>();
+        foreach (var template in templates)
+        {
+            var approverId = wanted[template.Id];
+            if (approverId == template.ApproverUserId) continue;
+
+            template.ApproverUserId = approverId;
+            template.ModifiedBy = _currentUser.UserId;
+            template.ModifiedAt = DateTime.UtcNow;
+            changed.Add($"{template.Department?.Name}={approverId ?? "(manager)"}");
+
+            // Hand over the department's unfinished tasks so the new approver sees them in My Checklist Tasks.
+            var assigneeId = approverId ?? template.Department?.Manager?.UserId;
+            if (assigneeId is null) continue;
+            var assignee = users.TryGetValue(assigneeId, out var known) ? known : await _users.GetByIdAsync(assigneeId, ct);
+            var openTasks = await _db.ChecklistTasks
+                .Where(t => t.AssignedDepartmentId == template.DepartmentId
+                            && t.ChecklistRequest!.Kind == kind
+                            && t.ChecklistRequest.Status != ChecklistStatus.Completed
+                            && t.ChecklistRequest.Status != ChecklistStatus.Cancelled
+                            && t.Status != ChecklistTaskStatus.Completed
+                            && t.Status != ChecklistTaskStatus.NotApplicable
+                            && t.AssignedUserId != assigneeId)
+                .ToListAsync(ct);
+            foreach (var task in openTasks)
+            {
+                task.AssignedUserId = assigneeId;
+                task.AssignedUserName = assignee?.UserName;
+                task.ModifiedBy = _currentUser.UserId;
+                task.ModifiedAt = DateTime.UtcNow;
+            }
+        }
+
+        if (changed.Count == 0) return Result.Success();
+        await _db.SaveChangesAsync(ct);
+        await _audit.LogAsync("SetChecklistApprovers", nameof(ChecklistTemplate), kind.ToString(), string.Join("; ", changed), ct);
+        return Result.Success();
     }
 
     public async Task<ChecklistTemplateEditDto?> GetAsync(int id, CancellationToken ct = default)

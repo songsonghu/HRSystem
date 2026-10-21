@@ -30,8 +30,9 @@
 
     var hrMenu = User.HasPermission(Permissions.EmployeesManage) || User.HasPermission(Permissions.DepartmentsManage)
                  || User.HasPermission(Permissions.OnboardingManage) || User.HasPermission(Permissions.DeparturesManage);
+    var canSetApprovers = User.HasPermission(Permissions.DeparturesManage) || User.HasPermission(Permissions.OnboardingManage);
     var settingsMenu = User.HasPermission(Permissions.UsersManage) || User.HasPermission(Permissions.RolesManage)
-                       || User.HasPermission(Permissions.SystemJobs);
+                       || User.HasPermission(Permissions.SystemJobs) || canSetApprovers;
     var userName = User.Identity?.Name ?? string.Empty;
 }
 
@@ -96,6 +97,10 @@ else
                         @if (User.HasPermission(Permissions.RolesManage))
                         {
                             <a class="nav-link @Active("Roles")" asp-controller="Roles" asp-action="Index"><i class="bi bi-shield-check"></i>Roles &amp; Permissions</a>
+                        }
+                        @if (canSetApprovers)
+                        {
+                            <a class="nav-link @Active("ChecklistApprovers")" asp-controller="ChecklistApprovers" asp-action="Index"><i class="bi bi-person-check"></i>Checklist Approvers</a>
                         }
                         @if (User.HasPermission(Permissions.SystemJobs))
                         {

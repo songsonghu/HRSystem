@@ -15,7 +15,7 @@
         {
             <div class="form-check">
                 <input class="form-check-input" type="checkbox" name="Permissions" value="@p.Name" id="perm-@p.Name"
-                       @(Model.Permissions.Contains(p.Name) ? "checked" : "") disabled="@Model.IsProtected" />
+                       checked="@Model.Permissions.Contains(p.Name)" disabled="@Model.IsProtected" />
                 <label class="form-check-label" for="perm-@p.Name">
                     @p.Description <code class="ms-1 small">@p.Name</code>
                 </label>

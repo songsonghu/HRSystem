@@ -20,7 +20,7 @@
                 @r.Name
                 @if (r.IsProtected) { <span class="badge bg-dark ms-1">built-in</span> }
             </td>
-            <td>@r.UserCount</td>
+            <td><a asp-action="Edit" asp-route-id="@r.Id" asp-fragment="members" title="Show users with this role">@r.UserCount</a></td>
             <td>
                 @if (r.IsProtected)
                 {

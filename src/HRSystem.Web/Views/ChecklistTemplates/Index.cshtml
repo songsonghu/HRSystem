@@ -9,6 +9,7 @@
     <h2>@ViewData["Title"]</h2>
     <div class="d-flex gap-2">
         <a class="btn btn-outline-secondary" asp-controller="@listController" asp-action="Index">Back to @(kind == ChecklistKind.Onboarding ? "Onboarding" : "Departures")</a>
+        <a class="btn btn-outline-secondary" asp-controller="ChecklistApprovers" asp-action="Index" asp-route-kind="@kind">Set Approvers</a>
         <a class="btn btn-success" asp-action="Create" asp-route-kind="@kind">+ New Template</a>
     </div>
 </div>
@@ -17,18 +18,22 @@
 
 <table class="table table-striped table-hover align-middle">
     <thead>
-        <tr><th>Order</th><th>Department</th><th>Items</th><th>Required</th><th>Status</th><th></th></tr>
+        <tr><th>Order</th><th>Department</th><th>Approver</th><th>Items</th><th>Required</th><th>Status</th><th></th></tr>
     </thead>
     <tbody>
     @foreach (var t in Model)
     {
         <tr>
             <td>@t.SortOrder</td>
+            <td>@t.DepartmentName</td>
             <td>
-                @t.DepartmentName
-                @if (!t.CanReceiveTasks)
+                @if (t.CanReceiveTasks)
                 {
-                    <span class="badge bg-warning text-dark ms-1" title="Set a manager with a login on the Departments page.">no manager with login</span>
+                    @t.AssigneeName
+                }
+                else
+                {
+                    <span class="badge bg-warning text-dark" title="Set one under Settings > Checklist Approvers.">no approver</span>
                 }
             </td>
             <td>@t.ItemCount</td>
@@ -45,7 +50,7 @@
     }
     @if (Model.Count == 0)
     {
-        <tr><td colspan="6" class="text-muted">No templates yet.</td></tr>
+        <tr><td colspan="7" class="text-muted">No templates yet.</td></tr>
     }
     </tbody>
 </table>

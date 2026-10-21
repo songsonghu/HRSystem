@@ -113,13 +113,61 @@ public class ChecklistTests : IntegrationTest
 
         var submitted = await service.SubmitAsync(created.Value);
         Assert.False(submitted.Succeeded);
-        Assert.Contains("No manager", submitted.Error);
+        Assert.Contains("No approver", submitted.Error);
 
         var request = await Data.ReadAsync(db => db.ChecklistRequests.Include(r => r.AccountRequest).Include(r => r.Tasks).SingleAsync(r => r.Id == created.Value));
         Assert.Equal(ChecklistStatus.Draft, request.Status);
         Assert.Empty(request.Tasks);
         Assert.Equal(RequestType.Onboard, request.AccountRequest!.RequestType);
         Assert.Equal(RequestStatus.Draft, request.AccountRequest.Status);
+    }
+
+    [SkippableFact]
+    public async Task Departure_tasks_go_to_configured_approvers_and_follow_a_change()
+    {
+        RequireDatabase();
+        var hr = await Data.PersonAsync(null);
+        var manager = await Data.PersonAsync(null);
+        var approver = await Data.PersonAsync(null);
+        var successor = await Data.PersonAsync(null);
+        await Data.SetTemplateManagersAsync(ChecklistKind.Departure, manager.EmployeeId);
+
+        try
+        {
+            using (var settings = Data.As(hr.UserId, Permissions.DeparturesManage))
+            {
+                var service = settings.Get<IChecklistTemplateService>();
+                var rows = await service.GetApproversAsync(ChecklistKind.Departure);
+                var set = await service.SetApproversAsync(ChecklistKind.Departure, rows.ToDictionary(r => r.TemplateId, _ => (string?)approver.UserId));
+                Assert.True(set.Succeeded, set.Error);
+            }
+
+            var requestId = await StartDepartureAsync(hr.UserId, await Data.EmployeeAsync(null));
+            var expected = await Data.ReadAsync(db => db.ChecklistTasks.CountAsync(t => t.ChecklistRequestId == requestId));
+            Assert.Equal(expected, (await TasksOfAsync(approver.UserId, requestId)).Count);
+            Assert.Empty(await TasksOfAsync(manager.UserId, requestId));
+
+            // Complete one task, then hand the department over: only unfinished tasks move.
+            var tasks = await TasksOfAsync(approver.UserId, requestId);
+            using (var acting = Data.As(approver.UserId))
+                Assert.True((await acting.Get<IChecklistService>().UpdateTaskAsync(CompleteAll(tasks[0]))).Succeeded);
+
+            using (var settings = Data.As(hr.UserId, Permissions.DeparturesManage))
+            {
+                var service = settings.Get<IChecklistTemplateService>();
+                var rows = await service.GetApproversAsync(ChecklistKind.Departure);
+                var set = await service.SetApproversAsync(ChecklistKind.Departure, rows.ToDictionary(r => r.TemplateId, _ => (string?)successor.UserId));
+                Assert.True(set.Succeeded, set.Error);
+            }
+
+            Assert.Equal(expected - 1, (await TasksOfAsync(successor.UserId, requestId)).Count);
+            Assert.Empty(await TasksOfAsync(approver.UserId, requestId));
+            Assert.Equal(approver.UserId, await Data.ReadAsync(db => db.ChecklistTasks.Where(t => t.Id == tasks[0].Id).Select(t => t.AssignedUserId).SingleAsync()));
+        }
+        finally
+        {
+            await Data.SetTemplateManagersAsync(ChecklistKind.Departure, manager.EmployeeId);
+        }
     }
 
     /// <summary>
