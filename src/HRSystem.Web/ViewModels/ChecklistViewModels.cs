@@ -41,6 +41,8 @@ public class ChecklistCreateViewModel
     public IReadOnlyList<ChecklistTemplatePreviewDto> Templates { get; set; } = Array.Empty<ChecklistTemplatePreviewDto>();
     public IReadOnlyList<AccountTypeOptionDto> AccountTypeOptions { get; set; } = Array.Empty<AccountTypeOptionDto>();
     public IReadOnlyDictionary<int, string?> ActiveAccounts { get; set; } = new Dictionary<int, string?>();
+    public string? FinalApproverName { get; set; }
+    public string? FinalApprovalError { get; set; }
 }
 
 public class ChecklistTaskEditViewModel
@@ -54,6 +56,7 @@ public class ChecklistTaskEditViewModel
     public string DepartmentName { get; set; } = string.Empty;
     public ChecklistTaskStatus Status { get; set; }
     public DateTime? CompletedAt { get; set; }
+    public string? ReturnReason { get; set; }
     public bool CanEdit { get; set; }
     public bool CanReopen { get; set; }
 
@@ -92,6 +95,8 @@ public static class ChecklistViewModelMapper
         Templates = dto.Templates,
         AccountTypeOptions = dto.AccountTypeOptions,
         ActiveAccounts = dto.ActiveAccounts,
+        FinalApproverName = dto.FinalApproverName,
+        FinalApprovalError = dto.FinalApprovalError,
         // Departure: every account the employee holds is ticked for disabling by default.
         AccountTypeIds = dto.ActiveAccounts.Keys.ToList()
     };
@@ -107,6 +112,8 @@ public static class ChecklistViewModelMapper
         vm.Templates = dto.Templates;
         vm.AccountTypeOptions = dto.AccountTypeOptions;
         vm.ActiveAccounts = dto.ActiveAccounts;
+        vm.FinalApproverName = dto.FinalApproverName;
+        vm.FinalApprovalError = dto.FinalApprovalError;
     }
 
     public static CreateChecklistRequestDto ToCreateDto(this ChecklistCreateViewModel vm) => new()
@@ -135,6 +142,7 @@ public static class ChecklistViewModelMapper
         DepartmentName = dto.DepartmentName,
         Status = dto.Status,
         CompletedAt = dto.CompletedAt,
+        ReturnReason = dto.ReturnReason,
         CanEdit = dto.CanEdit,
         CanReopen = dto.CanReopen,
         TaskRemark = dto.TaskRemark,

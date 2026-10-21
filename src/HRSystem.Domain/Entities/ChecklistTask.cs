@@ -20,6 +20,10 @@ public class ChecklistTask : BaseEntity
     public string? HandledBy { get; set; }
     public DateTime? CompletedAt { get; set; }
 
+    /// <summary>Why the final approver sent the task back; cleared when it is completed again.</summary>
+    public string? ReturnReason { get; set; }
+    public DateTime? ReturnedAt { get; set; }
+
     public ChecklistRequest? ChecklistRequest { get; set; }
     public ICollection<ChecklistTaskItem> Items { get; set; } = new List<ChecklistTaskItem>();
 }

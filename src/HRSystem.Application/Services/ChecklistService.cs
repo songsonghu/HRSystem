@@ -11,7 +11,8 @@ namespace HRSystem.Application.Services;
 /// <summary>
 /// Onboarding and departure workflow: draft -> submit (one task per active template
 /// department, assigned to its configured approver or else its manager) -> departments complete checklists in parallel
-/// -> pending final review -> finalize.
+/// -> pending final review -> finalize. A departure is finalized by the head of the leaver's department, who may
+/// return tasks; HR finalizes onboarding and departures of department heads themselves.
 /// </summary>
 public class ChecklistService : IChecklistService
 {
@@ -138,7 +139,7 @@ public class ChecklistService : IChecklistService
             }
         }
 
-        return Result<ChecklistCreatePageDto>.Success(new ChecklistCreatePageDto
+        var page = new ChecklistCreatePageDto
         {
             Kind = kind,
             EmployeeId = employee.Id,
@@ -150,7 +151,37 @@ public class ChecklistService : IChecklistService
             Templates = await GetTemplatePreviewAsync(kind, ct),
             AccountTypeOptions = options,
             ActiveAccounts = activeAccounts
-        });
+        };
+        if (kind == ChecklistKind.Departure)
+        {
+            var finalApprover = await ResolveFinalApproverAsync(employee.Id, ct);
+            page.FinalApproverName = finalApprover.User?.Display;
+            page.FinalApprovalError = finalApprover.Error;
+        }
+        return Result<ChecklistCreatePageDto>.Success(page);
+    }
+
+    /// <summary>
+    /// The head of the leaver's department, who gives a departure its final approval. User is null
+    /// without an error when the leaver is that head: HR then finalizes.
+    /// </summary>
+    private async Task<(UserDirectoryEntry? User, string? Error)> ResolveFinalApproverAsync(int employeeId, CancellationToken ct)
+    {
+        var leaver = await _db.Employees.AsNoTracking()
+            .Include(e => e.Department).ThenInclude(d => d!.Manager)
+            .FirstAsync(e => e.Id == employeeId, ct);
+        if (leaver.Department is null)
+            return (null, "The employee has no department, so there is no department head for the final approval. Set the employee's department first.");
+
+        var head = leaver.Department.Manager;
+        if (head?.UserId is null)
+            return (null, $"Department {leaver.Department.Name} has no manager with a login for the final approval. Set one under Departments first.");
+        if (head.Id == leaver.Id) return (null, null);
+
+        var user = await _users.GetByIdAsync(head.UserId, ct);
+        return user is null
+            ? (null, $"The manager login of {leaver.Department.Name} no longer exists. Set the manager again under Departments.")
+            : (user, null);
     }
 
     public async Task<Result<int>> CreateDraftAsync(CreateChecklistRequestDto dto, CancellationToken ct = default)
@@ -286,6 +317,14 @@ public class ChecklistService : IChecklistService
             assignees[userId] = user;
         }
 
+        UserDirectoryEntry? finalApprover = null;
+        if (snapshot.Kind == ChecklistKind.Departure)
+        {
+            var resolved = await ResolveFinalApproverAsync(snapshot.EmployeeId, ct);
+            if (resolved.Error is not null) return Result.Fail(resolved.Error);
+            finalApprover = resolved.User;
+        }
+
         // Submit the linked account request first; if its routing fails nothing is dispatched.
         if (snapshot.AccountRequest is { Status: RequestStatus.Draft })
         {
@@ -326,6 +365,8 @@ public class ChecklistService : IChecklistService
         request.Status = ChecklistStatus.Submitted;
         request.SubmittedAt = DateTime.UtcNow;
         request.SubmittedBy = _currentUser.UserId;
+        request.FinalApproverUserId = finalApprover?.UserId;
+        request.FinalApproverUserName = finalApprover?.UserName;
         await _db.SaveChangesAsync(ct);
 
         NotifyAssignees(request, tasks, assignees);
@@ -343,8 +384,16 @@ public class ChecklistService : IChecklistService
             .Include(r => r.AccountRequest)
             .Include(r => r.Tasks)
             .FirstOrDefaultAsync(r => r.Id == requestId, ct);
-        if (request is null || !CanManage(request.Kind)) return Result.Fail("Request not found.");
+        if (request is null) return Result.Fail("Request not found.");
+        var byFinalApprover = HasFinalApprover(request);
+        if (byFinalApprover ? !IsFinalApprover(request) : !CanManage(request.Kind))
+        {
+            return byFinalApprover && CanManage(request.Kind)
+                ? Result.Fail($"This departure is approved by {request.FinalApproverUserName}, the head of the employee's department.")
+                : Result.Fail("Request not found.");
+        }
         if (request.Status == ChecklistStatus.Completed) return Result.Fail("This request is already finalized.");
+        if (request.Status == ChecklistStatus.Cancelled) return Result.Fail("This request was cancelled.");
 
         var requiredTasks = request.Tasks.Where(t => t.IsRequired).ToList();
         if (requiredTasks.Count == 0)
@@ -368,7 +417,98 @@ public class ChecklistService : IChecklistService
         }
 
         await _db.SaveChangesAsync(ct);
+        if (byFinalApprover) await NotifySubmitterOfApprovalAsync(request, ct);
         await _audit.LogAsync($"Finalize{request.Kind}", nameof(ChecklistRequest), request.Id.ToString(), request.RequestNo, ct);
+        return Result.Success();
+    }
+
+    private static bool HasFinalApprover(ChecklistRequest request)
+        => request.Kind == ChecklistKind.Departure && request.FinalApproverUserId is not null;
+
+    private bool IsFinalApprover(ChecklistRequest request)
+        => HasFinalApprover(request) && !string.IsNullOrWhiteSpace(_currentUser.UserId) && request.FinalApproverUserId == _currentUser.UserId;
+
+    // ---------------------------------------------------------- final review
+
+    private IQueryable<ChecklistRequest> MyFinalReviews()
+    {
+        var userId = _currentUser.UserId;
+        return _db.ChecklistRequests.AsNoTracking()
+            .Include(r => r.Employee)
+            .Include(r => r.AccountRequest)
+            .Include(r => r.Tasks)
+            .Where(r => userId != null && r.Kind == ChecklistKind.Departure && r.FinalApproverUserId == userId);
+    }
+
+    public async Task<IReadOnlyList<ChecklistRequestDto>> GetMyFinalReviewsAsync(CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(_currentUser.UserId)) return Array.Empty<ChecklistRequestDto>();
+
+        var requests = await MyFinalReviews()
+            .Where(r => r.Status == ChecklistStatus.PendingFinalReview)
+            .OrderBy(r => r.SubmittedAt)
+            .ToListAsync(ct);
+        return requests.Select(MapRequest).ToList();
+    }
+
+    public async Task<IReadOnlyList<ChecklistRequestDto>> GetMyFinalReviewHistoryAsync(ChecklistTaskHistoryQuery query, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(_currentUser.UserId)) return Array.Empty<ChecklistRequestDto>();
+        if (query.Kind == ChecklistKind.Onboarding) return Array.Empty<ChecklistRequestDto>();
+
+        var q = MyFinalReviews().Where(r => r.Status != ChecklistStatus.PendingFinalReview);
+        if (!string.IsNullOrWhiteSpace(query.Keyword))
+        {
+            var k = query.Keyword.Trim();
+            q = q.Where(r => r.RequestNo.Contains(k) || r.Employee!.Name.Contains(k) || r.Employee.EmployeeNo.Contains(k));
+        }
+        if (query.From is { } from) q = q.Where(r => r.SubmittedAt >= from.Date);
+        if (query.To is { } to) q = q.Where(r => r.SubmittedAt < to.Date.AddDays(1));
+
+        var requests = await q.OrderByDescending(r => r.SubmittedAt).Take(500).ToListAsync(ct);
+        return requests.Select(MapRequest).ToList();
+    }
+
+    public async Task<ChecklistRequestDto?> GetFinalReviewAsync(int requestId, CancellationToken ct = default)
+    {
+        var request = await _db.ChecklistRequests.AsNoTracking()
+            .Include(r => r.Employee)
+            .Include(r => r.AccountRequest)
+            .Include(r => r.Tasks.OrderBy(t => t.SortOrder))
+            .ThenInclude(t => t.Items.OrderBy(i => i.SortOrder))
+            .FirstOrDefaultAsync(r => r.Id == requestId, ct);
+        return request is null || !IsFinalApprover(request) ? null : MapRequest(request);
+    }
+
+    public Task<Result> ReturnTaskAsync(int taskId, string reason, CancellationToken ct = default)
+        => ConcurrencyRetry.RunAsync(_db, () => ReturnTaskOnceAsync(taskId, reason, ct));
+
+    private async Task<Result> ReturnTaskOnceAsync(int taskId, string reason, CancellationToken ct)
+    {
+        var task = await _db.ChecklistTasks
+            .Include(t => t.ChecklistRequest).ThenInclude(r => r!.Employee)
+            .FirstOrDefaultAsync(t => t.Id == taskId, ct);
+        if (task?.ChecklistRequest is null || !IsFinalApprover(task.ChecklistRequest)) return Result.Fail("Task not found.");
+        if (task.ChecklistRequest.Status != ChecklistStatus.PendingFinalReview)
+            return Result.Fail("Tasks can only be returned while the request is waiting for final review.");
+        if (task.Status is not (ChecklistTaskStatus.Completed or ChecklistTaskStatus.NotApplicable))
+            return Result.Fail("Only completed tasks can be returned.");
+        if (string.IsNullOrWhiteSpace(reason)) return Result.Fail("Enter a reason for returning the task.");
+
+        var now = DateTime.UtcNow;
+        task.Status = ChecklistTaskStatus.Returned;
+        task.ReturnReason = reason.Trim();
+        task.ReturnedAt = now;
+        task.CompletedAt = null;
+        task.ModifiedBy = _currentUser.UserId;
+        task.ModifiedAt = now;
+
+        await RecomputeRequestStatusAsync(task.ChecklistRequest, ct);
+        task.ChecklistRequest.ModifiedAt = now;
+        await _db.SaveChangesAsync(ct);
+
+        await NotifyReturnAsync(task, ct);
+        await _audit.LogAsync("ReturnChecklistTask", nameof(ChecklistTask), task.Id.ToString(), $"{task.DepartmentName}: {task.ReturnReason}", ct);
         return Result.Success();
     }
 
@@ -552,6 +692,8 @@ public class ChecklistService : IChecklistService
                 ? ChecklistTaskStatus.NotApplicable
                 : ChecklistTaskStatus.Completed;
             task.CompletedAt = now;
+            task.ReturnReason = null;
+            task.ReturnedAt = null;
         }
         else
         {
@@ -561,9 +703,13 @@ public class ChecklistService : IChecklistService
 
         // Always write the request row so its row version detects a parallel update by another
         // department; the retry then recomputes from the tasks that department just changed.
+        var statusBefore = task.ChecklistRequest.Status;
         await RecomputeRequestStatusAsync(task.ChecklistRequest, ct);
         task.ChecklistRequest.ModifiedAt = now;
         await _db.SaveChangesAsync(ct);
+
+        if (statusBefore != ChecklistStatus.PendingFinalReview && task.ChecklistRequest.Status == ChecklistStatus.PendingFinalReview)
+            await NotifyFinalReviewDueAsync(task.ChecklistRequest, ct);
         await _audit.LogAsync("UpdateChecklistTask", nameof(ChecklistTask), task.Id.ToString(), task.Status.ToString(), ct);
         return Result.Success();
     }
@@ -592,6 +738,49 @@ public class ChecklistService : IChecklistService
     /// <summary>Only the assignee; administrators deliberately get no override.</summary>
     private bool CanHandleTask(string? assignedUserId)
         => !string.IsNullOrWhiteSpace(_currentUser.UserId) && _currentUser.UserId == assignedUserId;
+
+    private async Task NotifyFinalReviewDueAsync(ChecklistRequest request, CancellationToken ct)
+    {
+        if (!HasFinalApprover(request)) return;
+        var approver = await _users.GetByIdAsync(request.FinalApproverUserId!, ct);
+        if (string.IsNullOrWhiteSpace(approver?.Email)) return;
+
+        var employee = await _db.Employees.AsNoTracking().Where(e => e.Id == request.EmployeeId)
+            .Select(e => new { e.Name, e.EmployeeNo }).FirstOrDefaultAsync(ct);
+        _email.Enqueue(new EmailMessage(
+            new[] { approver.Email },
+            $"[Action Required] Departure final review ({request.RequestNo})",
+            $"<p>All departments have completed the departure checklist for <b>{employee?.Name}</b> ({employee?.EmployeeNo}).</p>" +
+            "<p>Please review and approve it in HR System under My Checklist Tasks.</p>"));
+    }
+
+    private async Task NotifyReturnAsync(ChecklistTask task, CancellationToken ct)
+    {
+        if (task.AssignedUserId is null) return;
+        var assignee = await _users.GetByIdAsync(task.AssignedUserId, ct);
+        if (string.IsNullOrWhiteSpace(assignee?.Email)) return;
+
+        var request = task.ChecklistRequest!;
+        _email.Enqueue(new EmailMessage(
+            new[] { assignee.Email },
+            $"[Returned] Departure checklist ({request.RequestNo}) - {task.DepartmentName}",
+            $"<p>The final reviewer returned the {System.Net.WebUtility.HtmlEncode(task.DepartmentName)} task for " +
+            $"<b>{request.Employee?.Name}</b> ({request.Employee?.EmployeeNo}).</p>" +
+            $"<p>Reason: {System.Net.WebUtility.HtmlEncode(task.ReturnReason)}</p><p>Please update it under My Checklist Tasks.</p>"));
+    }
+
+    private async Task NotifySubmitterOfApprovalAsync(ChecklistRequest request, CancellationToken ct)
+    {
+        if (request.SubmittedBy is null) return;
+        var submitter = await _users.GetByIdAsync(request.SubmittedBy, ct);
+        if (string.IsNullOrWhiteSpace(submitter?.Email)) return;
+
+        _email.Enqueue(new EmailMessage(
+            new[] { submitter.Email },
+            $"[Completed] Departure ({request.RequestNo})",
+            $"<p>{System.Net.WebUtility.HtmlEncode(request.FinalApproverUserName)} approved the departure of " +
+            $"<b>{request.Employee?.Name}</b> ({request.Employee?.EmployeeNo}). The employee is now marked as resigned.</p>"));
+    }
 
     private async Task NotifyCancellationAsync(ChecklistRequest request, CancellationToken ct)
     {
@@ -647,6 +836,8 @@ public class ChecklistService : IChecklistService
         CompletedAt = request.CompletedAt,
         CancelledAt = request.CancelledAt,
         CancelReason = request.CancelReason,
+        FinalApproverUserId = request.FinalApproverUserId,
+        FinalApproverName = request.FinalApproverUserName,
         AccountRequestId = request.AccountRequestId,
         AccountRequestNo = request.AccountRequest?.RequestNo,
         AccountRequestStatus = request.AccountRequest?.Status,
@@ -667,6 +858,8 @@ public class ChecklistService : IChecklistService
         SortOrder = task.SortOrder,
         TaskRemark = task.TaskRemark,
         CompletedAt = task.CompletedAt,
+        ReturnReason = task.ReturnReason,
+        ReturnedAt = task.ReturnedAt,
         RequestStatus = task.ChecklistRequest?.Status ?? default,
         Items = task.Items.OrderBy(i => i.SortOrder).Select(i => new ChecklistTaskItemDto
         {

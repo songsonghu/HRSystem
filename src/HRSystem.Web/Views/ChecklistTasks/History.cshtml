@@ -3,6 +3,7 @@
 @{
     ViewData["Title"] = "My Checklist Tasks - History";
     var q = (ChecklistTaskHistoryQuery)ViewBag.Query;
+    var finalReviews = (IReadOnlyList<ChecklistRequestDto>)ViewBag.FinalReviews;
 }
 
 <h2>My Checklist Tasks</h2>
@@ -38,6 +39,30 @@
         <a asp-action="History" class="btn btn-outline-secondary">Reset</a>
     </div>
 </form>
+
+@if (finalReviews.Count > 0)
+{
+    <h4>Final Reviews</h4>
+    <table class="table table-hover align-middle">
+        <thead>
+            <tr><th>Request</th><th>Employee</th><th>Submitted</th><th>Completed At</th><th>Request Status</th><th></th></tr>
+        </thead>
+        <tbody>
+        @foreach (var r in finalReviews)
+        {
+            <tr>
+                <td>@r.RequestNo</td>
+                <td>@r.EmployeeName (@r.EmployeeNo)</td>
+                <td>@r.SubmittedAt?.ToLocalTime().ToString("yyyy-MM-dd")</td>
+                <td>@r.CompletedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                <td><partial name="_ChecklistStatusBadge" model="r.Status" /></td>
+                <td class="text-end"><a class="btn btn-sm btn-outline-primary" asp-action="Review" asp-route-id="@r.Id">View</a></td>
+            </tr>
+        }
+        </tbody>
+    </table>
+    <h4>Department Tasks</h4>
+}
 
 <table class="table table-hover align-middle">
     <thead>

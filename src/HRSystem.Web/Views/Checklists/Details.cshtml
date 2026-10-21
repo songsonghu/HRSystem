@@ -48,6 +48,21 @@
     <p><b>Remark:</b> @Model.Remark</p>
 }
 
+@if (!isOnboarding && Model.Status != ChecklistStatus.Draft)
+{
+    <p>
+        <b>Final approval:</b>
+        @if (Model.FinalizedByHr)
+        {
+            <span>HR (the employee heads their own department)</span>
+        }
+        else
+        {
+            <span>@Model.FinalApproverName, head of the employee's department</span>
+        }
+    </p>
+}
+
 @if (Model.Status == ChecklistStatus.Cancelled)
 {
     <div class="alert alert-secondary">
@@ -67,7 +82,11 @@
             <span class="text-muted small">The account request is submitted at the same time.</span>
         }
     }
-    @if (Model.CanFinalize)
+    @if (Model.CanFinalize && !Model.FinalizedByHr)
+    {
+        <span class="text-muted">Waiting for final approval by <b>@Model.FinalApproverName</b> (head of the employee's department).</span>
+    }
+    @if (Model.CanFinalize && Model.FinalizedByHr)
     {
         <form asp-action="Finalize" asp-route-id="@Model.Id" method="post">
             <button class="btn btn-success">@(isOnboarding ? "Finalize Onboarding" : "Finalize Departure")</button>

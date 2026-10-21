@@ -32,6 +32,13 @@ public class ChecklistRequest : BaseEntity
     /// <summary>Account request raised together with this case (onboarding: accounts to open).</summary>
     public int? AccountRequestId { get; set; }
 
+    /// <summary>
+    /// Departure: head of the leaver's department, fixed at submit time, who gives the final
+    /// approval. Empty when the leaver is that head (HR finalizes) and for onboarding.
+    /// </summary>
+    public string? FinalApproverUserId { get; set; }
+    public string? FinalApproverUserName { get; set; }
+
     public string? SubmittedBy { get; set; }
     public DateTime? SubmittedAt { get; set; }
     public string? FinalizedBy { get; set; }

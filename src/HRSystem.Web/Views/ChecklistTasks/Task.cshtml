@@ -10,6 +10,11 @@
 </div>
 <p class="text-muted">Request @Model.RequestNo · @Model.EmployeeName (@Model.EmployeeNo)</p>
 
+@if (!readOnly && !string.IsNullOrWhiteSpace(Model.ReturnReason))
+{
+    <div class="alert alert-warning"><b>Returned by the final reviewer:</b> @Model.ReturnReason</div>
+}
+
 @if (readOnly)
 {
     <div class="alert alert-info d-flex justify-content-between align-items-center">

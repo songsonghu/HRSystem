@@ -159,6 +159,9 @@ Some access comes from the organization data rather than a permission: any user 
 linked to an employee can raise Add/Remove account requests for themself; the manager of a
 department can raise them for its employees and approves the self-service ones; whoever an item
 is assigned to can process it on My Tasks / My Checklist Tasks (no permission needed).
+A departure, once every department has finished, goes to the head of the leaver's department for
+final review on My Checklist Tasks: they approve it (completing it and marking the employee resigned)
+or return a department's task with a reason. When the leaver is that head, HR finalizes it instead.
 
 ---
 

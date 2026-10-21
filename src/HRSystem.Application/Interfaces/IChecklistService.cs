@@ -25,8 +25,23 @@ public interface IChecklistService
     /// <summary>Dispatch department tasks (and, for onboarding, submit the linked account request).</summary>
     Task<Result> SubmitAsync(int requestId, CancellationToken ct = default);
 
-    /// <summary>Close a request whose required tasks are done. Departure marks the employee resigned.</summary>
+    /// <summary>
+    /// Close a request whose required tasks are done. Departure marks the employee resigned.
+    /// A departure with a final approver can only be finalized (approved) by that approver; otherwise HR finalizes.
+    /// </summary>
     Task<Result> FinalizeAsync(int requestId, CancellationToken ct = default);
+
+    /// <summary>Departures waiting for the current user's final approval.</summary>
+    Task<IReadOnlyList<ChecklistRequestDto>> GetMyFinalReviewsAsync(CancellationToken ct = default);
+
+    /// <summary>The current user's other final reviews (approved, cancelled, or back with departments).</summary>
+    Task<IReadOnlyList<ChecklistRequestDto>> GetMyFinalReviewHistoryAsync(ChecklistTaskHistoryQuery query, CancellationToken ct = default);
+
+    /// <summary>A departure with all task details, for its final approver only.</summary>
+    Task<ChecklistRequestDto?> GetFinalReviewAsync(int requestId, CancellationToken ct = default);
+
+    /// <summary>Final approver sends a finished department task back with a reason.</summary>
+    Task<Result> ReturnTaskAsync(int taskId, string reason, CancellationToken ct = default);
 
     /// <summary>Withdraw a request that is not finalized; its open tasks and linked account request are closed.</summary>
     Task<Result> CancelAsync(int requestId, string reason, CancellationToken ct = default);

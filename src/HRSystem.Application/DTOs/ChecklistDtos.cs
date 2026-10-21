@@ -41,6 +41,10 @@ public class ChecklistRequestDto
     public DateTime? CancelledAt { get; set; }
     public string? CancelReason { get; set; }
 
+    /// <summary>Departure: the leaver's department head who gives the final approval.</summary>
+    public string? FinalApproverUserId { get; set; }
+    public string? FinalApproverName { get; set; }
+
     public int? AccountRequestId { get; set; }
     public string? AccountRequestNo { get; set; }
     public RequestStatus? AccountRequestStatus { get; set; }
@@ -49,6 +53,12 @@ public class ChecklistRequestDto
 
     public bool CanSubmit => Status == ChecklistStatus.Draft;
     public bool CanFinalize => Status == ChecklistStatus.PendingFinalReview;
+
+    /// <summary>
+    /// HR finalizes onboarding, and departures whose leaver heads their own department (or that
+    /// were submitted before final approval existed). Otherwise the department head approves.
+    /// </summary>
+    public bool FinalizedByHr => Kind == ChecklistKind.Onboarding || FinalApproverUserId is null;
     public bool CanCancel => Status is not (ChecklistStatus.Completed or ChecklistStatus.Cancelled);
 }
 
@@ -66,6 +76,8 @@ public class ChecklistTaskDto
     public int SortOrder { get; set; }
     public string? TaskRemark { get; set; }
     public DateTime? CompletedAt { get; set; }
+    public string? ReturnReason { get; set; }
+    public DateTime? ReturnedAt { get; set; }
     public ChecklistStatus RequestStatus { get; set; }
     public List<ChecklistTaskItemDto> Items { get; set; } = new();
 
@@ -136,6 +148,12 @@ public class ChecklistCreatePageDto
 
     /// <summary>Departure: the employee's active accounts (account type id -> account value), ticked by default.</summary>
     public IReadOnlyDictionary<int, string?> ActiveAccounts { get; set; } = new Dictionary<int, string?>();
+
+    /// <summary>Departure: who gives the final approval; null when HR finalizes (leaver heads the department).</summary>
+    public string? FinalApproverName { get; set; }
+
+    /// <summary>Departure: why no final approver can be found, so submitting would fail.</summary>
+    public string? FinalApprovalError { get; set; }
 }
 
 public class ChecklistTemplatePreviewDto

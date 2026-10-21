@@ -184,6 +184,9 @@ public class ChecklistRequestConfig : IEntityTypeConfiguration<ChecklistRequest>
         b.Property(x => x.FinalizedBy).HasMaxLength(450);
         b.Property(x => x.CancelledBy).HasMaxLength(450);
         b.Property(x => x.CancelReason).HasMaxLength(500);
+        b.Property(x => x.FinalApproverUserId).HasMaxLength(450);
+        b.Property(x => x.FinalApproverUserName).HasMaxLength(256);
+        b.HasIndex(x => new { x.FinalApproverUserId, x.Status });
         b.HasOne(x => x.Employee)
             .WithMany(e => e.ChecklistRequests)
             .HasForeignKey(x => x.EmployeeId)
@@ -206,6 +209,7 @@ public class ChecklistTaskConfig : IEntityTypeConfiguration<ChecklistTask>
         b.Property(x => x.AssignedUserName).HasMaxLength(256);
         b.Property(x => x.TaskRemark).HasMaxLength(1000);
         b.Property(x => x.HandledBy).HasMaxLength(450);
+        b.Property(x => x.ReturnReason).HasMaxLength(500);
         b.HasIndex(x => new { x.ChecklistRequestId, x.SortOrder });
         b.HasIndex(x => new { x.AssignedUserId, x.Status });
         b.HasOne(x => x.ChecklistRequest)

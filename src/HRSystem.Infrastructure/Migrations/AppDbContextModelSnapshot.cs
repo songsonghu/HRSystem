@@ -397,6 +397,14 @@ namespace HRSystem.Infrastructure.Migrations
                     b.Property<int>("EmployeeId")
                         .HasColumnType("int");
 
+                    b.Property<string>("FinalApproverUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("FinalApproverUserName")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
                     b.Property<DateTime?>("FinalizedAt")
                         .HasColumnType("datetime2");
 
@@ -463,6 +471,8 @@ namespace HRSystem.Infrastructure.Migrations
                     b.HasIndex("RequestNo")
                         .IsUnique();
 
+                    b.HasIndex("FinalApproverUserId", "Status");
+
                     b.HasIndex("Kind", "EmployeeId", "Status");
 
                     b.ToTable("ChecklistRequests", (string)null);
@@ -519,6 +529,13 @@ namespace HRSystem.Infrastructure.Migrations
 
                     b.Property<string>("ModifiedBy")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ReturnReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("ReturnedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");

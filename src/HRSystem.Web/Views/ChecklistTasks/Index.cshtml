@@ -1,19 +1,40 @@
 @model IReadOnlyList<ChecklistTaskDto>
 @{
     ViewData["Title"] = "My Checklist Tasks";
+    var finalReviews = (IReadOnlyList<ChecklistRequestDto>)ViewBag.FinalReviews;
 }
 
 <h2>My Checklist Tasks</h2>
 <p class="page-subtitle">Onboarding and departure checklists assigned to you as department approver.</p>
 
 <ul class="nav nav-tabs mb-3">
-    <li class="nav-item"><a class="nav-link active" asp-action="Index">Pending (@Model.Count)</a></li>
+    <li class="nav-item"><a class="nav-link active" asp-action="Index">Pending (@(Model.Count + finalReviews.Count))</a></li>
     <li class="nav-item"><a class="nav-link" asp-action="History">History</a></li>
 </ul>
 
-@if (Model.Count == 0)
+@if (Model.Count == 0 && finalReviews.Count == 0)
 {
     <div class="alert alert-info">No pending checklist tasks.</div>
+}
+
+@foreach (var r in finalReviews)
+{
+    <div class="card mb-3 border-warning">
+        <div class="card-header d-flex justify-content-between">
+            <span>
+                <span class="badge bg-warning text-dark">Final Review</span>
+                <b>Departure</b> · @r.EmployeeName (@r.EmployeeNo)
+            </span>
+            <partial name="_ChecklistStatusBadge" model="r.Status" />
+        </div>
+        <div class="card-body">
+            <p class="mb-2">
+                Request: @r.RequestNo · Last working date: @r.LastWorkingDate?.ToString("yyyy-MM-dd")
+                · Departments done: @r.Tasks.Count(t => t.IsDone) / @r.Tasks.Count
+            </p>
+            <a asp-action="Review" asp-route-id="@r.Id" class="btn btn-primary btn-sm">Review &amp; Approve</a>
+        </div>
+    </div>
 }
 
 @foreach (var t in Model)
@@ -25,10 +46,14 @@
                 <span class="badge @(t.Kind == ChecklistKind.Onboarding ? "bg-success" : "bg-secondary")">@t.Kind</span>
                 <b>@t.DepartmentName</b> · @t.EmployeeName (@t.EmployeeNo)
             </span>
-            <span class="badge bg-warning text-dark">@t.Status</span>
+            <span class="badge @(t.Status == ChecklistTaskStatus.Returned || t.ReturnReason is not null ? "bg-danger" : "bg-warning text-dark")">@(t.ReturnReason is not null ? "Returned" : t.Status.ToString())</span>
         </div>
         <div class="card-body">
             <p class="mb-2">Request: @t.RequestNo · Progress: @completed / @t.Items.Count</p>
+            @if (t.ReturnReason is not null)
+            {
+                <p class="mb-2 text-danger small">Returned by the final reviewer: @t.ReturnReason</p>
+            }
             <a asp-action="Task" asp-route-id="@t.Id" class="btn btn-primary btn-sm">Open Task</a>
         </div>
     </div>
