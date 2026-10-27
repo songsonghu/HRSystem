@@ -355,6 +355,7 @@ public class ChecklistService : IChecklistService
                     Description = item.Description,
                     SortOrder = item.SortOrder,
                     IsRequired = item.IsRequired,
+                    AllowAttachment = request.Kind == ChecklistKind.Departure && item.AllowAttachment,
                     CreatedBy = _currentUser.UserId
                 });
             }
@@ -655,6 +656,30 @@ public class ChecklistService : IChecklistService
         if (task.Status is ChecklistTaskStatus.Completed or ChecklistTaskStatus.NotApplicable)
             return Result.Fail("This task is already submitted. Take it back first to change it.");
 
+        if (dto.Items.Any(i => i.IsCompleted && i.IsNotApplicable))
+            return Result.Fail("A checklist item can be either Done or N/A, not both.");
+
+        // Validate every upload before changing anything.
+        var uploads = new Dictionary<int, (ChecklistAttachmentUpload File, string ContentType)>();
+        foreach (var updateItem in dto.Items.Where(i => i.NewAttachment is not null))
+        {
+            var item = task.Items.FirstOrDefault(i => i.Id == updateItem.Id);
+            if (item is null) continue;
+            if (!item.AllowAttachment) return Result.Fail($"\"{item.Description}\" does not take an attachment.");
+            var (contentType, error) = ChecklistAttachmentRules.Validate(updateItem.NewAttachment!.FileName, updateItem.NewAttachment.Content);
+            if (error is not null) return Result.Fail(error);
+            uploads[item.Id] = (updateItem.NewAttachment, contentType!);
+        }
+
+        // Load the content rows only for the items whose attachment changes.
+        var changingIds = dto.Items.Where(i => i.NewAttachment is not null || i.RemoveAttachment).Select(i => i.Id).ToList();
+        if (changingIds.Count > 0)
+        {
+            await _db.ChecklistTaskItems.Where(i => i.ChecklistTaskId == task.Id && changingIds.Contains(i.Id))
+                .Include(i => i.Attachment)
+                .LoadAsync(ct);
+        }
+
         var now = DateTime.UtcNow;
         foreach (var updateItem in dto.Items)
         {
@@ -662,8 +687,24 @@ public class ChecklistService : IChecklistService
             if (item is null) continue;
 
             item.IsNotApplicable = updateItem.IsNotApplicable;
-            item.IsCompleted = updateItem.IsCompleted && !updateItem.IsNotApplicable;
+            item.IsCompleted = updateItem.IsCompleted;
             item.Remark = updateItem.Remark;
+
+            if (uploads.TryGetValue(item.Id, out var upload))
+            {
+                if (item.Attachment is null) item.Attachment = new ChecklistTaskItemAttachment { Content = upload.File.Content };
+                else item.Attachment.Content = upload.File.Content;
+                item.AttachmentFileName = TrimFileName(upload.File.FileName);
+                item.AttachmentContentType = upload.ContentType;
+                item.AttachmentSize = upload.File.Content.Length;
+            }
+            else if (updateItem.RemoveAttachment && item.AttachmentFileName is not null)
+            {
+                item.Attachment = null;
+                item.AttachmentFileName = null;
+                item.AttachmentContentType = null;
+                item.AttachmentSize = null;
+            }
             if (item.IsCompleted || item.IsNotApplicable)
             {
                 item.CompletedBy = _currentUser.UserId;
@@ -679,11 +720,14 @@ public class ChecklistService : IChecklistService
         task.TaskRemark = dto.TaskRemark;
         task.HandledBy = _currentUser.UserId;
 
-        var hasProgress = task.Items.Any(i => i.IsCompleted || i.IsNotApplicable || !string.IsNullOrWhiteSpace(i.Remark));
+        var hasProgress = task.Items.Any(i => i.IsCompleted || i.IsNotApplicable || !string.IsNullOrWhiteSpace(i.Remark)
+                                              || i.AttachmentFileName is not null);
         var allRequiredDone = task.Items.Where(i => i.IsRequired).All(i => i.IsCompleted || i.IsNotApplicable);
 
         if (dto.MarkAsCompleted)
         {
+            if (task.ChecklistRequest.Kind == ChecklistKind.Departure && task.Items.Any(i => !i.IsCompleted && !i.IsNotApplicable))
+                return Result.Fail("Mark every checklist item as either Done or N/A before completing the department task.");
             if (!allRequiredDone)
                 return Result.Fail("Complete all required checklist items before submitting the department task.");
 
@@ -733,6 +777,42 @@ public class ChecklistService : IChecklistService
         var anyProgress = tasks.Any(t => t.Status is ChecklistTaskStatus.InProgress or ChecklistTaskStatus.Completed
                                                       or ChecklistTaskStatus.Returned or ChecklistTaskStatus.NotApplicable);
         request.Status = anyProgress ? ChecklistStatus.InProgress : ChecklistStatus.Submitted;
+    }
+
+    /// <summary>
+    /// An item's attachment, for the task's assignee, the request's final approver, and holders of
+    /// the kind's manage permission.
+    /// </summary>
+    public async Task<ChecklistAttachmentFile?> GetItemAttachmentAsync(int itemId, CancellationToken ct = default)
+    {
+        var item = await _db.ChecklistTaskItems.AsNoTracking()
+            .Where(i => i.Id == itemId && i.AttachmentFileName != null)
+            .Select(i => new
+            {
+                i.AttachmentFileName,
+                i.AttachmentContentType,
+                i.ChecklistTask!.AssignedUserId,
+                Request = i.ChecklistTask.ChecklistRequest
+            })
+            .FirstOrDefaultAsync(ct);
+        if (item?.Request is null) return null;
+        if (!CanHandleTask(item.AssignedUserId) && !IsFinalApprover(item.Request) && !CanManage(item.Request.Kind)) return null;
+
+        var content = await _db.ChecklistTaskItems.AsNoTracking()
+            .Where(i => i.Id == itemId)
+            .Select(i => i.Attachment!.Content)
+            .FirstOrDefaultAsync(ct);
+        return content is null
+            ? null
+            : new ChecklistAttachmentFile(item.AttachmentFileName!, item.AttachmentContentType ?? "application/octet-stream", content);
+    }
+
+    private static string TrimFileName(string fileName)
+    {
+        var name = Path.GetFileName(fileName.Replace('\\', '/')).Trim();
+        if (name.Length <= 255) return name;
+        var extension = Path.GetExtension(name);
+        return name[..(255 - extension.Length)] + extension;
     }
 
     /// <summary>Only the assignee; administrators deliberately get no override.</summary>
@@ -869,7 +949,10 @@ public class ChecklistService : IChecklistService
             IsRequired = i.IsRequired,
             IsCompleted = i.IsCompleted,
             IsNotApplicable = i.IsNotApplicable,
-            Remark = i.Remark
+            Remark = i.Remark,
+            AllowAttachment = i.AllowAttachment,
+            AttachmentFileName = i.AttachmentFileName,
+            AttachmentSize = i.AttachmentSize
         }).ToList()
     };
 }

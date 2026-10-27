@@ -564,6 +564,20 @@ namespace HRSystem.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<bool>("AllowAttachment")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("AttachmentContentType")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("AttachmentFileName")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<long?>("AttachmentSize")
+                        .HasColumnType("bigint");
+
                     b.Property<int>("ChecklistTaskId")
                         .HasColumnType("int");
 
@@ -613,6 +627,21 @@ namespace HRSystem.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ChecklistTaskId", "SortOrder");
+
+                    b.ToTable("ChecklistTaskItems", (string)null);
+                });
+
+            modelBuilder.Entity("HRSystem.Domain.Entities.ChecklistTaskItemAttachment", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("varbinary(max)")
+                        .HasColumnName("AttachmentContent");
+
+                    b.HasKey("Id");
 
                     b.ToTable("ChecklistTaskItems", (string)null);
                 });
@@ -677,6 +706,9 @@ namespace HRSystem.Infrastructure.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("AllowAttachment")
+                        .HasColumnType("bit");
 
                     b.Property<int>("ChecklistTemplateId")
                         .HasColumnType("int");
@@ -1244,6 +1276,15 @@ namespace HRSystem.Infrastructure.Migrations
                     b.Navigation("ChecklistTask");
                 });
 
+            modelBuilder.Entity("HRSystem.Domain.Entities.ChecklistTaskItemAttachment", b =>
+                {
+                    b.HasOne("HRSystem.Domain.Entities.ChecklistTaskItem", null)
+                        .WithOne("Attachment")
+                        .HasForeignKey("HRSystem.Domain.Entities.ChecklistTaskItemAttachment", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("HRSystem.Domain.Entities.ChecklistTemplate", b =>
                 {
                     b.HasOne("HRSystem.Domain.Entities.Department", "Department")
@@ -1382,6 +1423,11 @@ namespace HRSystem.Infrastructure.Migrations
             modelBuilder.Entity("HRSystem.Domain.Entities.ChecklistTask", b =>
                 {
                     b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("HRSystem.Domain.Entities.ChecklistTaskItem", b =>
+                {
+                    b.Navigation("Attachment");
                 });
 
             modelBuilder.Entity("HRSystem.Domain.Entities.ChecklistTemplate", b =>

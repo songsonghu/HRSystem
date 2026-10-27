@@ -165,6 +165,7 @@ public class ChecklistTemplateService : IChecklistTemplateService
                     Id = i.Id,
                     Description = i.Description,
                     IsRequired = i.IsRequired,
+                    AllowAttachment = i.AllowAttachment,
                     SortOrder = i.SortOrder
                 }).ToList()
         };
@@ -276,6 +277,7 @@ public class ChecklistTemplateService : IChecklistTemplateService
             }
             item.Description = row.Description!.Trim();
             item.IsRequired = row.IsRequired;
+            item.AllowAttachment = template.Kind == ChecklistKind.Departure && row.AllowAttachment;
             item.SortOrder = order;
         }
     }

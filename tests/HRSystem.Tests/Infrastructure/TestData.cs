@@ -116,6 +116,20 @@ public sealed class TestData
         await db.SaveChangesAsync();
     }
 
+    /// <summary>Allow (or stop allowing) an attachment on the first item of every active template of this kind.</summary>
+    public async Task SetFirstItemsAllowAttachmentAsync(ChecklistKind kind, bool allow)
+    {
+        using var scope = _app.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var templates = await db.ChecklistTemplates.Include(t => t.Items).Where(t => t.Kind == kind && t.IsActive).ToListAsync();
+        foreach (var template in templates)
+        {
+            var first = template.Items.Where(i => !i.IsDeleted).MinBy(i => i.SortOrder);
+            if (first is not null) first.AllowAttachment = allow;
+        }
+        await db.SaveChangesAsync();
+    }
+
     public async Task<int> AccountTypeAsync(int responsibleDepartmentId)
     {
         using var scope = _app.Services.CreateScope();

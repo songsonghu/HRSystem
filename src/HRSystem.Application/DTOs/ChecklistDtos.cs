@@ -110,7 +110,17 @@ public class ChecklistTaskItemDto
     public bool IsCompleted { get; set; }
     public bool IsNotApplicable { get; set; }
     public string? Remark { get; set; }
+    public bool AllowAttachment { get; set; }
+    public string? AttachmentFileName { get; set; }
+    public long? AttachmentSize { get; set; }
+    public bool HasAttachment => AttachmentFileName is not null;
 }
+
+/// <summary>A file chosen for a checklist item; the content type is detected from the content.</summary>
+public record ChecklistAttachmentUpload(string FileName, byte[] Content);
+
+/// <summary>A stored checklist item attachment, ready to download.</summary>
+public record ChecklistAttachmentFile(string FileName, string ContentType, byte[] Content);
 
 public class ChecklistTaskUpdateDto
 {
@@ -126,6 +136,10 @@ public class ChecklistTaskItemUpdateDto
     public bool IsCompleted { get; set; }
     public bool IsNotApplicable { get; set; }
     public string? Remark { get; set; }
+
+    /// <summary>Replaces the current attachment; ignored unless the item allows attachments.</summary>
+    public ChecklistAttachmentUpload? NewAttachment { get; set; }
+    public bool RemoveAttachment { get; set; }
 }
 
 /// <summary>What the create page shows for the chosen employee.</summary>
@@ -203,6 +217,9 @@ public class ChecklistTemplateItemEditDto
     public string? Description { get; set; }
     public bool IsRequired { get; set; } = true;
     public int SortOrder { get; set; }
+
+    /// <summary>Departure only: show an upload button for this item on the task page.</summary>
+    public bool AllowAttachment { get; set; }
 }
 
 // ------------------------------------------------------------- approvers

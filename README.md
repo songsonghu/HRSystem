@@ -162,6 +162,10 @@ is assigned to can process it on My Tasks / My Checklist Tasks (no permission ne
 A departure, once every department has finished, goes to the head of the leaver's department for
 final review on My Checklist Tasks: they approve it (completing it and marking the employee resigned)
 or return a department's task with a reason. When the leaver is that head, HR finalizes it instead.
+On a departure task every checklist item must be marked either Done or N/A before the task can be
+completed. Items ticked "Attachment" in the departure template take one JPG/PNG/PDF file (up to 5 MB),
+stored in the `ChecklistTaskItems.AttachmentContent` column and viewable by the assignee, the final
+approver and HR.
 
 ---
 

@@ -76,6 +76,14 @@ public class ChecklistTaskItemEditViewModel
     public bool IsCompleted { get; set; }
     public bool IsNotApplicable { get; set; }
     public string? Remark { get; set; }
+
+    public bool AllowAttachment { get; set; }
+    public string? AttachmentFileName { get; set; }
+    public long? AttachmentSize { get; set; }
+
+    /// <summary>A newly chosen file; replaces the current attachment.</summary>
+    public IFormFile? Attachment { get; set; }
+    public bool RemoveAttachment { get; set; }
 }
 
 public static class ChecklistViewModelMapper
@@ -153,21 +161,41 @@ public static class ChecklistViewModelMapper
             IsRequired = i.IsRequired,
             IsCompleted = i.IsCompleted,
             IsNotApplicable = i.IsNotApplicable,
-            Remark = i.Remark
+            Remark = i.Remark,
+            AllowAttachment = i.AllowAttachment,
+            AttachmentFileName = i.AttachmentFileName,
+            AttachmentSize = i.AttachmentSize
         }).ToList()
     };
 
-    public static ChecklistTaskUpdateDto ToUpdateDto(this ChecklistTaskEditViewModel vm) => new()
+    /// <summary>Reads the chosen files; the caller has already rejected files over the size limit.</summary>
+    public static async Task<ChecklistTaskUpdateDto> ToUpdateDtoAsync(this ChecklistTaskEditViewModel vm, CancellationToken ct = default)
     {
-        TaskId = vm.TaskId,
-        TaskRemark = vm.TaskRemark,
-        MarkAsCompleted = vm.MarkAsCompleted,
-        Items = vm.Items.Select(i => new ChecklistTaskItemUpdateDto
+        var dto = new ChecklistTaskUpdateDto
         {
-            Id = i.Id,
-            IsCompleted = i.IsCompleted,
-            IsNotApplicable = i.IsNotApplicable,
-            Remark = i.Remark
-        }).ToList()
-    };
+            TaskId = vm.TaskId,
+            TaskRemark = vm.TaskRemark,
+            MarkAsCompleted = vm.MarkAsCompleted
+        };
+        foreach (var i in vm.Items)
+        {
+            ChecklistAttachmentUpload? upload = null;
+            if (i.Attachment is { Length: > 0 } file)
+            {
+                using var buffer = new MemoryStream();
+                await file.CopyToAsync(buffer, ct);
+                upload = new ChecklistAttachmentUpload(file.FileName, buffer.ToArray());
+            }
+            dto.Items.Add(new ChecklistTaskItemUpdateDto
+            {
+                Id = i.Id,
+                IsCompleted = i.IsCompleted,
+                IsNotApplicable = i.IsNotApplicable,
+                Remark = i.Remark,
+                NewAttachment = upload,
+                RemoveAttachment = i.RemoveAttachment
+            });
+        }
+        return dto;
+    }
 }

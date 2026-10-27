@@ -69,7 +69,14 @@
                         @i.Description
                         @if (i.IsNotApplicable) { <span class="text-muted small">(N/A)</span> }
                     </span>
-                    <span class="text-muted small">@i.Remark</span>
+                    <span class="text-muted small text-end">
+                        @if (i.HasAttachment)
+                        {
+                            <a asp-action="Attachment" asp-route-id="@i.Id" target="_blank" rel="noopener" class="me-2">
+                                <i class="bi bi-paperclip"></i>@i.AttachmentFileName</a>
+                        }
+                        @i.Remark
+                    </span>
                 </li>
             }
         </ul>

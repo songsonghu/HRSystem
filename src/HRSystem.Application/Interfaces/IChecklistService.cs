@@ -60,6 +60,9 @@ public interface IChecklistService
 
     /// <summary>Take back a submitted task so it can be changed again (request not yet finalized).</summary>
     Task<Result> ReopenTaskAsync(int taskId, CancellationToken ct = default);
+
+    /// <summary>A checklist item's attachment, for its assignee, the final approver and HR; null otherwise.</summary>
+    Task<ChecklistAttachmentFile?> GetItemAttachmentAsync(int itemId, CancellationToken ct = default);
 }
 
 /// <summary>Per-department checklist templates, editable by holders of the kind's permission.</summary>

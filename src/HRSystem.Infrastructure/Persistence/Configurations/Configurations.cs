@@ -228,11 +228,27 @@ public class ChecklistTaskItemConfig : IEntityTypeConfiguration<ChecklistTaskIte
         b.Property(x => x.Description).HasMaxLength(500).IsRequired();
         b.Property(x => x.Remark).HasMaxLength(1000);
         b.Property(x => x.CompletedBy).HasMaxLength(450);
+        b.Property(x => x.AttachmentFileName).HasMaxLength(255);
+        b.Property(x => x.AttachmentContentType).HasMaxLength(100);
         b.HasIndex(x => new { x.ChecklistTaskId, x.SortOrder });
         b.HasOne(x => x.ChecklistTask)
             .WithMany(t => t.Items)
             .HasForeignKey(x => x.ChecklistTaskId)
             .OnDelete(DeleteBehavior.Cascade);
+        // Table splitting: the file content is the AttachmentContent column of this table.
+        b.HasOne(x => x.Attachment)
+            .WithOne()
+            .HasForeignKey<ChecklistTaskItemAttachment>(a => a.Id);
+    }
+}
+
+public class ChecklistTaskItemAttachmentConfig : IEntityTypeConfiguration<ChecklistTaskItemAttachment>
+{
+    public void Configure(EntityTypeBuilder<ChecklistTaskItemAttachment> b)
+    {
+        b.ToTable("ChecklistTaskItems");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Content).HasColumnName("AttachmentContent").IsRequired();
     }
 }
 

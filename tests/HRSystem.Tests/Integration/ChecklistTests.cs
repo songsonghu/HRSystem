@@ -416,4 +416,95 @@ public class ChecklistTests : IntegrationTest
             Assert.Empty(await Data.ReadAsync(db => db.ChecklistTasks.Where(t => t.ChecklistRequestId == created.Value).ToListAsync()));
         }
     }
+
+    [SkippableFact]
+    public async Task Departure_items_take_an_attachment_only_where_the_template_allows_it()
+    {
+        RequireDatabase();
+        var hr = await Data.PersonAsync(null);
+        var checklistManager = await Data.PersonAsync(null);
+        var outsider = await Data.PersonAsync(null);
+        await Data.SetTemplateManagersAsync(ChecklistKind.Departure, checklistManager.EmployeeId);
+        await Data.SetFirstItemsAllowAttachmentAsync(ChecklistKind.Departure, true);
+        try
+        {
+            var requestId = await StartDepartureAsync(hr.UserId, (await LeaverAsync()).Leaver);
+            var task = (await TasksOfAsync(checklistManager.UserId, requestId)).First();
+            var withAttachment = task.Items.MinBy(i => i.SortOrder)!;
+            Assert.True(withAttachment.AllowAttachment);
+
+            var pdf = "%PDF-1.4\n%test\n"u8.ToArray();
+            ChecklistTaskUpdateDto Upload(int itemId, string fileName, byte[] content) => new()
+            {
+                TaskId = task.Id,
+                Items = new() { new ChecklistTaskItemUpdateDto { Id = itemId, NewAttachment = new ChecklistAttachmentUpload(fileName, content) } }
+            };
+
+            using var manager = Data.As(checklistManager.UserId);
+            var service = manager.Get<IChecklistService>();
+            var notAnImage = await service.UpdateTaskAsync(Upload(withAttachment.Id, "photo.png", "hello"u8.ToArray()));
+            Assert.Contains("not a JPG, PNG or PDF", notAnImage.Error);
+            var withoutAttachment = task.Items.FirstOrDefault(i => !i.AllowAttachment);
+            if (withoutAttachment is not null)
+                Assert.False((await service.UpdateTaskAsync(Upload(withoutAttachment.Id, "proof.pdf", pdf))).Succeeded);
+
+            var saved = await service.UpdateTaskAsync(Upload(withAttachment.Id, @"C:\scans\proof.pdf", pdf));
+            Assert.True(saved.Succeeded, saved.Error);
+            var item = (await service.GetTaskAsync(task.Id))!.Items.Single(i => i.Id == withAttachment.Id);
+            Assert.Equal("proof.pdf", item.AttachmentFileName);
+            Assert.Equal(pdf, await Data.ReadAsync(db => db.ChecklistTaskItems.Where(i => i.Id == item.Id).Select(i => i.Attachment!.Content).SingleAsync()));
+
+            var file = await service.GetItemAttachmentAsync(item.Id);
+            Assert.Equal("application/pdf", file!.ContentType);
+            Assert.Equal(pdf, file.Content);
+            using (var hrScope = Data.As(hr.UserId, Permissions.DeparturesManage))
+                Assert.NotNull(await hrScope.Get<IChecklistService>().GetItemAttachmentAsync(item.Id));
+            using (var outsiderScope = Data.As(outsider.UserId))
+                Assert.Null(await outsiderScope.Get<IChecklistService>().GetItemAttachmentAsync(item.Id));
+
+            var removed = await service.UpdateTaskAsync(new ChecklistTaskUpdateDto
+            {
+                TaskId = task.Id,
+                Items = new() { new ChecklistTaskItemUpdateDto { Id = item.Id, RemoveAttachment = true } }
+            });
+            Assert.True(removed.Succeeded, removed.Error);
+            Assert.Null((await service.GetTaskAsync(task.Id))!.Items.Single(i => i.Id == item.Id).AttachmentFileName);
+            Assert.Null(await service.GetItemAttachmentAsync(item.Id));
+        }
+        finally
+        {
+            await Data.SetFirstItemsAllowAttachmentAsync(ChecklistKind.Departure, false);
+        }
+    }
+
+    [SkippableFact]
+    public async Task Departure_items_need_exactly_one_of_done_and_na_to_complete()
+    {
+        RequireDatabase();
+        var hr = await Data.PersonAsync(null);
+        var checklistManager = await Data.PersonAsync(null);
+        await Data.SetTemplateManagersAsync(ChecklistKind.Departure, checklistManager.EmployeeId);
+        var requestId = await StartDepartureAsync(hr.UserId, (await LeaverAsync()).Leaver);
+        var task = (await TasksOfAsync(checklistManager.UserId, requestId)).First();
+
+        using var manager = Data.As(checklistManager.UserId);
+        var service = manager.Get<IChecklistService>();
+
+        var both = CompleteAll(task);
+        both.Items[0].IsNotApplicable = true;
+        Assert.Contains("not both", (await service.UpdateTaskAsync(both)).Error);
+        both.MarkAsCompleted = false;
+        Assert.Contains("not both", (await service.UpdateTaskAsync(both)).Error);
+
+        // Every item counts here, optional ones included.
+        var oneLeftOpen = CompleteAll(task);
+        oneLeftOpen.Items[^1].IsCompleted = false;
+        Assert.Contains("either Done or N/A", (await service.UpdateTaskAsync(oneLeftOpen)).Error);
+
+        var mixed = CompleteAll(task);
+        mixed.Items[0].IsCompleted = false;
+        mixed.Items[0].IsNotApplicable = true;
+        var completed = await service.UpdateTaskAsync(mixed);
+        Assert.True(completed.Succeeded, completed.Error);
+    }
 }

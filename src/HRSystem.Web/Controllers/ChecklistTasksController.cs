@@ -1,8 +1,10 @@
+using HRSystem.Application.Common;
 using HRSystem.Application.DTOs;
 using HRSystem.Application.Interfaces;
 using HRSystem.Web.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Net.Http.Headers;
 
 namespace HRSystem.Web.Controllers;
 
@@ -10,6 +12,9 @@ namespace HRSystem.Web.Controllers;
 [Authorize]
 public class ChecklistTasksController : Controller
 {
+    /// <summary>Room for several attachments of up to 5 MB each in one save.</summary>
+    private const long MaxTaskPostBytes = 100 * 1024 * 1024;
+
     private readonly IChecklistService _service;
 
     public ChecklistTasksController(IChecklistService service) => _service = service;
@@ -68,12 +73,19 @@ public class ChecklistTasksController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [RequestSizeLimit(MaxTaskPostBytes)]
+    [RequestFormLimits(MultipartBodyLengthLimit = MaxTaskPostBytes)]
     public async Task<IActionResult> Task(ChecklistTaskEditViewModel vm)
     {
-        var result = await _service.UpdateTaskAsync(vm.ToUpdateDto());
+        var tooLarge = vm.Items.FirstOrDefault(i => i.Attachment?.Length > ChecklistAttachmentRules.MaxBytes);
+        var result = tooLarge is not null
+            ? Result.Fail($"\"{tooLarge.Attachment!.FileName}\" is larger than 5 MB.")
+            : await _service.UpdateTaskAsync(await vm.ToUpdateDtoAsync(HttpContext.RequestAborted));
         if (!result.Succeeded)
         {
-            ModelState.AddModelError(string.Empty, result.Error!);
+            var filesChosen = vm.Items.Any(i => i.Attachment is { Length: > 0 });
+            ModelState.AddModelError(string.Empty, result.Error!
+                + (filesChosen ? " Nothing was saved, so choose the files again." : string.Empty));
             var task = await _service.GetTaskAsync(vm.TaskId);
             if (task is null) return NotFound();
             // Keep what the user entered; only the read-only parts come from the database.
@@ -86,6 +98,7 @@ public class ChecklistTasksController : Controller
                 item.IsCompleted = posted.IsCompleted;
                 item.IsNotApplicable = posted.IsNotApplicable;
                 item.Remark = posted.Remark;
+                item.RemoveAttachment = posted.RemoveAttachment;
             }
             return View(redisplay);
         }
@@ -94,6 +107,19 @@ public class ChecklistTasksController : Controller
             ? "Department task completed. It now appears under History."
             : "Progress saved. Click \"Complete Task\" when every required item is done.";
         return vm.MarkAsCompleted ? RedirectToAction(nameof(Index)) : RedirectToAction(nameof(Task), new { id = vm.TaskId });
+    }
+
+    /// <summary>Shows a checklist item's attachment in the browser (images and PDFs only).</summary>
+    public async Task<IActionResult> Attachment(int id)
+    {
+        var file = await _service.GetItemAttachmentAsync(id);
+        if (file is null) return NotFound();
+
+        var disposition = new ContentDispositionHeaderValue("inline");
+        disposition.SetHttpFileName(file.FileName);
+        Response.Headers.ContentDisposition = disposition.ToString();
+        Response.Headers.XContentTypeOptions = "nosniff";
+        return File(file.Content, file.ContentType);
     }
 
     [HttpPost]

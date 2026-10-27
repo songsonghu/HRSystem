@@ -1,6 +1,7 @@
 @model ChecklistTemplateEditDto
 @{
     var isNew = Model.Id == 0;
+    var isDeparture = Model.Kind == ChecklistKind.Departure;
     ViewData["Title"] = (isNew ? "New " : "Edit ") + Model.Kind + " Checklist Template";
 }
 
@@ -37,10 +38,21 @@
     </div>
 
     <h5>Checklist items</h5>
-    <p class="text-muted small">Items are listed by their order number. Clear an item's text to remove it; fill a blank row to add one.</p>
+    <p class="text-muted small">Items are listed by their order number. Clear an item's text to remove it; fill a blank row to add one.
+        @if (isDeparture)
+        {
+            @:Tick <b>Attachment</b> to let the department attach one JPG, PNG or PDF file to that item.
+        }
+    </p>
     <table class="table table-sm align-middle">
         <thead class="table-light">
-            <tr><th style="width:90px">Order</th><th>Description</th><th style="width:110px">Required</th></tr>
+            <tr>
+                <th style="width:90px">Order</th><th>Description</th><th style="width:110px">Required</th>
+                @if (isDeparture)
+                {
+                    <th style="width:130px" title="Show an upload button (JPG, PNG or PDF) for this item on the department task page">Attachment</th>
+                }
+            </tr>
         </thead>
         <tbody>
         @for (int i = 0; i < Model.Items.Count; i++)
@@ -52,6 +64,10 @@
                 </td>
                 <td><input asp-for="Items[i].Description" class="form-control form-control-sm" maxlength="500" /></td>
                 <td class="text-center"><input asp-for="Items[i].IsRequired" class="form-check-input" /></td>
+                @if (isDeparture)
+                {
+                    <td class="text-center"><input asp-for="Items[i].AllowAttachment" class="form-check-input" /></td>
+                }
             </tr>
         }
         </tbody>
