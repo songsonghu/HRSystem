@@ -23,6 +23,7 @@ public interface IAppDbContext
     DbSet<ChecklistTaskItem> ChecklistTaskItems { get; }
     DbSet<ChecklistTemplate> ChecklistTemplates { get; }
     DbSet<ChecklistTemplateItem> ChecklistTemplateItems { get; }
+    DbSet<DepartmentAssignee> DepartmentAssignees { get; }
 
     /// <summary>Used to discard tracked state before retrying after a concurrency conflict.</summary>
     Microsoft.EntityFrameworkCore.ChangeTracking.ChangeTracker ChangeTracker { get; }

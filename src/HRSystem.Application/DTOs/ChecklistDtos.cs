@@ -52,7 +52,13 @@ public class ChecklistRequestDto
     public List<ChecklistTaskDto> Tasks { get; set; } = new();
 
     public bool CanSubmit => Status == ChecklistStatus.Draft;
-    public bool CanFinalize => Status == ChecklistStatus.PendingFinalReview;
+    /// <summary>
+    /// Onboarding has no department tasks: HR finalizes it once its accounts are open. A departure
+    /// waits until every required department task is approved.
+    /// </summary>
+    public bool CanFinalize => Kind == ChecklistKind.Onboarding
+        ? Status is ChecklistStatus.Submitted or ChecklistStatus.InProgress or ChecklistStatus.PendingFinalReview
+        : Status == ChecklistStatus.PendingFinalReview;
 
     /// <summary>
     /// HR finalizes onboarding, and departures whose leaver heads their own department (or that
@@ -78,17 +84,27 @@ public class ChecklistTaskDto
     public DateTime? CompletedAt { get; set; }
     public string? ReturnReason { get; set; }
     public DateTime? ReturnedAt { get; set; }
+    public string? ApprovedByName { get; set; }
+    public DateTime? ApprovedAt { get; set; }
     public ChecklistStatus RequestStatus { get; set; }
     public List<ChecklistTaskItemDto> Items { get; set; } = new();
 
     public bool IsDone => Status is ChecklistTaskStatus.Completed or ChecklistTaskStatus.NotApplicable;
+    public bool IsApproved => ApprovedAt is not null;
     public bool IsRequestOpen => RequestStatus is not (ChecklistStatus.Draft or ChecklistStatus.Completed or ChecklistStatus.Cancelled);
 
-    /// <summary>The assignee may still change the items.</summary>
-    public bool CanEdit => IsRequestOpen && !IsDone;
+    // What the current user may do, as a handler or an approver of the task's department.
+    public bool IsHandler { get; set; }
+    public bool IsApprover { get; set; }
 
-    /// <summary>A submitted task can be taken back until the request is finalized or cancelled.</summary>
-    public bool CanReopen => IsRequestOpen && IsDone;
+    /// <summary>Handlers and approvers may change the items until the task is completed.</summary>
+    public bool CanEdit => IsRequestOpen && !IsDone && (IsHandler || IsApprover);
+
+    /// <summary>A completed task can be taken back until the department approver approves it.</summary>
+    public bool CanReopen => IsRequestOpen && IsDone && !IsApproved && (IsHandler || IsApprover);
+
+    /// <summary>The department approver approves a completed task, or returns it to the handlers.</summary>
+    public bool CanApprove => IsRequestOpen && IsDone && !IsApproved && IsApprover;
 }
 
 /// <summary>Filters for the current user's checklist task history.</summary>
@@ -175,11 +191,10 @@ public class ChecklistTemplatePreviewDto
     public string DepartmentName { get; set; } = string.Empty;
     public int ItemCount { get; set; }
 
-    /// <summary>False when neither an approver nor a manager with a login is set, so submitting would fail.</summary>
-    public bool CanReceiveTasks { get; set; }
-
-    /// <summary>Login that will receive the task.</summary>
-    public string? AssigneeName { get; set; }
+    /// <summary>Who processes and who approves the task; null when nobody, so submitting would fail.</summary>
+    public string? HandlerNames { get; set; }
+    public string? ApproverNames { get; set; }
+    public bool CanReceiveTasks => HandlerNames is not null && ApproverNames is not null;
 }
 
 // ------------------------------------------------------------- templates
@@ -193,9 +208,10 @@ public class ChecklistTemplateListItemDto
     public bool IsRequired { get; set; }
     public int SortOrder { get; set; }
     public int ItemCount { get; set; }
-    public bool CanReceiveTasks { get; set; }
-    public string? AssigneeUserId { get; set; }
-    public string? AssigneeName { get; set; }
+    public int DepartmentId { get; set; }
+    public string? HandlerNames { get; set; }
+    public string? ApproverNames { get; set; }
+    public bool CanReceiveTasks => HandlerNames is not null && ApproverNames is not null;
 }
 
 public class ChecklistTemplateEditDto
@@ -222,19 +238,3 @@ public class ChecklistTemplateItemEditDto
     public bool AllowAttachment { get; set; }
 }
 
-// ------------------------------------------------------------- approvers
-
-/// <summary>Who receives one department's checklist task.</summary>
-public class ChecklistApproverDto
-{
-    public int TemplateId { get; set; }
-    public string DepartmentName { get; set; } = string.Empty;
-    public int ItemCount { get; set; }
-    public bool IsActive { get; set; }
-
-    /// <summary>The configured approver login; empty means the department manager's login.</summary>
-    public string? ApproverUserId { get; set; }
-
-    /// <summary>Department manager's login, used when no approver is configured.</summary>
-    public string? ManagerUserName { get; set; }
-}

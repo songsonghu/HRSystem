@@ -16,23 +16,16 @@
     var signedIn = User.Identity?.IsAuthenticated == true;
     var controller = ViewContext.RouteData.Values["controller"]?.ToString();
     var action = ViewContext.RouteData.Values["action"]?.ToString();
-    var kind = Context.Request.Query["kind"].ToString();
-
-    // Checklist templates belong to Onboarding or Departures depending on their kind.
     string Active(string c, string? a = null)
     {
-        var current = string.Equals(controller, "ChecklistTemplates", StringComparison.OrdinalIgnoreCase)
-            ? (string.Equals(kind, "Onboarding", StringComparison.OrdinalIgnoreCase) ? "Onboarding" : "Departures")
-            : controller;
-        return string.Equals(current, c, StringComparison.OrdinalIgnoreCase)
+        return string.Equals(controller, c, StringComparison.OrdinalIgnoreCase)
                && (a is null || string.Equals(action, a, StringComparison.OrdinalIgnoreCase)) ? "active" : "";
     }
 
-    var hrMenu = User.HasPermission(Permissions.EmployeesManage) || User.HasPermission(Permissions.DepartmentsManage)
-                 || User.HasPermission(Permissions.OnboardingManage) || User.HasPermission(Permissions.DeparturesManage);
     var canSetApprovers = User.HasPermission(Permissions.ChecklistApproversManage);
     var settingsMenu = User.HasPermission(Permissions.UsersManage) || User.HasPermission(Permissions.RolesManage)
-                       || User.HasPermission(Permissions.SystemJobs) || canSetApprovers;
+                       || User.HasPermission(Permissions.SystemJobs) || canSetApprovers
+                       || User.HasPermission(Permissions.AccountRequestsManage) || User.HasPermission(Permissions.DeparturesManage);
     var userName = User.Identity?.Name ?? string.Empty;
 }
 
@@ -62,29 +55,29 @@ else
                     <a class="nav-link @Active("Home")" asp-controller="Home" asp-action="Index"><i class="bi bi-grid"></i>Home</a>
 
                     <div class="sidebar-heading">Workspace</div>
-                    <a class="nav-link @Active("Requests")" asp-controller="Requests" asp-action="Index"><i class="bi bi-person-badge"></i>Account Requests</a>
-                    <a class="nav-link @Active("MyTasks")" asp-controller="MyTasks" asp-action="Index"><i class="bi bi-check2-square"></i>My Tasks</a>
-                    <a class="nav-link @Active("ChecklistTasks")" asp-controller="ChecklistTasks" asp-action="Index"><i class="bi bi-list-check"></i>My Checklist Tasks</a>
+                    <a class="nav-link @Active("MyTasks")" asp-controller="MyTasks" asp-action="Index"><i class="bi bi-check2-square"></i>Account Checklist</a>
+                    <a class="nav-link @Active("AccountApprovals")" asp-controller="AccountApprovals" asp-action="Index"><i class="bi bi-patch-check"></i>Account Approval</a>
+                    <a class="nav-link @Active("ChecklistTasks")" asp-controller="ChecklistTasks" asp-action="Index"><i class="bi bi-list-check"></i>Departure Checklist</a>
+                    <a class="nav-link @Active("DepartureApprovals")" asp-controller="DepartureApprovals" asp-action="Index"><i class="bi bi-clipboard-check"></i>Departure Approval</a>
 
-                    @if (hrMenu)
+                    @* Account Request is for everyone: employees raise requests for themselves and managers for their team. *@
+                    <div class="sidebar-heading">HR</div>
+                    @if (User.HasPermission(Permissions.EmployeesManage))
                     {
-                        <div class="sidebar-heading">HR</div>
-                        @if (User.HasPermission(Permissions.EmployeesManage))
-                        {
-                            <a class="nav-link @Active("Employees")" asp-controller="Employees" asp-action="Index"><i class="bi bi-people"></i>Employees</a>
-                        }
-                        @if (User.HasPermission(Permissions.DepartmentsManage))
-                        {
-                            <a class="nav-link @Active("Departments")" asp-controller="Departments" asp-action="Index"><i class="bi bi-diagram-3"></i>Departments</a>
-                        }
-                        @if (User.HasPermission(Permissions.OnboardingManage))
-                        {
-                            <a class="nav-link @Active("Onboarding")" asp-controller="Onboarding" asp-action="Index"><i class="bi bi-person-plus"></i>Onboarding</a>
-                        }
-                        @if (User.HasPermission(Permissions.DeparturesManage))
-                        {
-                            <a class="nav-link @Active("Departures")" asp-controller="Departures" asp-action="Index"><i class="bi bi-person-dash"></i>Departures</a>
-                        }
+                        <a class="nav-link @Active("Employees")" asp-controller="Employees" asp-action="Index"><i class="bi bi-people"></i>Employees</a>
+                    }
+                    @if (User.HasPermission(Permissions.DepartmentsManage))
+                    {
+                        <a class="nav-link @Active("Departments")" asp-controller="Departments" asp-action="Index"><i class="bi bi-diagram-3"></i>Departments</a>
+                    }
+                    <a class="nav-link @Active("Requests")" asp-controller="Requests" asp-action="Index"><i class="bi bi-person-badge"></i>Account Request</a>
+                    @if (User.HasPermission(Permissions.OnboardingManage))
+                    {
+                        <a class="nav-link @Active("Onboarding")" asp-controller="Onboarding" asp-action="Index"><i class="bi bi-person-plus"></i>Onboarding</a>
+                    }
+                    @if (User.HasPermission(Permissions.DeparturesManage))
+                    {
+                        <a class="nav-link @Active("Departures")" asp-controller="Departures" asp-action="Index"><i class="bi bi-person-dash"></i>Departures</a>
                     }
 
                     @if (settingsMenu)
@@ -96,11 +89,15 @@ else
                         }
                         @if (User.HasPermission(Permissions.RolesManage))
                         {
-                            <a class="nav-link @Active("Roles")" asp-controller="Roles" asp-action="Index"><i class="bi bi-shield-check"></i>Roles &amp; Permissions</a>
+                            <a class="nav-link @Active("Roles")" asp-controller="Roles" asp-action="Index"><i class="bi bi-shield-check"></i>Roles</a>
                         }
-                        @if (canSetApprovers)
+                        @if (canSetApprovers || User.HasPermission(Permissions.AccountRequestsManage))
                         {
-                            <a class="nav-link @Active("ChecklistApprovers")" asp-controller="ChecklistApprovers" asp-action="Index"><i class="bi bi-person-check"></i>Checklist Approvers</a>
+                            <a class="nav-link @Active("AccountTemplates")" asp-controller="AccountTemplates" asp-action="Index"><i class="bi bi-ui-checks"></i>Templates for Accounts</a>
+                        }
+                        @if (canSetApprovers || User.HasPermission(Permissions.DeparturesManage))
+                        {
+                            <a class="nav-link @Active("ChecklistTemplates")" asp-controller="ChecklistTemplates" asp-action="Index" asp-route-kind="Departure"><i class="bi bi-card-checklist"></i>Templates for Departure</a>
                         }
                         @if (User.HasPermission(Permissions.SystemJobs))
                         {

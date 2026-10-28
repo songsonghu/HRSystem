@@ -130,12 +130,19 @@ namespace HRSystem.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
-                    b.Property<int>("AssignedDeptId")
-                        .HasColumnType("int");
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("datetime2");
 
-                    b.Property<string>("AssignedUserId")
+                    b.Property<string>("ApprovedBy")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("ApprovedByName")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<int>("AssignedDeptId")
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -169,6 +176,13 @@ namespace HRSystem.Infrastructure.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
+                    b.Property<string>("ReturnReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("ReturnedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
@@ -176,9 +190,9 @@ namespace HRSystem.Infrastructure.Migrations
 
                     b.HasIndex("AccountTypeId");
 
-                    b.HasIndex("AssignedDeptId");
-
                     b.HasIndex("RequestId");
+
+                    b.HasIndex("AssignedDeptId", "Status");
 
                     b.ToTable("AccountRequestItems", (string)null);
                 });
@@ -486,16 +500,19 @@ namespace HRSystem.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int?>("AssignedDepartmentId")
-                        .HasColumnType("int");
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("datetime2");
 
-                    b.Property<string>("AssignedUserId")
+                    b.Property<string>("ApprovedBy")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
-                    b.Property<string>("AssignedUserName")
+                    b.Property<string>("ApprovedByName")
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
+
+                    b.Property<int?>("AssignedDepartmentId")
+                        .HasColumnType("int");
 
                     b.Property<int>("ChecklistRequestId")
                         .HasColumnType("int");
@@ -549,7 +566,7 @@ namespace HRSystem.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AssignedUserId", "Status");
+                    b.HasIndex("AssignedDepartmentId", "Status");
 
                     b.HasIndex("ChecklistRequestId", "SortOrder");
 
@@ -653,10 +670,6 @@ namespace HRSystem.Infrastructure.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("ApproverUserId")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -792,6 +805,38 @@ namespace HRSystem.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("Departments", (string)null);
+                });
+
+            modelBuilder.Entity("HRSystem.Domain.Entities.DepartmentAssignee", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Area")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DepartmentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Area", "Role");
+
+                    b.HasIndex("DepartmentId", "Area", "Role", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("DepartmentAssignees", (string)null);
                 });
 
             modelBuilder.Entity("HRSystem.Domain.Entities.Employee", b =>
@@ -1315,6 +1360,17 @@ namespace HRSystem.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Manager");
+                });
+
+            modelBuilder.Entity("HRSystem.Domain.Entities.DepartmentAssignee", b =>
+                {
+                    b.HasOne("HRSystem.Domain.Entities.Department", "Department")
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Department");
                 });
 
             modelBuilder.Entity("HRSystem.Domain.Entities.Employee", b =>

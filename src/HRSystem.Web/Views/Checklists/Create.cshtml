@@ -95,31 +95,31 @@
             </div>
         }
 
-        <hr />
-        <h5>Department checklists</h5>
-        @if (Model.Templates.Count == 0)
-        {
-            <div class="alert alert-warning">No active checklist templates. Add them under Checklist Templates before submitting.</div>
-        }
-        <ul>
-            @foreach (var t in Model.Templates)
-            {
-                <li>
-                    @t.DepartmentName (@t.ItemCount items)
-                    @if (t.CanReceiveTasks)
-                    {
-                        <span class="text-muted small">— approver: @t.AssigneeName</span>
-                    }
-                    else
-                    {
-                        <span class="badge bg-warning text-dark">no approver set — submitting will fail</span>
-                    }
-                </li>
-            }
-        </ul>
-
         @if (!isOnboarding)
         {
+            <hr />
+            <h5>Department checklists</h5>
+            @if (Model.Templates.Count == 0)
+            {
+                <div class="alert alert-warning">No active departure templates. Add them under Settings &gt; Templates for Departure before submitting.</div>
+            }
+            <ul>
+                @foreach (var t in Model.Templates)
+                {
+                    <li>
+                        @t.DepartmentName (@t.ItemCount items)
+                        @if (t.CanReceiveTasks)
+                        {
+                            <span class="text-muted small">— handled by @t.HandlerNames; approved by @t.ApproverNames</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-warning text-dark">no handler or approver set — submitting will fail</span>
+                        }
+                    </li>
+                }
+            </ul>
+
             <h5>Final approval</h5>
             @if (Model.FinalApprovalError is not null)
             {

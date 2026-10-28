@@ -2,32 +2,32 @@
 @model DashboardDto
 @{
     ViewData["Title"] = "Home";
-    var myTasks = Model.MyAccountTasks + Model.MyChecklistTasks;
     var firstName = Model.DisplayName.Split(' ', '@')[0];
+    var queues = new[]
+    {
+        (Controller: "MyTasks", Icon: "bi-check2-square", Tone: "", Count: Model.AccountChecklist, Label: "Account Checklist"),
+        (Controller: "AccountApprovals", Icon: "bi-patch-check", Tone: "tone-amber", Count: Model.AccountApproval, Label: "Account Approval"),
+        (Controller: "ChecklistTasks", Icon: "bi-list-check", Tone: "", Count: Model.DepartureChecklist, Label: "Departure Checklist"),
+        (Controller: "DepartureApprovals", Icon: "bi-clipboard-check", Tone: "tone-amber", Count: Model.DepartureApproval, Label: "Departure Approval")
+    };
 }
 
 <h1 class="mb-1">@Display.Greeting(DateTime.Now), @firstName</h1>
 <p class="page-subtitle">Here is what needs your attention today.</p>
 
 <div class="row g-3 mb-4">
-    <div class="col-sm-6 col-xl-3">
-        <a class="card stat-card" asp-controller="@(Model.MyAccountTasks > 0 || Model.MyChecklistTasks == 0 ? "MyTasks" : "ChecklistTasks")" asp-action="Index">
-            <span class="stat-icon"><i class="bi bi-check2-square"></i></span>
-            <span>
-                <span class="stat-value d-block">@myTasks</span>
-                <span class="stat-label">My open tasks</span>
-            </span>
-        </a>
-    </div>
-    <div class="col-sm-6 col-xl-3">
-        <a class="card stat-card" asp-controller="Requests" asp-action="Index">
-            <span class="stat-icon tone-amber"><i class="bi bi-hourglass-split"></i></span>
-            <span>
-                <span class="stat-value d-block">@Model.WaitingForMyApproval</span>
-                <span class="stat-label">Waiting for my approval</span>
-            </span>
-        </a>
-    </div>
+    @foreach (var q in queues)
+    {
+        <div class="col-sm-6 col-xl-3">
+            <a class="card stat-card" asp-controller="@q.Controller" asp-action="Index">
+                <span class="stat-icon @q.Tone"><i class="bi @q.Icon"></i></span>
+                <span>
+                    <span class="stat-value d-block">@q.Count</span>
+                    <span class="stat-label">@q.Label</span>
+                </span>
+            </a>
+        </div>
+    }
     <div class="col-sm-6 col-xl-3">
         <a class="card stat-card" asp-controller="Requests" asp-action="Index">
             <span class="stat-icon tone-slate"><i class="bi bi-send"></i></span>
@@ -134,7 +134,7 @@
             {
                 <a class="quick-action" asp-controller="Departures" asp-action="Index"><i class="bi bi-person-dash"></i>Start departure</a>
             }
-            <a class="quick-action" asp-controller="ChecklistTasks" asp-action="Index"><i class="bi bi-list-check"></i>My checklist tasks</a>
+            <a class="quick-action" asp-controller="ChecklistTasks" asp-action="Index"><i class="bi bi-list-check"></i>Departure checklist</a>
         </div>
     </div>
 </div>

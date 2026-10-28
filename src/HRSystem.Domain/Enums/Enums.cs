@@ -118,3 +118,16 @@ public enum ChecklistTaskStatus
     Returned = 3,
     NotApplicable = 4
 }
+
+/// <summary>The kind of department work that handlers and approvers are set for.</summary>
+public enum WorkArea
+{
+    Account = 1,    // Account request items (open / disable accounts)
+    Departure = 2   // Departure checklist tasks
+}
+
+public enum AssignmentRole
+{
+    Handler = 1,    // Processes the department's work (save / complete)
+    Approver = 2    // Approves or returns the work the handlers completed
+}

@@ -5,26 +5,47 @@
     var readOnly = !Model.CanEdit;
     var hasAttachments = Model.Items.Any(i => i.AllowAttachment);
     var everyItemNeedsChoice = Model.Kind == ChecklistKind.Departure;
+    // Approvers come from (and go back to) Departure Approval; handlers use Departure Checklist.
+    var backController = Model.IsApprover && !Model.IsHandler ? "DepartureApprovals" : "ChecklistTasks";
+    var backAction = readOnly && !Model.CanApprove ? "History" : "Index";
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h2 class="mb-0">@Model.Kind Task - @Model.DepartmentName</h2>
-    <span class="badge @(Model.Status is ChecklistTaskStatus.Completed or ChecklistTaskStatus.NotApplicable ? "bg-success" : "bg-warning text-dark")">@Model.Status</span>
+    <span>
+        <span class="badge @(Model.IsDone ? "bg-success" : "bg-warning text-dark")">@Model.Status</span>
+        @if (Model.ApprovedAt is not null)
+        {
+            <span class="badge bg-success">Approved by @Model.ApprovedByName</span>
+        }
+        else if (Model.IsDone)
+        {
+            <span class="badge bg-primary">Waiting for approval</span>
+        }
+    </span>
 </div>
 <p class="text-muted">Request @Model.RequestNo · @Model.EmployeeName (@Model.EmployeeNo)</p>
 
 @if (!readOnly && !string.IsNullOrWhiteSpace(Model.ReturnReason))
 {
-    <div class="alert alert-warning"><b>Returned by the final reviewer:</b> @Model.ReturnReason</div>
+    <div class="alert alert-warning"><b>Returned:</b> @Model.ReturnReason</div>
 }
 
 @if (readOnly)
 {
     <div class="alert alert-info d-flex justify-content-between align-items-center">
         <span>
-            @if (Model.CanReopen)
+            @if (Model.CanApprove)
             {
-                @:Submitted @(Model.CompletedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")). Take it back to make changes.
+                @:Completed @(Model.CompletedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")). Approve it below, or return it to the handlers.
+            }
+            else if (Model.CanReopen)
+            {
+                @:Completed @(Model.CompletedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")) and waiting for the department approver. Take it back to make changes.
+            }
+            else if (Model.ApprovedAt is not null)
+            {
+                @:Approved by @Model.ApprovedByName on @(Model.ApprovedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")), so the task is read-only.
             }
             else
             {
@@ -135,13 +156,47 @@
             {
                 @:Attachments: @ChecklistAttachmentRules.Description, one per item.
             }
-            "Complete Task" submits this department's part and updates the request.
+            "Complete Task" sends this department's part to the department approvers.
         </p>
-        <button type="submit" name="MarkAsCompleted" value="true" class="btn btn-success" id="completeTask">Complete Task</button>
-        <button type="submit" name="MarkAsCompleted" value="false" class="btn btn-primary">Save Progress</button>
     }
-    <a asp-action="@(readOnly ? "History" : "Index")" class="btn btn-outline-secondary">Back</a>
+    <div class="d-flex flex-wrap gap-2 align-items-start">
+        @if (!readOnly)
+        {
+            <button type="submit" name="MarkAsCompleted" value="true" class="btn btn-success" id="completeTask">Complete Task</button>
+            <button type="submit" name="MarkAsCompleted" value="false" class="btn btn-primary">Save Progress</button>
+        }
+        else if (Model.IsApprover && Model.IsDone && Model.ApprovedAt is null)
+        {
+            @* The handlers already completed it: the approver's Complete is greyed out and Approve is live. *@
+            <button type="button" class="btn btn-success" disabled>Complete Task</button>
+        }
+        @if (Model.CanApprove)
+        {
+            <button type="submit" form="approveForm" class="btn btn-primary">Approve</button>
+            <button type="button" class="btn btn-outline-danger" data-bs-toggle="collapse" data-bs-target="#return-task">Return to Handlers</button>
+        }
+        else if (Model.IsApprover && Model.ApprovedAt is null)
+        {
+            <button type="button" class="btn btn-primary" disabled title="Available once the task is completed">Approve</button>
+        }
+        <a asp-controller="@backController" asp-action="@backAction" class="btn btn-outline-secondary">Back</a>
+    </div>
 </form>
+
+@if (Model.CanApprove)
+{
+    <form asp-action="Approve" asp-route-id="@Model.TaskId" method="post" id="approveForm"
+          onsubmit="return confirm('Approve this department task?');"></form>
+    <div class="collapse mt-3" id="return-task">
+        <div class="card card-body">
+            <form asp-action="Return" asp-route-id="@Model.TaskId" method="post">
+                <label class="form-label" for="reason">What needs to be fixed</label>
+                <textarea class="form-control" id="reason" name="reason" rows="2" maxlength="500" required></textarea>
+                <button type="submit" class="btn btn-danger mt-2">Return Task</button>
+            </form>
+        </div>
+    </div>
+}
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />

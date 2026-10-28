@@ -62,11 +62,14 @@ public class StartupAndAccessTests : IntegrationTest
         var users = await client.GetAsync("/Users");
         Assert.Equal(HttpStatusCode.Redirect, users.StatusCode);
         Assert.Contains("AccessDenied", users.Headers.Location!.ToString());
-        // HR runs departures but needs checklist-approvers.manage to choose the approvers.
-        var approvers = await client.GetAsync("/ChecklistApprovers");
-        Assert.Equal(HttpStatusCode.Redirect, approvers.StatusCode);
-        Assert.Contains("AccessDenied", approvers.Headers.Location!.ToString());
-        Assert.DoesNotContain("Checklist Approvers", await client.GetStringAsync("/Departures"));
+        // HR edits the templates but needs checklist-approvers.manage to choose the handlers and approvers.
+        var templateId = await Data.ReadAsync(db => db.ChecklistTemplates.Where(t => t.Kind == ChecklistKind.Departure && !t.IsDeleted).Select(t => t.Id).FirstAsync());
+        foreach (var page in new[] { "/AccountTemplates/Edit/" + await Data.DepartmentAsync(), "/ChecklistTemplates/Edit/" + templateId })
+        {
+            var html = await client.GetStringAsync(page);
+            Assert.Contains("Handlers &amp; Approvers", html);
+            Assert.DoesNotContain("user-picker", html);
+        }
     }
 
     [SkippableFact]
@@ -78,7 +81,11 @@ public class StartupAndAccessTests : IntegrationTest
 
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/MyTasks")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/ChecklistTasks")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/ChecklistTasks/History?Keyword=x&Kind=Departure")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/ChecklistTasks/History?Keyword=x")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/AccountApprovals")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/DepartureApprovals")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/DepartureApprovals/History")).StatusCode);
+        Assert.Equal(HttpStatusCode.Redirect, (await client.GetAsync("/AccountTemplates")).StatusCode);
         Assert.Equal(HttpStatusCode.Redirect, (await client.GetAsync("/Employees")).StatusCode);
     }
 
@@ -91,7 +98,9 @@ public class StartupAndAccessTests : IntegrationTest
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/Users")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/Roles")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/ChecklistTemplates?kind=Departure")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/ChecklistApprovers?kind=Departure")).StatusCode);
+        var accounts = await client.GetAsync("/AccountTemplates/Edit/" + await Data.DepartmentAsync());
+        Assert.Equal(HttpStatusCode.OK, accounts.StatusCode);
+        Assert.Contains("user-picker", await accounts.Content.ReadAsStringAsync());
     }
 
     [SkippableFact]

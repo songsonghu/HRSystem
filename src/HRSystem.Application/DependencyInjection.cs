@@ -16,6 +16,8 @@ public static class DependencyInjection
         services.AddScoped<IAccountRequestService, AccountRequestService>();
         services.AddScoped<IOffboardingService, OffboardingService>();
         services.AddScoped<IChecklistService, ChecklistService>();
+        services.AddScoped<IAssignmentService, AssignmentService>();
+        services.AddScoped<IAccountTypeService, AccountTypeService>();
         services.AddScoped<IChecklistTemplateService, ChecklistTemplateService>();
         services.AddScoped<IDepartmentService, DepartmentService>();
         services.AddScoped<IDashboardService, DashboardService>();

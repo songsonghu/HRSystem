@@ -59,6 +59,12 @@ public class ChecklistTaskEditViewModel
     public string? ReturnReason { get; set; }
     public bool CanEdit { get; set; }
     public bool CanReopen { get; set; }
+    public bool CanApprove { get; set; }
+    public bool IsDone { get; set; }
+    public bool IsHandler { get; set; }
+    public bool IsApprover { get; set; }
+    public string? ApprovedByName { get; set; }
+    public DateTime? ApprovedAt { get; set; }
 
     [StringLength(1000)]
     public string? TaskRemark { get; set; }
@@ -153,6 +159,12 @@ public static class ChecklistViewModelMapper
         ReturnReason = dto.ReturnReason,
         CanEdit = dto.CanEdit,
         CanReopen = dto.CanReopen,
+        CanApprove = dto.CanApprove,
+        IsDone = dto.IsDone,
+        IsHandler = dto.IsHandler,
+        IsApprover = dto.IsApprover,
+        ApprovedByName = dto.ApprovedByName,
+        ApprovedAt = dto.ApprovedAt,
         TaskRemark = dto.TaskRemark,
         Items = dto.Items.Select(i => new ChecklistTaskItemEditViewModel
         {

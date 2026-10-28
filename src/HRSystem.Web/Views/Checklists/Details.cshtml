@@ -123,8 +123,10 @@
     </div>
 }
 
+@if (Model.Kind == ChecklistKind.Departure)
+{
 <h4>Department Tasks</h4>
-@if (Model.Tasks.Count == 0)
+if (Model.Tasks.Count == 0)
 {
     <p class="text-muted">Tasks are created for each department when the request is submitted.</p>
 }
@@ -132,7 +134,7 @@ else
 {
     <table class="table table-bordered align-middle">
         <thead class="table-light">
-            <tr><th>Department</th><th>Required</th><th>Status</th><th>Progress</th><th>Completed At</th></tr>
+            <tr><th>Department</th><th>Required</th><th>Status</th><th>Progress</th><th>Completed At</th><th>Approved</th></tr>
         </thead>
         <tbody>
         @foreach (var t in Model.Tasks.OrderBy(x => x.SortOrder))
@@ -144,10 +146,12 @@ else
                 <td>@t.Status</td>
                 <td>@done / @t.Items.Count</td>
                 <td>@t.CompletedAt?.ToString("yyyy-MM-dd HH:mm")</td>
+                <td>@(t.IsApproved ? $"{t.ApprovedByName}, {t.ApprovedAt?.ToLocalTime():yyyy-MM-dd HH:mm}" : t.IsDone ? "waiting" : "")</td>
             </tr>
         }
         </tbody>
     </table>
+}
 }
 
 <a asp-action="Index" class="btn btn-outline-secondary">Back</a>

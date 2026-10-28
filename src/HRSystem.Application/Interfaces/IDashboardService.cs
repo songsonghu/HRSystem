@@ -12,9 +12,11 @@ public class DashboardDto
 {
     public string DisplayName { get; set; } = string.Empty;
 
-    public int MyAccountTasks { get; set; }
-    public int MyChecklistTasks { get; set; }
-    public int WaitingForMyApproval { get; set; }
+    // The four workspace queues.
+    public int AccountChecklist { get; set; }
+    public int AccountApproval { get; set; }
+    public int DepartureChecklist { get; set; }
+    public int DepartureApproval { get; set; }
     public int MyOpenRequests { get; set; }
 
     // Only filled when the user holds the matching permission.

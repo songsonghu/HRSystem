@@ -8,7 +8,10 @@ using Microsoft.Net.Http.Headers;
 
 namespace HRSystem.Web.Controllers;
 
-/// <summary>Onboarding and departure checklist tasks assigned to the current user.</summary>
+/// <summary>
+/// Departure Checklist: departure tasks of the departments the current user handles. The task page is
+/// shared with the department approvers, who can process, approve or return it.
+/// </summary>
 [Authorize]
 public class ChecklistTasksController : Controller
 {
@@ -19,50 +22,42 @@ public class ChecklistTasksController : Controller
 
     public ChecklistTasksController(IChecklistService service) => _service = service;
 
-    public async Task<IActionResult> Index()
-    {
-        ViewBag.FinalReviews = await _service.GetMyFinalReviewsAsync();
-        return View(await _service.GetMyPendingTasksAsync());
-    }
+    public async Task<IActionResult> Index() => View(await _service.GetMyPendingTasksAsync());
 
     public async Task<IActionResult> History(ChecklistTaskHistoryQuery query)
     {
         ViewBag.Query = query;
-        ViewBag.FinalReviews = await _service.GetMyFinalReviewHistoryAsync(query);
         return View(await _service.GetMyTaskHistoryAsync(query));
     }
 
-    /// <summary>Final review of a departure by the head of the leaver's department.</summary>
-    public async Task<IActionResult> Review(int id)
-    {
-        var request = await _service.GetFinalReviewAsync(id);
-        return request is null ? NotFound() : View(request);
-    }
-
+    /// <summary>The department approver accepts the completed task.</summary>
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Approve(int id)
     {
-        var result = await _service.FinalizeAsync(id);
+        var result = await _service.ApproveTaskAsync(id);
         if (!result.Succeeded)
         {
             TempData["Error"] = result.Error;
-            return RedirectToAction(nameof(Review), new { id });
+            return RedirectToAction(nameof(Task), new { id });
         }
-
-        TempData["Success"] = "Departure approved. The request is completed and the employee is marked as resigned.";
-        return RedirectToAction(nameof(Index));
+        TempData["Success"] = "Task approved.";
+        return RedirectToAction(nameof(DepartureApprovalsController.Index), "DepartureApprovals");
     }
 
+    /// <summary>The department approver sends the completed task back to the handlers.</summary>
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> ReturnTask(int requestId, int taskId, string? reason)
+    public async Task<IActionResult> Return(int id, string? reason)
     {
-        var result = await _service.ReturnTaskAsync(taskId, reason ?? string.Empty);
-        TempData[result.Succeeded ? "Success" : "Error"] = result.Succeeded
-            ? "Task returned to the department. The request will come back for your review once it is completed again."
-            : result.Error;
-        return result.Succeeded ? RedirectToAction(nameof(Index)) : RedirectToAction(nameof(Review), new { id = requestId });
+        var result = await _service.ReturnTaskToHandlersAsync(id, reason ?? string.Empty);
+        if (!result.Succeeded)
+        {
+            TempData["Error"] = result.Error;
+            return RedirectToAction(nameof(Task), new { id });
+        }
+        TempData["Success"] = "Task returned to the handlers.";
+        return RedirectToAction(nameof(DepartureApprovalsController.Index), "DepartureApprovals");
     }
 
     public async Task<IActionResult> Task(int id)
@@ -103,10 +98,21 @@ public class ChecklistTasksController : Controller
             return View(redisplay);
         }
 
-        TempData["Success"] = vm.MarkAsCompleted
-            ? "Department task completed. It now appears under History."
-            : "Progress saved. Click \"Complete Task\" when every required item is done.";
-        return vm.MarkAsCompleted ? RedirectToAction(nameof(Index)) : RedirectToAction(nameof(Task), new { id = vm.TaskId });
+        if (!vm.MarkAsCompleted)
+        {
+            TempData["Success"] = "Progress saved. Click \"Complete Task\" when every required item is done.";
+            return RedirectToAction(nameof(Task), new { id = vm.TaskId });
+        }
+
+        // An approver who completed the task can approve it straight away on the same page.
+        var completed = await _service.GetTaskAsync(vm.TaskId);
+        if (completed?.CanApprove == true)
+        {
+            TempData["Success"] = "Department task completed. Approve it, or return it to the handlers.";
+            return RedirectToAction(nameof(Task), new { id = vm.TaskId });
+        }
+        TempData["Success"] = "Department task completed and sent to the department approvers. It now appears under History.";
+        return RedirectToAction(nameof(Index));
     }
 
     /// <summary>Shows a checklist item's attachment in the browser (images and PDFs only).</summary>

@@ -230,20 +230,14 @@ public class UserAdminService : IUserAdminService
         if (managerOf.Count > 0)
             return Result.Fail($"This user's employee record is the manager of: {string.Join(", ", managerOf)}. Assign another manager first, or disable the user instead.");
 
-        bool hasOpenAccountTasks = await _db.AccountRequestItems.AnyAsync(i =>
-            i.AssignedUserId == id && i.Status != ItemStatus.Completed && i.Status != ItemStatus.Rejected, ct);
-        bool hasOpenChecklistTasks = await _db.ChecklistTasks.AnyAsync(t =>
-            t.AssignedUserId == id
-            && t.Status != ChecklistTaskStatus.Completed && t.Status != ChecklistTaskStatus.NotApplicable
-            && t.ChecklistRequest!.Status != ChecklistStatus.Completed
-            && t.ChecklistRequest.Status != ChecklistStatus.Cancelled, ct);
-        if (hasOpenAccountTasks || hasOpenChecklistTasks)
-            return Result.Fail("This user still has open tasks assigned. Reassign or complete them first, or disable the user instead.");
+        // Handler/approver settings that name the user go with it; departments left without anyone fall back to their manager.
+        var assignments = await _db.DepartmentAssignees.Where(a => a.UserId == id).ToListAsync(ct);
 
         return await _db.InTransactionAsync(async () =>
         {
             var linked = await _db.Employees.IgnoreQueryFilters().Where(e => e.UserId == id).ToListAsync(ct);
             foreach (var employee in linked) employee.UserId = null;
+            _db.DepartmentAssignees.RemoveRange(assignments);
             await _db.SaveChangesAsync(ct);
 
             var deleted = await _users.DeleteAsync(user);

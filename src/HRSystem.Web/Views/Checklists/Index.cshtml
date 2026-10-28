@@ -9,7 +9,10 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h2>@ViewData["Title"]</h2>
-    <a class="btn btn-outline-secondary" asp-controller="ChecklistTemplates" asp-action="Index" asp-route-kind="@kind">Checklist Templates</a>
+    @if (!isOnboarding && User.HasPermission(Permissions.DeparturesManage))
+    {
+        <a class="btn btn-outline-secondary" asp-controller="ChecklistTemplates" asp-action="Index" asp-route-kind="@kind">Templates for Departure</a>
+    }
 </div>
 
 <form method="get" asp-action="Create" class="row g-2 mb-4">

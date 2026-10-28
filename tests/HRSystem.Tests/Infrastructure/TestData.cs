@@ -110,11 +110,28 @@ public sealed class TestData
         var departmentIds = templates.Select(t => t.DepartmentId).ToList();
         foreach (var department in await db.Departments.Where(d => departmentIds.Contains(d.Id)).ToListAsync())
             department.ManagerEmployeeId = employeeId;
-        // Tasks follow the manager only while no approver is configured.
-        foreach (var template in templates)
-            template.ApproverUserId = null;
+        // The manager handles and approves the tasks only while nobody else is set.
+        db.DepartmentAssignees.RemoveRange(await db.DepartmentAssignees
+            .Where(a => a.Area == WorkArea.Departure && departmentIds.Contains(a.DepartmentId)).ToListAsync());
         await db.SaveChangesAsync();
     }
+
+    /// <summary>Set the handlers and approvers of one department and area; empty lists fall back to the manager.</summary>
+    public async Task SetAssigneesAsync(int departmentId, WorkArea area, IEnumerable<string> handlers, IEnumerable<string> approvers)
+    {
+        using var scope = _app.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        db.DepartmentAssignees.RemoveRange(await db.DepartmentAssignees
+            .Where(a => a.Area == area && a.DepartmentId == departmentId).ToListAsync());
+        foreach (var (role, users) in new[] { (AssignmentRole.Handler, handlers), (AssignmentRole.Approver, approvers) })
+            foreach (var userId in users)
+                db.DepartmentAssignees.Add(new DepartmentAssignee { DepartmentId = departmentId, Area = area, Role = role, UserId = userId });
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>The departments with an active template of this kind.</summary>
+    public Task<List<int>> TemplateDepartmentsAsync(ChecklistKind kind)
+        => ReadAsync(db => db.ChecklistTemplates.Where(t => t.Kind == kind && t.IsActive && !t.IsDeleted).Select(t => t.DepartmentId).ToListAsync());
 
     /// <summary>Allow (or stop allowing) an attachment on the first item of every active template of this kind.</summary>
     public async Task SetFirstItemsAllowAttachmentAsync(ChecklistKind kind, bool allow)

@@ -7,6 +7,7 @@ namespace HRSystem.Application.Interfaces;
 /// Account request workflow: onboarding (HR) and in-service add/remove raised by HR,
 /// a department manager for their team, or an employee for themself (which then needs
 /// the department manager's approval before it is dispatched to the responsible departments).
+/// Each department's handlers process its items and its approvers approve them.
 /// All operations apply the current user's access rules.
 /// </summary>
 public interface IAccountRequestService
@@ -35,14 +36,26 @@ public interface IAccountRequestService
     /// <summary>Self-service requests waiting for the current user's approval.</summary>
     Task<IReadOnlyList<RequestDto>> GetPendingApprovalsAsync(CancellationToken ct = default);
 
-    /// <summary>Items dispatched to the current user.</summary>
+    /// <summary>Unfinished items of the departments the current user handles.</summary>
     Task<IReadOnlyList<RequestItemDto>> GetMyPendingItemsAsync(CancellationToken ct = default);
 
+    /// <summary>Items of dispatched requests not yet approved, in the departments the current user approves.</summary>
+    Task<IReadOnlyList<RequestItemDto>> GetMyApprovalItemsAsync(CancellationToken ct = default);
+
     /// <summary>
-    /// The assignee updates an item (open account, set status, remark). On Completed it
-    /// writes to the employee account ledger; the master status is then re-evaluated.
+    /// A handler or approver of the item's department updates it (open account, set status, remark).
+    /// Completed or Rejected submits it to the department approvers.
     /// </summary>
     Task<Result> UpdateItemAsync(UpdateItemDto dto, CancellationToken ct = default);
+
+    /// <summary>
+    /// A department approver accepts a completed or rejected item. A completed item then updates the
+    /// employee account ledger, and the request status is re-evaluated.
+    /// </summary>
+    Task<Result> ApproveItemAsync(int itemId, CancellationToken ct = default);
+
+    /// <summary>A department approver sends a completed or rejected item back to the handlers with a reason.</summary>
+    Task<Result> ReturnItemAsync(int itemId, string reason, CancellationToken ct = default);
 
     /// <summary>
     /// The account type checklist applicable to the given employee (Staff or AE/Sales/SA

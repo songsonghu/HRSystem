@@ -90,9 +90,24 @@ public class RequestItemDto
     public string? RequestDetail { get; set; }
     public string? ResultRemark { get; set; }
     public DateTime? HandledAt { get; set; }
+    public RequestStatus RequestStatus { get; set; }
+    public string? ApprovedByName { get; set; }
+    public DateTime? ApprovedAt { get; set; }
+    public string? ReturnReason { get; set; }
+
+    /// <summary>Completed or rejected by the handlers: waiting for (or past) the department approval.</summary>
+    public bool IsSubmitted => Status is ItemStatus.Completed or ItemStatus.Rejected;
+    public bool IsApproved => ApprovedAt is not null;
+    public bool IsRequestOpen => RequestStatus is Domain.Enums.RequestStatus.Submitted or Domain.Enums.RequestStatus.InProgress;
+
+    // What the current user may do, as a handler or an approver of the item's department.
+    public bool IsHandler { get; set; }
+    public bool IsApprover { get; set; }
+    public bool CanEdit => IsRequestOpen && !IsSubmitted && (IsHandler || IsApprover);
+    public bool CanApprove => IsRequestOpen && IsSubmitted && !IsApproved && IsApprover;
 }
 
-/// <summary>Input model used by a department head to update an item.</summary>
+/// <summary>Input model used by a department handler or approver to update an item.</summary>
 public class UpdateItemDto
 {
     public int ItemId { get; set; }

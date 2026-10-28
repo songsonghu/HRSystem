@@ -56,6 +56,10 @@
             <span>
                 <span class="badge @(t.IsDone ? "bg-success" : "bg-warning text-dark")">@t.Status</span>
                 <span class="text-muted small ms-2">@t.CompletedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
+                @if (t.IsApproved)
+                {
+                    <span class="badge bg-success-subtle text-success-emphasis ms-2" title="@t.ApprovedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")">approved by @t.ApprovedByName</span>
+                }
             </span>
         </div>
         <ul class="list-group list-group-flush">
@@ -72,7 +76,7 @@
                     <span class="text-muted small text-end">
                         @if (i.HasAttachment)
                         {
-                            <a asp-action="Attachment" asp-route-id="@i.Id" target="_blank" rel="noopener" class="me-2">
+                            <a asp-controller="ChecklistTasks" asp-action="Attachment" asp-route-id="@i.Id" target="_blank" rel="noopener" class="me-2">
                                 <i class="bi bi-paperclip"></i>@i.AttachmentFileName</a>
                         }
                         @i.Remark

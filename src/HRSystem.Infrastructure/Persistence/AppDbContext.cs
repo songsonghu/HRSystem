@@ -29,6 +29,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
     public DbSet<ChecklistTaskItem> ChecklistTaskItems => Set<ChecklistTaskItem>();
     public DbSet<ChecklistTemplate> ChecklistTemplates => Set<ChecklistTemplate>();
     public DbSet<ChecklistTemplateItem> ChecklistTemplateItems => Set<ChecklistTemplateItem>();
+    public DbSet<DepartmentAssignee> DepartmentAssignees => Set<DepartmentAssignee>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

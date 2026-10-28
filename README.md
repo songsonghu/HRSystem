@@ -13,9 +13,9 @@ built on **ASP.NET Core 8.0 (MVC + Razor Pages)** using **Clean Architecture**.
 |---|--------|-------------|
 | 1 | **Users, Roles & Permissions** | ASP.NET Core Identity. Admins manage users (disable, reset password, link to an employee) and roles; each role is a set of permissions checked by policy. |
 | 2 | **Organization & Employees** | Departments with a manager (an employee) and their members; employee records (staff no., name, gender, position, department, email, category, join date, attachments) with search and soft delete. Account and departure tasks for a department are assigned to its manager's login. |
-| 3 | **Account Provisioning Workflow** | A request fans out into per-account-type items → dispatched to each responsible department's manager → they open the account & submit → master status auto-recomputes (safe under parallel updates). Notifies the employee and each manager. Scanned signed approval upload. |
+| 3 | **Account Provisioning Workflow** | A request fans out into per-account-type items → each goes to the responsible department, where any of its **handlers** opens/disables the account (Account Checklist) and any of its **approvers** approves or returns it (Account Approval) → master status auto-recomputes once every item is approved (safe under parallel updates). Notifies the employee, handlers and approvers. Scanned signed approval upload. |
 | 4 | **Account requests (self-service)** | `Add / Remove` requests can be raised by HR (anyone), a department manager (their team, dispatched directly) or an employee for themself — which first needs their department manager's approval or rejection (with reason). |
-| 5 | **Onboarding & Departure checklists** | HR starts onboarding (with the accounts to open) or departure (with the accounts to disable — every account the employee holds is ticked) for an employee; the accounts travel as a linked Onboard/Offboard account request; each active department checklist template becomes a task for that department's manager, processed in parallel on My Checklist Tasks; HR finalizes once all required tasks and the linked account request are done (departure then marks the employee resigned). Templates are managed per department on the Checklist Templates page. |
+| 5 | **Onboarding & Departure** | Onboarding opens the new joiner's accounts (a linked Onboard account request); HR finalizes it once they are approved. A departure disables the accounts the employee holds (linked Offboard request) and gives each department with a departure template a checklist task: its handlers complete it (Departure Checklist), its approvers approve or return it (Departure Approval), then the head of the leaver's department gives the final approval (marking the employee resigned). |
 | 6 | **Account list & Export** | List an employee's active accounts and export them to Excel (ClosedXML); linked from the departure page. |
 
 ---
@@ -145,27 +145,33 @@ always holds every permission and cannot be renamed or deleted.
 | `users.manage` | Users page | Admin |
 | `roles.manage` | Roles & Permissions page | Admin |
 | `system.jobs` | Hangfire dashboard `/hangfire` | Admin |
-| `checklist-approvers.manage` | Settings → Checklist Approvers (approver account per department for onboarding/departure checklists) | Admin |
+| `checklist-approvers.manage` | Choose each department's handlers and approvers on Settings → Templates for Accounts / Templates for Departure (others with access see them read-only) | Admin |
 | `employees.manage` | Employees | Admin, HR |
 | `departments.manage` | Departments and department managers | Admin, HR |
-| `account-requests.manage` | Account requests for any employee (Offboard requests come only from departures) | Admin, HR |
-| `onboarding.manage` | Onboarding requests and onboarding checklist templates | Admin, HR |
-| `departures.manage` | Departure requests and departure checklist templates | Admin, HR |
+| `account-requests.manage` | Account requests for any employee (Offboard requests come only from departures); Settings → Templates for Accounts (account types per department) | Admin, HR |
+| `onboarding.manage` | Onboarding requests | Admin, HR |
+| `departures.manage` | Departure requests; Settings → Templates for Departure | Admin, HR |
 | `offboarding.export` | Employee account list & Excel export | Admin, HR |
 
 Default roles and users are only seeded into an empty database; after that they are managed in the UI.
 
-Some access comes from the organization data rather than a permission: any user whose login is
-linked to an employee can raise Add/Remove account requests for themself; the manager of a
-department can raise them for its employees and approves the self-service ones; whoever an item
-is assigned to can process it on My Tasks / My Checklist Tasks (no permission needed).
-A departure, once every department has finished, goes to the head of the leaver's department for
-final review on My Checklist Tasks: they approve it (completing it and marking the employee resigned)
+Some access comes from the organization data and the department settings rather than a permission:
+any user whose login is linked to an employee can raise Add/Remove account requests for themself, and
+the manager of a department can raise them for its employees and approves the self-service ones.
+
+Department work is done by logins, set per department on **Settings → Templates for Accounts** and
+**Templates for Departure** (next to the department's account types or checklist):
+several **handlers** and several **approvers** for account requests, and again for departure checklists.
+Any handler can process the department's work (Account Checklist / Departure Checklist); once it is
+completed, any approver approves it or returns it with a reason (Account Approval / Departure Approval).
+Approvers can also process work themselves. A department with nobody in a role uses its manager's login.
+A departure, once every department task is approved, goes to the head of the leaver's department for
+final review under Departure Approval: they approve it (completing it and marking the employee resigned)
 or return a department's task with a reason. When the leaver is that head, HR finalizes it instead.
 On a departure task every checklist item must be marked either Done or N/A before the task can be
 completed. Items ticked "Attachment" in the departure template take one JPG/PNG/PDF file (up to 5 MB),
-stored in the `ChecklistTaskItems.AttachmentContent` column and viewable by the assignee, the final
-approver and HR.
+stored in the `ChecklistTaskItems.AttachmentContent` column and viewable by the department's handlers and
+approvers, the final approver and HR.
 
 ---
 
@@ -183,7 +189,7 @@ See `docs/DESIGN.md` for the full flow and ER overview.
 
 ## 📝 Notes for production
 
-- Give every department that owns account types or a departure checklist a manager whose employee record is linked to a login; otherwise requests for it cannot be submitted.
+- Give every department that owns account types or a departure checklist handlers and approvers on its Templates for Accounts / Templates for Departure page (or a manager whose employee record is linked to a login); otherwise requests for it cannot be submitted.
 - Configure real SMTP settings under the `Smtp` section.
 - Point `FileStorage:RootPath` to a secured SMB/blob location.
 - All key actions are written to `AuditLogs` for compliance traceability.

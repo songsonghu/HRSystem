@@ -27,10 +27,17 @@ public class WorkflowServiceTests
         => Assert.Equal(RequestStatus.InProgress,
             _workflow.EvaluateRequestStatus(new[] { Item(progressed), Item(ItemStatus.NotStarted) }));
 
+    private static AccountRequestItem Approved(ItemStatus status) => new() { Status = status, ApprovedAt = DateTime.UtcNow };
+
     [Fact]
-    public void Request_completes_when_every_item_is_completed_or_rejected()
+    public void Request_completes_when_every_item_is_completed_or_rejected_and_approved()
         => Assert.Equal(RequestStatus.Completed,
-            _workflow.EvaluateRequestStatus(new[] { Item(ItemStatus.Completed), Item(ItemStatus.Rejected) }));
+            _workflow.EvaluateRequestStatus(new[] { Approved(ItemStatus.Completed), Approved(ItemStatus.Rejected) }));
+
+    [Fact]
+    public void Request_stays_in_progress_until_every_item_is_approved()
+        => Assert.Equal(RequestStatus.InProgress,
+            _workflow.EvaluateRequestStatus(new[] { Approved(ItemStatus.Completed), Item(ItemStatus.Completed) }));
 
     [Theory]
     [InlineData(ItemStatus.NotStarted, ItemStatus.Completed, true)]

@@ -12,7 +12,8 @@ namespace HRSystem.Application.Services;
 /// <summary>
 /// Orchestrates the account request workflow:
 /// draft -> (self-service: manager approval) -> dispatch to responsible departments ->
-/// assignees complete items -> ledger updated -> master status recomputed.
+/// department handlers complete items -> department approvers approve them (ledger updated) ->
+/// master status recomputed.
 /// </summary>
 public class AccountRequestService : IAccountRequestService
 {
@@ -25,6 +26,7 @@ public class AccountRequestService : IAccountRequestService
     private readonly ICurrentUser _currentUser;
     private readonly IAuditService _audit;
     private readonly IUserDirectoryService _users;
+    private readonly IAssignmentService _assignments;
     private readonly ILogger<AccountRequestService> _logger;
 
     public AccountRequestService(
@@ -35,6 +37,7 @@ public class AccountRequestService : IAccountRequestService
         ICurrentUser currentUser,
         IAuditService audit,
         IUserDirectoryService users,
+        IAssignmentService assignments,
         ILogger<AccountRequestService> logger)
     {
         _db = db;
@@ -44,14 +47,19 @@ public class AccountRequestService : IAccountRequestService
         _currentUser = currentUser;
         _audit = audit;
         _users = users;
+        _assignments = assignments;
         _logger = logger;
     }
 
     // ------------------------------------------------------------------ access
 
     /// <summary>The current user as the workflow sees them.</summary>
-    private sealed record Actor(string? UserId, bool IsHr, bool IsAdmin, bool CanOnboard, bool CanDepart, int? EmployeeId, IReadOnlyList<int> ManagedDepartmentIds)
+    private sealed record Actor(string? UserId, bool IsHr, bool IsAdmin, bool CanOnboard, bool CanDepart, int? EmployeeId,
+        IReadOnlyList<int> ManagedDepartmentIds, IReadOnlyList<int> HandledDepartmentIds, IReadOnlyList<int> ApprovedDepartmentIds)
     {
+        public bool Handles(AccountRequestItem item) => HandledDepartmentIds.Contains(item.AssignedDeptId);
+        public bool Approves(AccountRequestItem item) => ApprovedDepartmentIds.Contains(item.AssignedDeptId);
+
         public bool Manages(Employee employee)
             => employee.DepartmentId is int d && ManagedDepartmentIds.Contains(d);
 
@@ -66,7 +74,7 @@ public class AccountRequestService : IAccountRequestService
             => IsHr || IsAdmin
                || r.EmployeeId == EmployeeId
                || (UserId is not null && (r.CreatedBy == UserId || r.ApproverUserId == UserId
-                                          || r.Items.Any(i => i.AssignedUserId == UserId)))
+                                          || r.Items.Any(i => Handles(i) || Approves(i))))
                || (r.Employee is not null && Manages(r.Employee));
 
         public bool CanSubmit(AccountRequest r)
@@ -92,7 +100,9 @@ public class AccountRequestService : IAccountRequestService
 
         return new Actor(userId, _currentUser.HasPermission(Permissions.AccountRequestsManage),
             _currentUser.IsAdmin, _currentUser.HasPermission(Permissions.OnboardingManage),
-            _currentUser.HasPermission(Permissions.DeparturesManage), employeeId, managed);
+            _currentUser.HasPermission(Permissions.DeparturesManage), employeeId, managed,
+            await _assignments.GetDepartmentIdsAsync(userId, WorkArea.Account, AssignmentRole.Handler, ct),
+            await _assignments.GetDepartmentIdsAsync(userId, WorkArea.Account, AssignmentRole.Approver, ct));
     }
 
     // ------------------------------------------------------------------ create
@@ -199,7 +209,7 @@ public class AccountRequestService : IAccountRequestService
             if (!actor.CanSubmit(request)) return Result.Fail("Only draft requests can be submitted, by HR or whoever created them.");
             if (request.Items.Count == 0) return Result.Fail("Request has no items.");
 
-            var routingError = CheckRouting(request);
+            var routingError = await CheckRoutingAsync(request, ct);
             if (routingError is not null) return Result.Fail(routingError);
 
             request.AppliedBy = actor.UserId;
@@ -236,7 +246,7 @@ public class AccountRequestService : IAccountRequestService
             if (request is null || !actor.CanSee(request)) return Result.Fail("Request not found.");
             if (!actor.CanApprove(request)) return Result.Fail("This request is not waiting for your approval.");
 
-            var routingError = CheckRouting(request);
+            var routingError = await CheckRoutingAsync(request, ct);
             if (routingError is not null) return Result.Fail(routingError);
 
             request.DecidedBy = actor.UserId;
@@ -281,29 +291,17 @@ public class AccountRequestService : IAccountRequestService
             .Include(r => r.Items).ThenInclude(i => i.AssignedDept).ThenInclude(d => d!.Manager)
             .FirstOrDefaultAsync(r => r.Id == requestId, ct);
 
-    private static string? CheckRouting(AccountRequest request)
-    {
-        var unrouted = request.Items
-            .Where(i => i.AssignedDept?.Manager?.UserId is null)
-            .Select(i => i.AssignedDept?.Name ?? $"#{i.AssignedDeptId}")
-            .Distinct()
-            .ToList();
-        return unrouted.Count == 0
-            ? null
-            : $"No manager with a login account is set for: {string.Join(", ", unrouted)}. Set one under Departments first.";
-    }
+    private Task<string?> CheckRoutingAsync(AccountRequest request, CancellationToken ct)
+        => _assignments.CheckCoverageAsync(request.Items.Select(i => i.AssignedDeptId), WorkArea.Account, ct);
 
-    /// <summary>Assign every item to its department manager (snapshot) and notify everyone.</summary>
+    /// <summary>Send the items to their departments' handlers and notify everyone.</summary>
     private async Task DispatchAsync(AccountRequest request, CancellationToken ct)
     {
-        foreach (var item in request.Items)
-            item.AssignedUserId = item.AssignedDept!.Manager!.UserId;
-
         request.Status = RequestStatus.Submitted;
         await _db.SaveChangesAsync(ct);
 
         NotifyEmployee(request);
-        await NotifyDepartmentManagersAsync(request, ct);
+        await NotifyHandlersAsync(request, ct);
         _logger.LogInformation("Request {RequestNo} dispatched with {Count} items.", request.RequestNo, request.Items.Count);
     }
 
@@ -320,7 +318,7 @@ public class AccountRequestService : IAccountRequestService
             .FirstOrDefaultAsync(x => x.Id == requestId, ct);
         if (r is null || !actor.CanSee(r)) return null;
 
-        var dto = MapRequest(r);
+        var dto = MapRequest(r, actor);
         dto.CanSubmit = actor.CanSubmit(r);
         dto.CanApprove = actor.CanApprove(r);
         dto.CanUpload = actor.CanUpload(r);
@@ -351,7 +349,7 @@ public class AccountRequestService : IAccountRequestService
         }
 
         var list = await query.OrderByDescending(x => x.Id).ToListAsync(ct);
-        return list.Select(MapRequest).ToList();
+        return list.Select(r => MapRequest(r, null)).ToList();
     }
 
     public async Task<IReadOnlyList<RequestDto>> GetPendingApprovalsAsync(CancellationToken ct = default)
@@ -366,43 +364,59 @@ public class AccountRequestService : IAccountRequestService
             .Where(r => r.Status == RequestStatus.PendingApproval && r.ApproverUserId == userId)
             .OrderBy(r => r.AppliedAt)
             .ToListAsync(ct);
-        return list.Select(MapRequest).ToList();
+        return list.Select(r => MapRequest(r, null)).ToList();
     }
 
-    public async Task<IReadOnlyList<RequestItemDto>> GetMyPendingItemsAsync(CancellationToken ct = default)
-    {
-        var userId = _currentUser.UserId;
-        if (string.IsNullOrEmpty(userId)) return Array.Empty<RequestItemDto>();
-
-        var items = await _db.AccountRequestItems.AsNoTracking()
+    private IQueryable<AccountRequestItem> OpenItemsOf(IReadOnlyList<int> departmentIds)
+        => _db.AccountRequestItems.AsNoTracking()
             .Include(i => i.AccountType)
             .Include(i => i.AssignedDept)
             .Include(i => i.Request).ThenInclude(r => r!.Employee)
-            .Where(i => i.AssignedUserId == userId
-                        && i.Status != ItemStatus.Completed
-                        && i.Status != ItemStatus.Rejected
-                        && (i.Request!.Status == RequestStatus.Submitted || i.Request.Status == RequestStatus.InProgress))
+            .Where(i => departmentIds.Contains(i.AssignedDeptId)
+                        && (i.Request!.Status == RequestStatus.Submitted || i.Request.Status == RequestStatus.InProgress));
+
+    public async Task<IReadOnlyList<RequestItemDto>> GetMyPendingItemsAsync(CancellationToken ct = default)
+    {
+        var actor = await GetActorAsync(ct);
+        var items = await OpenItemsOf(actor.HandledDepartmentIds)
+            .Where(i => i.Status != ItemStatus.Completed && i.Status != ItemStatus.Rejected)
             .OrderBy(i => i.RequestId)
             .ToListAsync(ct);
+        return items.Select(i => MapItem(i, actor)).ToList();
+    }
 
-        return items.Select(MapItem).ToList();
+    public async Task<IReadOnlyList<RequestItemDto>> GetMyApprovalItemsAsync(CancellationToken ct = default)
+    {
+        var actor = await GetActorAsync(ct);
+        var items = await OpenItemsOf(actor.ApprovedDepartmentIds)
+            .Where(i => i.ApprovedAt == null)
+            .OrderBy(i => i.RequestId)
+            .ToListAsync(ct);
+        // Items waiting for a decision come first.
+        return items.Select(i => MapItem(i, actor)).OrderByDescending(i => i.CanApprove).ToList();
     }
 
     // ------------------------------------------------------- department work
 
     public async Task<Result> UpdateItemAsync(UpdateItemDto dto, CancellationToken ct = default)
     {
-        return await ConcurrencyRetry.RunAsync(_db, async () =>
+        var actor = await GetActorAsync(ct);
+        var submitted = false;
+        var result = await ConcurrencyRetry.RunAsync(_db, async () =>
         {
             var item = await _db.AccountRequestItems
                 .Include(i => i.Request)
                 .FirstOrDefaultAsync(i => i.Id == dto.ItemId, ct);
 
             if (item is null) return Result.Fail("Request item not found.");
-            if (!_currentUser.IsAdmin && (item.AssignedUserId is null || item.AssignedUserId != _currentUser.UserId))
-                return Result.Fail("This item is not assigned to you.");
-            if (item.Request!.Status is not (RequestStatus.Submitted or RequestStatus.InProgress or RequestStatus.Completed))
-                return Result.Fail("This request has not been dispatched.");
+            if (!actor.Handles(item) && !actor.Approves(item))
+                return Result.Fail("This item is not assigned to your department.");
+            if (item.Request!.Status is not (RequestStatus.Submitted or RequestStatus.InProgress))
+                return Result.Fail("This request is not open for processing.");
+            if (item.Status is ItemStatus.Completed or ItemStatus.Rejected)
+                return Result.Fail(item.ApprovedAt is null
+                    ? "This item is already submitted for approval. The department approver can return it if it needs changes."
+                    : "This item is already approved.");
 
             try
             {
@@ -418,24 +432,92 @@ public class AccountRequestService : IAccountRequestService
             item.ResultRemark = dto.ResultRemark;
             item.HandledBy = _currentUser.UserId;
             item.HandledAt = DateTime.UtcNow;
+            submitted = dto.Status is ItemStatus.Completed or ItemStatus.Rejected;
 
-            if (dto.Status == ItemStatus.Completed)
-                await ApplyToLedgerAsync(item, ct);
-
-            // Recompute the master status from all items. The request row is always written
-            // so its row version catches a parallel update by another department; the retry
-            // then re-reads the items that department just changed.
-            var siblings = await _db.AccountRequestItems.Where(i => i.RequestId == item.RequestId).ToListAsync(ct);
-            var newStatus = _workflow.EvaluateRequestStatus(siblings);
-            item.Request.Status = newStatus;
-            item.Request.ModifiedAt = DateTime.UtcNow;
-            if (newStatus == RequestStatus.Completed && item.Request.CompletedAt is null)
-                item.Request.CompletedAt = DateTime.UtcNow;
-
+            await RecomputeAsync(item.Request, ct);
             await _db.SaveChangesAsync(ct);
             await _audit.LogAsync("UpdateItem", nameof(AccountRequestItem), item.Id.ToString(), $"{dto.Status}", ct);
             return Result.Success();
         });
+
+        if (result.Succeeded && submitted) await NotifyApproversAsync(dto.ItemId, ct);
+        return result;
+    }
+
+    public async Task<Result> ApproveItemAsync(int itemId, CancellationToken ct = default)
+    {
+        var actor = await GetActorAsync(ct);
+        return await ConcurrencyRetry.RunAsync(_db, async () =>
+        {
+            var (item, error) = await LoadForDecisionAsync(itemId, actor, ct);
+            if (item is null) return Result.Fail(error!);
+
+            item.ApprovedBy = _currentUser.UserId;
+            item.ApprovedByName = _currentUser.UserName;
+            item.ApprovedAt = DateTime.UtcNow;
+            item.ReturnReason = null;
+            item.ReturnedAt = null;
+            if (item.Status == ItemStatus.Completed)
+                await ApplyToLedgerAsync(item, ct);
+
+            await RecomputeAsync(item.Request!, ct);
+            await _db.SaveChangesAsync(ct);
+            await _audit.LogAsync("ApproveItem", nameof(AccountRequestItem), item.Id.ToString(), $"{item.Status}", ct);
+            return Result.Success();
+        });
+    }
+
+    public async Task<Result> ReturnItemAsync(int itemId, string reason, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(reason)) return Result.Fail("Enter a reason for returning the item.");
+        var actor = await GetActorAsync(ct);
+        var result = await ConcurrencyRetry.RunAsync(_db, async () =>
+        {
+            var (item, error) = await LoadForDecisionAsync(itemId, actor, ct);
+            if (item is null) return Result.Fail(error!);
+
+            item.Status = ItemStatus.WIP;
+            item.ReturnReason = reason.Trim();
+            item.ReturnedAt = DateTime.UtcNow;
+
+            await RecomputeAsync(item.Request!, ct);
+            await _db.SaveChangesAsync(ct);
+            await _audit.LogAsync("ReturnItem", nameof(AccountRequestItem), item.Id.ToString(), item.ReturnReason, ct);
+            return Result.Success();
+        });
+
+        if (result.Succeeded) await NotifyReturnAsync(itemId, ct);
+        return result;
+    }
+
+    /// <summary>A submitted, unapproved item of an open request, for one of its department's approvers.</summary>
+    private async Task<(AccountRequestItem? Item, string? Error)> LoadForDecisionAsync(int itemId, Actor actor, CancellationToken ct)
+    {
+        var item = await _db.AccountRequestItems
+            .Include(i => i.Request)
+            .FirstOrDefaultAsync(i => i.Id == itemId, ct);
+        if (item?.Request is null || !actor.Approves(item)) return (null, "Request item not found.");
+        if (item.Request.Status is not (RequestStatus.Submitted or RequestStatus.InProgress))
+            return (null, "This request is not open for approval.");
+        if (item.Status is not (ItemStatus.Completed or ItemStatus.Rejected))
+            return (null, "The handlers have not completed or rejected this item yet.");
+        if (item.ApprovedAt is not null) return (null, "This item is already approved.");
+        return (item, null);
+    }
+
+    /// <summary>
+    /// Recompute the master status from all items. The request row is always written so its row
+    /// version catches a parallel update by another department; the retry then re-reads the items
+    /// that department just changed.
+    /// </summary>
+    private async Task RecomputeAsync(AccountRequest request, CancellationToken ct)
+    {
+        var siblings = await _db.AccountRequestItems.Where(i => i.RequestId == request.Id).ToListAsync(ct);
+        var newStatus = _workflow.EvaluateRequestStatus(siblings);
+        request.Status = newStatus;
+        request.ModifiedAt = DateTime.UtcNow;
+        if (newStatus == RequestStatus.Completed && request.CompletedAt is null)
+            request.CompletedAt = DateTime.UtcNow;
     }
 
     public async Task<IReadOnlyList<AccountTypeOptionDto>> GetAccountTypeOptionsAsync(int employeeId, CancellationToken ct = default)
@@ -592,37 +674,75 @@ public class AccountRequestService : IAccountRequestService
         _email.Enqueue(new EmailMessage(new[] { to }, subject, body));
     }
 
-    /// <summary>
-    /// Notify each assigned department manager, grouped so a manager who owns
-    /// several account types receives a single consolidated email.
-    /// </summary>
-    private async Task NotifyDepartmentManagersAsync(AccountRequest request, CancellationToken ct)
+    private async Task<IReadOnlyList<string>> EmailsOfAsync(IEnumerable<int> departmentIds, AssignmentRole role, CancellationToken ct)
     {
-        var groups = request.Items
-            .Where(i => !string.IsNullOrWhiteSpace(i.AssignedUserId))
-            .GroupBy(i => i.AssignedUserId!);
+        var assignees = await _assignments.GetAssigneesAsync(departmentIds, WorkArea.Account, role, ct);
+        return assignees.Values.SelectMany(u => u)
+            .Select(u => u.Email)
+            .Where(e => !string.IsNullOrWhiteSpace(e))
+            .Select(e => e!)
+            .Distinct()
+            .ToList();
+    }
 
-        foreach (var group in groups)
+    /// <summary>One consolidated email per department to its handlers, listing that department's account types.</summary>
+    private async Task NotifyHandlersAsync(AccountRequest request, CancellationToken ct)
+    {
+        foreach (var group in request.Items.GroupBy(i => i.AssignedDeptId))
         {
-            var managerEmail = (await _users.GetByIdAsync(group.Key, ct))?.Email;
-            if (string.IsNullOrWhiteSpace(managerEmail)) continue;
+            var emails = await EmailsOfAsync(new[] { group.Key }, AssignmentRole.Handler, ct);
+            if (emails.Count == 0) continue;
 
             var typeList = string.Join(", ", group.Select(i => i.AccountType?.Name));
             var subject = $"[Action Required] Account provisioning for {request.Employee?.Name} ({request.RequestNo})";
             var body = $"""
                 <p>Hello,</p>
                 <p>Please log in to the HR System to process the following account type(s) for
-                <b>{request.Employee?.Name}</b> (No. {request.Employee?.EmployeeNo}):</p>
+                <b>{request.Employee?.Name}</b> (No. {request.Employee?.EmployeeNo}) under Account Checklist:</p>
                 <p><b>{typeList}</b></p>
                 <p>Request: {request.RequestNo} &middot; Type: {request.RequestType}</p>
                 <p>Regards,<br/>HR System</p>
                 """;
-
-            _email.Enqueue(new EmailMessage(new[] { managerEmail }, subject, body));
+            _email.Enqueue(new EmailMessage(emails, subject, body));
         }
     }
 
-    private static RequestDto MapRequest(AccountRequest r) => new()
+    /// <summary>Tell the item's department approvers it is waiting for their approval.</summary>
+    private async Task NotifyApproversAsync(int itemId, CancellationToken ct)
+    {
+        var item = await LoadForNoticeAsync(itemId, ct);
+        if (item is null) return;
+        var emails = await EmailsOfAsync(new[] { item.AssignedDeptId }, AssignmentRole.Approver, ct);
+        if (emails.Count == 0) return;
+
+        _email.Enqueue(new EmailMessage(
+            emails,
+            $"[Approval Required] {item.AccountType?.Name} for {item.Request?.Employee?.Name} ({item.Request?.RequestNo})",
+            $"<p>{item.AccountType?.Name} for <b>{item.Request?.Employee?.Name}</b> ({item.Request?.Employee?.EmployeeNo}) was marked <b>{item.Status}</b>.</p>" +
+            "<p>Please approve it, or return it to the handlers, in HR System under Account Approval.</p>"));
+    }
+
+    private async Task NotifyReturnAsync(int itemId, CancellationToken ct)
+    {
+        var item = await LoadForNoticeAsync(itemId, ct);
+        if (item is null) return;
+        var emails = await EmailsOfAsync(new[] { item.AssignedDeptId }, AssignmentRole.Handler, ct);
+        if (emails.Count == 0) return;
+
+        _email.Enqueue(new EmailMessage(
+            emails,
+            $"[Returned] {item.AccountType?.Name} for {item.Request?.Employee?.Name} ({item.Request?.RequestNo})",
+            $"<p>The department approver returned {item.AccountType?.Name} for <b>{item.Request?.Employee?.Name}</b> ({item.Request?.Employee?.EmployeeNo}).</p>" +
+            $"<p>Reason: {System.Net.WebUtility.HtmlEncode(item.ReturnReason)}</p><p>Please update it under Account Checklist.</p>"));
+    }
+
+    private Task<AccountRequestItem?> LoadForNoticeAsync(int itemId, CancellationToken ct)
+        => _db.AccountRequestItems.AsNoTracking()
+            .Include(i => i.AccountType)
+            .Include(i => i.Request).ThenInclude(r => r!.Employee)
+            .FirstOrDefaultAsync(i => i.Id == itemId, ct);
+
+    private static RequestDto MapRequest(AccountRequest r, Actor? actor) => new()
     {
         Id = r.Id,
         RequestNo = r.RequestNo,
@@ -640,14 +760,15 @@ public class AccountRequestService : IAccountRequestService
         CompletedAt = r.CompletedAt,
         DecidedAt = r.DecidedAt,
         DecisionRemark = r.DecisionRemark,
-        Items = r.Items.Select(MapItem).ToList(),
+        Items = r.Items.Select(i => MapItem(i, actor)).ToList(),
         Attachments = r.Attachments.Select(a => new AttachmentDto
         {
             Id = a.Id, FileName = a.FileName, FileSize = a.FileSize
         }).ToList()
     };
 
-    private static RequestItemDto MapItem(AccountRequestItem i) => new()
+    /// <summary>With <paramref name="actor"/>, the DTO also says what the current user may do with the item.</summary>
+    private static RequestItemDto MapItem(AccountRequestItem i, Actor? actor) => new()
     {
         Id = i.Id,
         RequestId = i.RequestId,
@@ -655,6 +776,7 @@ public class AccountRequestService : IAccountRequestService
         EmployeeName = i.Request?.Employee?.Name ?? string.Empty,
         EmployeeNo = i.Request?.Employee?.EmployeeNo ?? string.Empty,
         RequestType = i.Request?.RequestType ?? default,
+        RequestStatus = i.Request?.Status ?? default,
         AccountTypeId = i.AccountTypeId,
         AccountTypeName = i.AccountType?.Name ?? string.Empty,
         AssignedDeptId = i.AssignedDeptId,
@@ -663,6 +785,11 @@ public class AccountRequestService : IAccountRequestService
         AccountValue = i.AccountValue,
         RequestDetail = i.RequestDetail,
         ResultRemark = i.ResultRemark,
-        HandledAt = i.HandledAt
+        HandledAt = i.HandledAt,
+        ApprovedByName = i.ApprovedByName,
+        ApprovedAt = i.ApprovedAt,
+        ReturnReason = i.ReturnReason,
+        IsHandler = actor?.Handles(i) ?? false,
+        IsApprover = actor?.Approves(i) ?? false
     };
 }

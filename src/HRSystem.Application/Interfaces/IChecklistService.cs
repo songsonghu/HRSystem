@@ -6,7 +6,8 @@ namespace HRSystem.Application.Interfaces;
 
 /// <summary>
 /// Onboarding and departure checklists. Managing requests of a kind needs that kind's
-/// permission (onboarding.manage / departures.manage); tasks are handled by their assignee.
+/// permission (onboarding.manage / departures.manage). Onboarding only opens accounts; a departure
+/// gives each department a task that its handlers complete and its approvers approve.
 /// </summary>
 public interface IChecklistService
 {
@@ -22,11 +23,11 @@ public interface IChecklistService
     /// <summary>A request, or null when it does not exist or the user may not manage its kind.</summary>
     Task<ChecklistRequestDto?> GetAsync(int requestId, CancellationToken ct = default);
 
-    /// <summary>Dispatch department tasks (and, for onboarding, submit the linked account request).</summary>
+    /// <summary>Submit the linked account request and, for a departure, dispatch the department tasks.</summary>
     Task<Result> SubmitAsync(int requestId, CancellationToken ct = default);
 
     /// <summary>
-    /// Close a request whose required tasks are done. Departure marks the employee resigned.
+    /// Close a request whose required tasks are approved and whose accounts are done. Departure marks the employee resigned.
     /// A departure with a final approver can only be finalized (approved) by that approver; otherwise HR finalizes.
     /// </summary>
     Task<Result> FinalizeAsync(int requestId, CancellationToken ct = default);
@@ -47,21 +48,33 @@ public interface IChecklistService
     Task<Result> CancelAsync(int requestId, string reason, CancellationToken ct = default);
 
     /// <summary>
-    /// Open tasks of both kinds assigned to the current user. Tasks are only ever visible to
-    /// their assignee — administrators included.
+    /// Unfinished tasks of the departments the current user handles. Tasks are only visible to their
+    /// department's handlers and approvers — administrators included.
     /// </summary>
     Task<IReadOnlyList<ChecklistTaskDto>> GetMyPendingTasksAsync(CancellationToken ct = default);
 
-    /// <summary>The current user's finished tasks, and tasks of requests that were finalized or cancelled.</summary>
+    /// <summary>Finished tasks of the departments the current user handles, and tasks of closed requests.</summary>
     Task<IReadOnlyList<ChecklistTaskDto>> GetMyTaskHistoryAsync(ChecklistTaskHistoryQuery query, CancellationToken ct = default);
+
+    /// <summary>Tasks of open requests not yet approved, in the departments the current user approves.</summary>
+    Task<IReadOnlyList<ChecklistTaskDto>> GetMyApprovalTasksAsync(CancellationToken ct = default);
+
+    /// <summary>Approved tasks, and tasks of closed requests, in the departments the current user approves.</summary>
+    Task<IReadOnlyList<ChecklistTaskDto>> GetMyApprovalHistoryAsync(ChecklistTaskHistoryQuery query, CancellationToken ct = default);
+
+    /// <summary>The department approver accepts a completed task.</summary>
+    Task<Result> ApproveTaskAsync(int taskId, CancellationToken ct = default);
+
+    /// <summary>The department approver sends a completed task back to the handlers with a reason.</summary>
+    Task<Result> ReturnTaskToHandlersAsync(int taskId, string reason, CancellationToken ct = default);
 
     Task<ChecklistTaskDto?> GetTaskAsync(int taskId, CancellationToken ct = default);
     Task<Result> UpdateTaskAsync(ChecklistTaskUpdateDto dto, CancellationToken ct = default);
 
-    /// <summary>Take back a submitted task so it can be changed again (request not yet finalized).</summary>
+    /// <summary>Take back a completed task that is not yet approved, so it can be changed again.</summary>
     Task<Result> ReopenTaskAsync(int taskId, CancellationToken ct = default);
 
-    /// <summary>A checklist item's attachment, for its assignee, the final approver and HR; null otherwise.</summary>
+    /// <summary>A checklist item's attachment, for its department's handlers and approvers, the final approver and HR; null otherwise.</summary>
     Task<ChecklistAttachmentFile?> GetItemAttachmentAsync(int itemId, CancellationToken ct = default);
 }
 
@@ -77,13 +90,4 @@ public interface IChecklistTemplateService
     Task<Result<int>> CreateAsync(ChecklistTemplateEditDto dto, CancellationToken ct = default);
     Task<Result> UpdateAsync(ChecklistTemplateEditDto dto, CancellationToken ct = default);
     Task<Result> DeleteAsync(int id, CancellationToken ct = default);
-
-    /// <summary>Each template of this kind with the login that receives its department's task (needs checklist-approvers.manage).</summary>
-    Task<IReadOnlyList<ChecklistApproverDto>> GetApproversAsync(ChecklistKind kind, CancellationToken ct = default);
-
-    /// <summary>
-    /// Set the approver login per template id (null/empty falls back to the department manager).
-    /// Unfinished tasks of open requests move to the new assignee.
-    /// </summary>
-    Task<Result> SetApproversAsync(ChecklistKind kind, IReadOnlyDictionary<int, string?> approvers, CancellationToken ct = default);
 }
