@@ -157,18 +157,25 @@ public class ChecklistTests : IntegrationTest
         Assert.Equal(RequestType.Onboard, request.AccountRequest!.RequestType);
         Assert.Equal(RequestStatus.Submitted, request.AccountRequest.Status);
         Assert.True((await service.GetAsync(created.Value))!.CanFinalize);
-        Assert.Contains("not completed", (await service.FinalizeAsync(created.Value)).Error);
+
+        // Each finalize attempt runs in its own scope, like a web request, so it reads the current account request.
+        async Task<HRSystem.Application.Common.Result> FinalizeAsync()
+        {
+            using var scope = Data.As(onboarder.UserId, Permissions.OnboardingManage);
+            return await scope.Get<IChecklistService>().FinalizeAsync(created.Value);
+        }
+        Assert.Contains("not completed", (await FinalizeAsync()).Error);
 
         var itemId = await Data.ReadAsync(db => db.AccountRequestItems.Where(i => i.RequestId == request.AccountRequestId).Select(i => i.Id).SingleAsync());
         using (var it = Data.As(itManager.UserId))
         {
             var accounts = it.Get<IAccountRequestService>();
             Assert.True((await accounts.UpdateItemAsync(new UpdateItemDto { ItemId = itemId, Status = ItemStatus.Completed, AccountValue = "newhire" })).Succeeded);
-            Assert.Contains("not completed", (await service.FinalizeAsync(created.Value)).Error); // still waiting for approval
+            Assert.Contains("not completed", (await FinalizeAsync()).Error); // still waiting for approval
             Assert.True((await accounts.ApproveItemAsync(itemId)).Succeeded);
         }
 
-        var finalized = await service.FinalizeAsync(created.Value);
+        var finalized = await FinalizeAsync();
         Assert.True(finalized.Succeeded, finalized.Error);
     }
 
