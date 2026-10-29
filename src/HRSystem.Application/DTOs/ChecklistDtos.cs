@@ -84,6 +84,7 @@ public class ChecklistTaskDto
     public DateTime? CompletedAt { get; set; }
     public string? ReturnReason { get; set; }
     public DateTime? ReturnedAt { get; set; }
+    public string? ReturnedByName { get; set; }
     public string? ApprovedByName { get; set; }
     public DateTime? ApprovedAt { get; set; }
     public ChecklistStatus RequestStatus { get; set; }
@@ -93,15 +94,18 @@ public class ChecklistTaskDto
     public bool IsApproved => ApprovedAt is not null;
     public bool IsRequestOpen => RequestStatus is not (ChecklistStatus.Draft or ChecklistStatus.Completed or ChecklistStatus.Cancelled);
 
+    /// <summary>Sent back and not completed again yet.</summary>
+    public bool IsReturned => ReturnReason is not null && !IsDone;
+
+    /// <summary>Completed again after a return; the return note stays until the approver approves.</summary>
+    public bool IsResubmitted => ReturnReason is not null && IsDone;
+
     // What the current user may do, as a handler or an approver of the task's department.
     public bool IsHandler { get; set; }
     public bool IsApprover { get; set; }
 
     /// <summary>Handlers and approvers may change the items until the task is completed.</summary>
     public bool CanEdit => IsRequestOpen && !IsDone && (IsHandler || IsApprover);
-
-    /// <summary>A completed task can be taken back until the department approver approves it.</summary>
-    public bool CanReopen => IsRequestOpen && IsDone && !IsApproved && (IsHandler || IsApprover);
 
     /// <summary>The department approver approves a completed task, or returns it to the handlers.</summary>
     public bool CanApprove => IsRequestOpen && IsDone && !IsApproved && IsApprover;

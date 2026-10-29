@@ -554,6 +554,14 @@ namespace HRSystem.Infrastructure.Migrations
                     b.Property<DateTime?>("ReturnedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("ReturnedBy")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("ReturnedByName")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
 

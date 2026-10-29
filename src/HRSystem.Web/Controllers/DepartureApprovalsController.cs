@@ -54,12 +54,12 @@ public class DepartureApprovalsController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> ReturnTask(int requestId, int taskId, string? reason)
+    public async Task<IActionResult> Return(int id, List<int>? taskIds, string? reason)
     {
-        var result = await _service.ReturnTaskAsync(taskId, reason ?? string.Empty);
+        var result = await _service.ReturnTasksAsync(id, taskIds ?? new List<int>(), reason ?? string.Empty);
         TempData[result.Succeeded ? "Success" : "Error"] = result.Succeeded
-            ? "Task returned to the department. The request will come back for your review once it is completed and approved again."
+            ? "Departure returned. It comes back for your review once the chosen departments redo their tasks and their approvers approve them again."
             : result.Error;
-        return result.Succeeded ? RedirectToAction(nameof(Index)) : RedirectToAction(nameof(Review), new { id = requestId });
+        return result.Succeeded ? RedirectToAction(nameof(Index)) : RedirectToAction(nameof(Review), new { id });
     }
 }

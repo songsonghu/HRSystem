@@ -303,7 +303,7 @@ public class ChecklistTests : IntegrationTest
     }
 
     [SkippableFact]
-    public async Task Completed_task_moves_to_history_and_can_be_taken_back()
+    public async Task Completed_task_moves_to_history_and_is_locked_until_the_approver_returns_it()
     {
         RequireDatabase();
         var hr = await Data.PersonAsync(null);
@@ -321,19 +321,18 @@ public class ChecklistTests : IntegrationTest
         var requestNo = await Data.ReadAsync(db => db.ChecklistRequests.Where(r => r.Id == requestId).Select(r => r.RequestNo).SingleAsync());
         var history = await service.GetMyTaskHistoryAsync(new ChecklistTaskHistoryQuery { Keyword = requestNo, Kind = ChecklistKind.Departure });
         Assert.Equal(tasks.Count, history.Count);
-        Assert.All(history, t => Assert.True(t.CanReopen));
+        Assert.All(history, t => Assert.False(t.CanEdit));
         // Completed is not enough for the final review: the department approvals are still missing.
         Assert.Equal(ChecklistStatus.InProgress, await StatusOfAsync(requestId));
 
-        // A submitted task cannot be edited until it is taken back.
-        Assert.Contains("Take it back", (await service.UpdateTaskAsync(CompleteAll(tasks[0]))).Error);
-        Assert.True((await service.ReopenTaskAsync(tasks[0].Id)).Succeeded);
+        // A completed task cannot be changed by its handlers; only the approver can send it back.
+        Assert.Contains("ask the department approver", (await service.UpdateTaskAsync(CompleteAll(tasks[0]))).Error);
+        Assert.True((await service.ReturnTaskToHandlersAsync(tasks[0].Id, "Recheck the access card")).Succeeded);
         Assert.Single(await TasksOfAsync(checklistManager.UserId, requestId));
 
-        // Once approved, a task can no longer be taken back.
+        // Once approved, a task can no longer be returned by its department approver.
         Assert.True((await service.ApproveTaskAsync(tasks[1].Id)).Succeeded);
-        Assert.Contains("already approved", (await service.ReopenTaskAsync(tasks[1].Id)).Error);
-        Assert.False((await service.GetTaskAsync(tasks[1].Id))!.CanReopen);
+        Assert.Contains("already approved", (await service.ReturnTaskToHandlersAsync(tasks[1].Id, "too late")).Error);
         Assert.Equal(ChecklistStatus.InProgress, await StatusOfAsync(requestId));
     }
 
@@ -435,8 +434,9 @@ public class ChecklistTests : IntegrationTest
             Assert.NotNull(review);
             returnedTaskId = review!.Tasks.First().Id;
 
-            Assert.False((await service.ReturnTaskAsync(returnedTaskId, " ")).Succeeded);
-            var returned = await service.ReturnTaskAsync(returnedTaskId, "Laptop serial missing");
+            Assert.False((await service.ReturnTasksAsync(requestId, new[] { returnedTaskId }, " ")).Succeeded);
+            Assert.False((await service.ReturnTasksAsync(requestId, Array.Empty<int>(), "Laptop serial missing")).Succeeded);
+            var returned = await service.ReturnTasksAsync(requestId, new[] { returnedTaskId }, "Laptop serial missing");
             Assert.True(returned.Succeeded, returned.Error);
             Assert.DoesNotContain(await service.GetMyFinalReviewsAsync(), r => r.Id == requestId);
         }
@@ -459,6 +459,58 @@ public class ChecklistTests : IntegrationTest
             Assert.Contains(history, r => r.Id == requestId && r.Status == ChecklistStatus.Completed);
         }
         Assert.Equal(EmployeeStatus.Resigned, await Data.ReadAsync(db => db.Employees.Where(e => e.Id == leaver).Select(e => e.Status).SingleAsync()));
+    }
+
+    [SkippableFact]
+    public async Task Final_approver_returns_the_departure_to_several_departments_at_once()
+    {
+        RequireDatabase();
+        var hr = await Data.PersonAsync(null);
+        var checklistManager = await Data.PersonAsync(null);
+        await Data.SetTemplateManagersAsync(ChecklistKind.Departure, checklistManager.EmployeeId);
+        var (leaver, head) = await LeaverAsync();
+        var requestId = await StartDepartureAsync(hr.UserId, leaver);
+        await CompleteAndApproveAllTasksAsync(checklistManager.UserId, requestId);
+
+        List<int> returnedIds;
+        using (var headScope = Data.As(head.UserId))
+        {
+            var service = headScope.Get<IChecklistService>();
+            var review = (await service.GetFinalReviewAsync(requestId))!;
+            Assert.True(review.Tasks.Count >= 2);
+            returnedIds = review.Tasks.Take(2).Select(t => t.Id).ToList();
+
+            // Another request's task cannot be slipped in.
+            Assert.False((await service.ReturnTasksAsync(requestId, returnedIds.Append(int.MaxValue).ToList(), "Missing")).Succeeded);
+            var returned = await service.ReturnTasksAsync(requestId, returnedIds, "Handover notes missing");
+            Assert.True(returned.Succeeded, returned.Error);
+            // Once back with the departments, it cannot be returned again until it comes back for review.
+            Assert.False((await service.ReturnTasksAsync(requestId, returnedIds, "Again")).Succeeded);
+        }
+
+        var back = await TasksOfAsync(checklistManager.UserId, requestId);
+        Assert.Equal(returnedIds.OrderBy(i => i), back.Select(t => t.Id).OrderBy(i => i));
+        Assert.All(back, t =>
+        {
+            Assert.True(t.IsReturned);
+            Assert.Equal("Handover notes missing", t.ReturnReason);
+            Assert.Equal(head.UserId, t.ReturnedByName);
+        });
+        Assert.Equal(ChecklistStatus.InProgress, await StatusOfAsync(requestId));
+
+        // The department approver still sees why it was returned when the handlers complete it again.
+        await CompleteAllTasksAsync(checklistManager.UserId, requestId);
+        using (var approver = Data.As(checklistManager.UserId))
+        {
+            var resubmitted = (await approver.Get<IChecklistService>().GetTaskAsync(returnedIds[0]))!;
+            Assert.True(resubmitted.IsResubmitted);
+            Assert.Equal("Handover notes missing", resubmitted.ReturnReason);
+        }
+
+        await ApproveAllTasksAsync(checklistManager.UserId, requestId);
+        Assert.Equal(ChecklistStatus.PendingFinalReview, await StatusOfAsync(requestId));
+        using (var headScope = Data.As(head.UserId))
+            Assert.All((await headScope.Get<IChecklistService>().GetFinalReviewAsync(requestId))!.Tasks, t => Assert.Null(t.ReturnReason));
     }
 
     [SkippableFact]
@@ -634,7 +686,19 @@ public class ChecklistTests : IntegrationTest
             var back = Assert.Single(await TasksOfAsync(handler.UserId, requestId), t => t.Id == task.Id);
             Assert.Equal(ChecklistTaskStatus.Returned, back.Status);
             Assert.Equal("Badge not collected", back.ReturnReason);
+            Assert.Equal(approver.UserId, back.ReturnedByName);
             Assert.Contains(App.Emails.Sent, m => m.To.Contains(handler.Email) && m.Subject.StartsWith("[Returned]"));
+
+            // Completed again: the approver still sees the reason, which approval then clears.
+            using (var h = Data.As(handler.UserId))
+                Assert.True((await h.Get<IChecklistService>().UpdateTaskAsync(CompleteAll(back))).Succeeded);
+            using (var a = Data.As(approver.UserId))
+            {
+                var service = a.Get<IChecklistService>();
+                Assert.True((await service.GetTaskAsync(task.Id))!.IsResubmitted);
+                Assert.True((await service.ApproveTaskAsync(task.Id)).Succeeded);
+                Assert.Null((await service.GetTaskAsync(task.Id))!.ReturnReason);
+            }
         }
         finally
         {

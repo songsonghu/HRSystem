@@ -22,13 +22,13 @@
     <div class="card mb-3">
         <div class="card-header d-flex justify-content-between">
             <span><b>@t.DepartmentName</b> · @t.EmployeeName (@t.EmployeeNo)</span>
-            <span class="badge @(t.ReturnReason is not null ? "bg-danger" : "bg-warning text-dark")">@(t.ReturnReason is not null ? "Returned" : t.Status.ToString())</span>
+            <span class="badge @(t.IsReturned ? "bg-danger" : "bg-warning text-dark")">@(t.IsReturned ? "Returned" : t.Status.ToString())</span>
         </div>
         <div class="card-body">
             <p class="mb-2">Request: @t.RequestNo · Progress: @completed / @t.Items.Count</p>
-            @if (t.ReturnReason is not null)
+            @if (t.IsReturned)
             {
-                <p class="mb-2 text-danger small">Returned: @t.ReturnReason</p>
+                <p class="mb-2 text-danger small">Returned by @t.ReturnedByName: @t.ReturnReason</p>
             }
             <a asp-action="Task" asp-route-id="@t.Id" class="btn btn-primary btn-sm">Open Task</a>
         </div>

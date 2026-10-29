@@ -26,38 +26,37 @@
 </div>
 <p class="text-muted">Request @Model.RequestNo · @Model.EmployeeName (@Model.EmployeeNo)</p>
 
-@if (!readOnly && !string.IsNullOrWhiteSpace(Model.ReturnReason))
+@if (!string.IsNullOrWhiteSpace(Model.ReturnReason) && (!readOnly || Model.CanApprove))
 {
-    <div class="alert alert-warning"><b>Returned:</b> @Model.ReturnReason</div>
+    <div class="alert alert-warning">
+        <b>@(readOnly ? "Completed again after being returned" : "Returned")</b>
+        by @Model.ReturnedByName on @(Model.ReturnedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")):
+        @Model.ReturnReason
+        @if (readOnly)
+        {
+            <div class="small mt-1">Check that this has been fixed before approving.</div>
+        }
+    </div>
 }
 
 @if (readOnly)
 {
-    <div class="alert alert-info d-flex justify-content-between align-items-center">
-        <span>
-            @if (Model.CanApprove)
-            {
-                @:Completed @(Model.CompletedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")). Approve it below, or return it to the handlers.
-            }
-            else if (Model.CanReopen)
-            {
-                @:Completed @(Model.CompletedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")) and waiting for the department approver. Take it back to make changes.
-            }
-            else if (Model.ApprovedAt is not null)
-            {
-                @:Approved by @Model.ApprovedByName on @(Model.ApprovedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")), so the task is read-only.
-            }
-            else
-            {
-                @:This request is closed, so the task is read-only.
-            }
-        </span>
-        @if (Model.CanReopen)
+    <div class="alert alert-info">
+        @if (Model.CanApprove)
         {
-            <form asp-action="Reopen" asp-route-id="@Model.TaskId" method="post"
-                  onsubmit="return confirm('Take this task back? The request returns to In Progress until you complete it again.');">
-                <button class="btn btn-sm btn-outline-danger">Take Back</button>
-            </form>
+            @:Completed @(Model.CompletedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")). Approve it below, or return it to the handlers.
+        }
+        else if (Model.IsRequestOpen && Model.IsDone && Model.ApprovedAt is null)
+        {
+            @:Completed @(Model.CompletedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")) and waiting for the department approver. If it needs changes, the approver can return it to you.
+        }
+        else if (Model.ApprovedAt is not null)
+        {
+            @:Approved by @Model.ApprovedByName on @(Model.ApprovedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")), so the task is read-only.
+        }
+        else
+        {
+            @:This request is closed, so the task is read-only.
         }
     </div>
 }
@@ -192,6 +191,7 @@
             <form asp-action="Return" asp-route-id="@Model.TaskId" method="post">
                 <label class="form-label" for="reason">What needs to be fixed</label>
                 <textarea class="form-control" id="reason" name="reason" rows="2" maxlength="500" required></textarea>
+                <div class="form-text">The handlers of @Model.DepartmentName get this reason by email and on the task.</div>
                 <button type="submit" class="btn btn-danger mt-2">Return Task</button>
             </form>
         </div>

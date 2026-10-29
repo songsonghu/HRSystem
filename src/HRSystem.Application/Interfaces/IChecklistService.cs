@@ -41,8 +41,11 @@ public interface IChecklistService
     /// <summary>A departure with all task details, for its final approver only.</summary>
     Task<ChecklistRequestDto?> GetFinalReviewAsync(int requestId, CancellationToken ct = default);
 
-    /// <summary>Final approver sends a finished department task back with a reason.</summary>
-    Task<Result> ReturnTaskAsync(int taskId, string reason, CancellationToken ct = default);
+    /// <summary>
+    /// The final approver sends the departure back: the chosen departments redo their tasks, which their
+    /// approvers then approve again, before the request returns for final review.
+    /// </summary>
+    Task<Result> ReturnTasksAsync(int requestId, IReadOnlyCollection<int> taskIds, string reason, CancellationToken ct = default);
 
     /// <summary>Withdraw a request that is not finalized; its open tasks and linked account request are closed.</summary>
     Task<Result> CancelAsync(int requestId, string reason, CancellationToken ct = default);
@@ -69,10 +72,11 @@ public interface IChecklistService
     Task<Result> ReturnTaskToHandlersAsync(int taskId, string reason, CancellationToken ct = default);
 
     Task<ChecklistTaskDto?> GetTaskAsync(int taskId, CancellationToken ct = default);
+    /// <summary>
+    /// Save or complete a task. A completed task is locked for its handlers; only its department
+    /// approver (or the final approver) can send it back for changes.
+    /// </summary>
     Task<Result> UpdateTaskAsync(ChecklistTaskUpdateDto dto, CancellationToken ct = default);
-
-    /// <summary>Take back a completed task that is not yet approved, so it can be changed again.</summary>
-    Task<Result> ReopenTaskAsync(int taskId, CancellationToken ct = default);
 
     /// <summary>A checklist item's attachment, for its department's handlers and approvers, the final approver and HR; null otherwise.</summary>
     Task<ChecklistAttachmentFile?> GetItemAttachmentAsync(int itemId, CancellationToken ct = default);

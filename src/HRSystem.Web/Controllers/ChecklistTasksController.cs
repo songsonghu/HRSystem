@@ -127,15 +127,4 @@ public class ChecklistTasksController : Controller
         Response.Headers.XContentTypeOptions = "nosniff";
         return File(file.Content, file.ContentType);
     }
-
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Reopen(int id)
-    {
-        var result = await _service.ReopenTaskAsync(id);
-        TempData[result.Succeeded ? "Success" : "Error"] = result.Succeeded
-            ? "Task taken back. Change it and complete it again."
-            : result.Error;
-        return result.Succeeded ? RedirectToAction(nameof(Task), new { id }) : RedirectToAction(nameof(History));
-    }
 }

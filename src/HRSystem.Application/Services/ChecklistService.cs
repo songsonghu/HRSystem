@@ -480,44 +480,52 @@ public class ChecklistService : IChecklistService
         return request is null || !IsFinalApprover(request) ? null : MapRequest(request);
     }
 
-    public Task<Result> ReturnTaskAsync(int taskId, string reason, CancellationToken ct = default)
-        => ConcurrencyRetry.RunAsync(_db, () => ReturnTaskOnceAsync(taskId, reason, ct));
+    public Task<Result> ReturnTasksAsync(int requestId, IReadOnlyCollection<int> taskIds, string reason, CancellationToken ct = default)
+        => ConcurrencyRetry.RunAsync(_db, () => ReturnTasksOnceAsync(requestId, taskIds, reason, ct));
 
-    private async Task<Result> ReturnTaskOnceAsync(int taskId, string reason, CancellationToken ct)
+    private async Task<Result> ReturnTasksOnceAsync(int requestId, IReadOnlyCollection<int> taskIds, string reason, CancellationToken ct)
     {
-        var task = await _db.ChecklistTasks
-            .Include(t => t.ChecklistRequest).ThenInclude(r => r!.Employee)
-            .FirstOrDefaultAsync(t => t.Id == taskId, ct);
-        if (task?.ChecklistRequest is null || !IsFinalApprover(task.ChecklistRequest)) return Result.Fail("Task not found.");
-        if (task.ChecklistRequest.Status != ChecklistStatus.PendingFinalReview)
-            return Result.Fail("Tasks can only be returned while the request is waiting for final review.");
-        if (task.Status is not (ChecklistTaskStatus.Completed or ChecklistTaskStatus.NotApplicable))
-            return Result.Fail("Only completed tasks can be returned.");
-        if (string.IsNullOrWhiteSpace(reason)) return Result.Fail("Enter a reason for returning the task.");
+        var request = await _db.ChecklistRequests
+            .Include(r => r.Employee)
+            .Include(r => r.Tasks)
+            .FirstOrDefaultAsync(r => r.Id == requestId, ct);
+        if (request is null || !IsFinalApprover(request)) return Result.Fail("Request not found.");
+        if (request.Status != ChecklistStatus.PendingFinalReview)
+            return Result.Fail("Departments can only be asked to redo their tasks while the departure is waiting for final review.");
+        if (string.IsNullOrWhiteSpace(reason)) return Result.Fail("Enter a reason for returning the departure.");
 
-        await SendBackAsync(task, reason, ct);
-        await NotifyReturnAsync(task, "the final reviewer", ct);
-        await _audit.LogAsync("ReturnChecklistTask", nameof(ChecklistTask), task.Id.ToString(), $"{task.DepartmentName}: {task.ReturnReason}", ct);
+        var tasks = request.Tasks.Where(t => taskIds.Contains(t.Id)).OrderBy(t => t.SortOrder).ToList();
+        if (tasks.Count == 0) return Result.Fail("Choose at least one department to redo its task.");
+        if (tasks.Count != taskIds.Distinct().Count()) return Result.Fail("Task not found.");
+        var notDone = tasks.FirstOrDefault(t => t.Status is not (ChecklistTaskStatus.Completed or ChecklistTaskStatus.NotApplicable));
+        if (notDone is not null) return Result.Fail($"The {notDone.DepartmentName} task is not completed, so it cannot be returned.");
+
+        var now = DateTime.UtcNow;
+        foreach (var task in tasks) MarkReturned(task, reason, now);
+        await RecomputeRequestStatusAsync(request, ct);
+        request.ModifiedAt = now;
+        await _db.SaveChangesAsync(ct);
+
+        foreach (var task in tasks) await NotifyReturnAsync(task, $"{_currentUser.UserName} (final approval)", ct);
+        await _audit.LogAsync("ReturnDeparture", nameof(ChecklistRequest), request.Id.ToString(),
+            $"{request.RequestNo} to {string.Join(", ", tasks.Select(t => t.DepartmentName))}: {reason.Trim()}", ct);
         return Result.Success();
     }
 
-    /// <summary>Back to the handlers: the task needs completing and approving again.</summary>
-    private async Task SendBackAsync(ChecklistTask task, string reason, CancellationToken ct)
+    /// <summary>Back to the handlers: the task needs completing and approving again. The caller saves.</summary>
+    private void MarkReturned(ChecklistTask task, string reason, DateTime now)
     {
-        var now = DateTime.UtcNow;
         task.Status = ChecklistTaskStatus.Returned;
         task.ReturnReason = reason.Trim();
         task.ReturnedAt = now;
+        task.ReturnedBy = _currentUser.UserId;
+        task.ReturnedByName = _currentUser.UserName;
         task.CompletedAt = null;
         task.ApprovedBy = null;
         task.ApprovedByName = null;
         task.ApprovedAt = null;
         task.ModifiedBy = _currentUser.UserId;
         task.ModifiedAt = now;
-
-        await RecomputeRequestStatusAsync(task.ChecklistRequest!, ct);
-        task.ChecklistRequest!.ModifiedAt = now;
-        await _db.SaveChangesAsync(ct);
     }
 
     public Task<Result> CancelAsync(int requestId, string reason, CancellationToken ct = default)
@@ -659,6 +667,8 @@ public class ChecklistService : IChecklistService
         task.ApprovedAt = now;
         task.ReturnReason = null;
         task.ReturnedAt = null;
+        task.ReturnedBy = null;
+        task.ReturnedByName = null;
         task.ModifiedBy = _currentUser.UserId;
         task.ModifiedAt = now;
 
@@ -682,8 +692,13 @@ public class ChecklistService : IChecklistService
         var (task, error) = await LoadForDecisionAsync(taskId, ct);
         if (task is null) return Result.Fail(error!);
 
-        await SendBackAsync(task, reason, ct);
-        await NotifyReturnAsync(task, "the department approver", ct);
+        var now = DateTime.UtcNow;
+        MarkReturned(task, reason, now);
+        await RecomputeRequestStatusAsync(task.ChecklistRequest!, ct);
+        task.ChecklistRequest!.ModifiedAt = now;
+        await _db.SaveChangesAsync(ct);
+
+        await NotifyReturnAsync(task, $"{_currentUser.UserName} (department approver)", ct);
         await _audit.LogAsync("ReturnChecklistTaskToHandlers", nameof(ChecklistTask), task.Id.ToString(), $"{task.DepartmentName}: {task.ReturnReason}", ct);
         return Result.Success();
     }
@@ -701,34 +716,6 @@ public class ChecklistService : IChecklistService
             return (null, "The handlers have not completed this task yet.");
         if (task.ApprovedAt is not null) return (null, "This task is already approved.");
         return (task, null);
-    }
-
-    public Task<Result> ReopenTaskAsync(int taskId, CancellationToken ct = default)
-        => ConcurrencyRetry.RunAsync(_db, () => ReopenTaskOnceAsync(taskId, ct));
-
-    private async Task<Result> ReopenTaskOnceAsync(int taskId, CancellationToken ct)
-    {
-        var task = await _db.ChecklistTasks
-            .Include(t => t.ChecklistRequest)
-            .Include(t => t.Items)
-            .FirstOrDefaultAsync(t => t.Id == taskId, ct);
-        if (task is null || !(await GetRolesAsync(ct)).CanSee(task)) return Result.Fail("Task not found.");
-        if (task.ChecklistRequest is null || task.ChecklistRequest.Status is ChecklistStatus.Completed or ChecklistStatus.Cancelled)
-            return Result.Fail("The request is already finalized or cancelled, so this task can no longer be changed.");
-        if (task.Status is not (ChecklistTaskStatus.Completed or ChecklistTaskStatus.NotApplicable))
-            return Result.Fail("Only submitted tasks can be taken back.");
-        if (task.ApprovedAt is not null)
-            return Result.Fail("This task is already approved, so it can no longer be taken back.");
-
-        task.Status = ChecklistTaskStatus.InProgress;
-        task.CompletedAt = null;
-        task.HandledBy = _currentUser.UserId;
-
-        await RecomputeRequestStatusAsync(task.ChecklistRequest, ct);
-        task.ChecklistRequest.ModifiedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync(ct);
-        await _audit.LogAsync("ReopenChecklistTask", nameof(ChecklistTask), task.Id.ToString(), task.DepartmentName, ct);
-        return Result.Success();
     }
 
     public async Task<ChecklistTaskDto?> GetTaskAsync(int taskId, CancellationToken ct = default)
@@ -756,7 +743,7 @@ public class ChecklistService : IChecklistService
         if (task.ChecklistRequest is null || task.ChecklistRequest.Status is ChecklistStatus.Draft or ChecklistStatus.Completed or ChecklistStatus.Cancelled)
             return Result.Fail("Request already closed.");
         if (task.Status is ChecklistTaskStatus.Completed or ChecklistTaskStatus.NotApplicable)
-            return Result.Fail("This task is already submitted. Take it back first to change it.");
+            return Result.Fail("This task is already completed. If it needs changes, ask the department approver to return it.");
 
         if (dto.Items.Any(i => i.IsCompleted && i.IsNotApplicable))
             return Result.Fail("A checklist item can be either Done or N/A, not both.");
@@ -837,9 +824,8 @@ public class ChecklistService : IChecklistService
             task.Status = requiredItems.Count > 0 && requiredItems.All(i => i.IsNotApplicable)
                 ? ChecklistTaskStatus.NotApplicable
                 : ChecklistTaskStatus.Completed;
+            // The return note stays until the approver approves, so they can check what was fixed.
             task.CompletedAt = now;
-            task.ReturnReason = null;
-            task.ReturnedAt = null;
         }
         else
         {
@@ -969,7 +955,7 @@ public class ChecklistService : IChecklistService
         _email.Enqueue(new EmailMessage(
             emails,
             $"[Returned] Departure checklist ({request.RequestNo}) - {task.DepartmentName}",
-            $"<p>{returnedBy} returned the {System.Net.WebUtility.HtmlEncode(task.DepartmentName)} task for " +
+            $"<p>{System.Net.WebUtility.HtmlEncode(returnedBy)} returned the {System.Net.WebUtility.HtmlEncode(task.DepartmentName)} task for " +
             $"<b>{request.Employee?.Name}</b> ({request.Employee?.EmployeeNo}).</p>" +
             $"<p>Reason: {System.Net.WebUtility.HtmlEncode(task.ReturnReason)}</p><p>Please update it under Departure Checklist.</p>"));
     }
@@ -1063,6 +1049,7 @@ public class ChecklistService : IChecklistService
         CompletedAt = task.CompletedAt,
         ReturnReason = task.ReturnReason,
         ReturnedAt = task.ReturnedAt,
+        ReturnedByName = task.ReturnedByName,
         ApprovedByName = task.ApprovedByName,
         ApprovedAt = task.ApprovedAt,
         IsHandler = roles?.IsHandler(task) ?? false,

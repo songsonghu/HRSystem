@@ -25,13 +25,6 @@
             <td><partial name="_ChecklistStatusBadge" model="t.RequestStatus" /></td>
             <td class="text-nowrap text-end">
                 <a class="btn btn-sm btn-outline-primary" asp-controller="ChecklistTasks" asp-action="Task" asp-route-id="@t.Id">View</a>
-                @if (t.CanReopen)
-                {
-                    <form asp-controller="ChecklistTasks" asp-action="Reopen" asp-route-id="@t.Id" method="post" class="d-inline"
-                          onsubmit="return confirm('Take this task back? It returns to In Progress until it is completed again.');">
-                        <button type="submit" class="btn btn-sm btn-outline-danger">Take Back</button>
-                    </form>
-                }
             </td>
         </tr>
     }

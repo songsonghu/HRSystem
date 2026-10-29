@@ -213,6 +213,8 @@ public class ChecklistTaskConfig : IEntityTypeConfiguration<ChecklistTask>
         b.Property(x => x.TaskRemark).HasMaxLength(1000);
         b.Property(x => x.HandledBy).HasMaxLength(450);
         b.Property(x => x.ReturnReason).HasMaxLength(500);
+        b.Property(x => x.ReturnedBy).HasMaxLength(450);
+        b.Property(x => x.ReturnedByName).HasMaxLength(256);
         b.HasIndex(x => new { x.ChecklistRequestId, x.SortOrder });
         b.HasIndex(x => new { x.AssignedDepartmentId, x.Status });
         b.HasOne(x => x.ChecklistRequest)

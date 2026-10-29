@@ -23,9 +23,14 @@ public class ChecklistTask : BaseEntity
     public string? ApprovedByName { get; set; }
     public DateTime? ApprovedAt { get; set; }
 
-    /// <summary>Why the department approver or the final approver sent the task back; cleared when it is completed again.</summary>
+    /// <summary>
+    /// Who sent the task back (a department approver or the final approver), why, and when. Kept while
+    /// the handlers redo it so the approver can check the fix; cleared when the task is approved again.
+    /// </summary>
     public string? ReturnReason { get; set; }
     public DateTime? ReturnedAt { get; set; }
+    public string? ReturnedBy { get; set; }
+    public string? ReturnedByName { get; set; }
 
     public ChecklistRequest? ChecklistRequest { get; set; }
     public ICollection<ChecklistTaskItem> Items { get; set; } = new List<ChecklistTaskItem>();

@@ -1,11 +1,9 @@
-@using Microsoft.AspNetCore.Mvc.Rendering
 @model ChecklistRequestDto
 @{
     ViewData["Title"] = "Final Review " + Model.RequestNo;
     var canDecide = Model.Status == ChecklistStatus.PendingFinalReview;
     var accountsPending = Model.AccountRequestStatus is not null and not RequestStatus.Completed;
-    var returnable = Model.Tasks.Where(t => t.IsDone).OrderBy(t => t.SortOrder)
-        .Select(t => new SelectListItem(t.DepartmentName, t.Id.ToString())).ToList();
+    var returnable = Model.Tasks.Where(t => t.IsDone).OrderBy(t => t.SortOrder).ToList();
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -84,6 +82,12 @@
                 </li>
             }
         </ul>
+        @if (t.ReturnReason is not null)
+        {
+            <div class="card-footer small text-danger">
+                <b>Returned</b> by @t.ReturnedByName on @t.ReturnedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm"): @t.ReturnReason
+            </div>
+        }
         @if (!string.IsNullOrWhiteSpace(t.TaskRemark))
         {
             <div class="card-footer small"><b>Remark:</b> @t.TaskRemark</div>
@@ -100,28 +104,37 @@
         </form>
         @if (returnable.Count > 0)
         {
-            <button type="button" class="btn btn-outline-danger" data-bs-toggle="collapse" data-bs-target="#return-task">Return to Department</button>
+            <button type="button" class="btn btn-outline-danger" data-bs-toggle="collapse" data-bs-target="#return-departure">Return to Departments</button>
         }
         <a asp-action="Index" class="btn btn-outline-secondary">Back</a>
     </div>
 
     @if (returnable.Count > 0)
     {
-        <div class="collapse mb-3" id="return-task">
+        <div class="collapse mb-3" id="return-departure">
             <div class="card card-body">
-                <form asp-action="ReturnTask" method="post">
-                    <input type="hidden" name="requestId" value="@Model.Id" />
-                    <div class="row g-2">
+                <form asp-action="Return" asp-route-id="@Model.Id" method="post" id="returnForm">
+                    <div class="row g-3">
                         <div class="col-md-4">
-                            <label class="form-label" for="taskId">Department</label>
-                            <select class="form-select" id="taskId" name="taskId" asp-items="returnable"></select>
+                            <span class="form-label d-block mb-1">Departments to redo their task</span>
+                            @foreach (var t in returnable)
+                            {
+                                <div class="form-check">
+                                    <input class="form-check-input return-dept" type="checkbox" name="taskIds" value="@t.Id" id="return-@t.Id" />
+                                    <label class="form-check-label" for="return-@t.Id">@t.DepartmentName</label>
+                                </div>
+                            }
                         </div>
                         <div class="col-md-8">
                             <label class="form-label" for="reason">What needs to be fixed</label>
-                            <textarea class="form-control" id="reason" name="reason" rows="2" maxlength="500" required></textarea>
+                            <textarea class="form-control" id="reason" name="reason" rows="3" maxlength="500" required></textarea>
+                            <div class="form-text">
+                                Each chosen department's handlers get this reason. Their approvers approve the task again,
+                                and the departure then comes back to you.
+                            </div>
                         </div>
                     </div>
-                    <button type="submit" class="btn btn-danger mt-2">Return Task</button>
+                    <button type="submit" class="btn btn-danger mt-2">Return Departure</button>
                 </form>
             </div>
         </div>
@@ -130,4 +143,19 @@
 else
 {
     <a asp-action="@(Model.Status is ChecklistStatus.Completed or ChecklistStatus.Cancelled ? "History" : "Index")" class="btn btn-outline-secondary">Back</a>
+}
+
+@section Scripts {
+    <script>
+        document.getElementById('returnForm')?.addEventListener('submit', e => {
+            const chosen = [...document.querySelectorAll('.return-dept:checked')]
+                .map(box => box.nextElementSibling.textContent.trim());
+            if (chosen.length === 0) {
+                e.preventDefault();
+                alert('Choose at least one department to redo its task.');
+                return;
+            }
+            if (!confirm('Return this departure to ' + chosen.join(', ') + '?')) e.preventDefault();
+        });
+    </script>
 }
