@@ -33,7 +33,6 @@ appsettings.*.local.json
 wwwroot/lib/
 
 # ---- Runtime data (uploads, logs) ----
-src/HRSystem.Web/App_Data/
 src/HRSystem.Web/App_Data/uploads/
 [Ll]ogs/
 
@@ -52,3 +51,4 @@ secrets.json
 
 # ---- Test results ----
 TestResults/
+.config/

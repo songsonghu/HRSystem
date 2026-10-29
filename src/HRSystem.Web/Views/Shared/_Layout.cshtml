@@ -93,11 +93,11 @@ else
                         }
                         @if (canSetApprovers || User.HasPermission(Permissions.AccountRequestsManage))
                         {
-                            <a class="nav-link @Active("AccountTemplates")" asp-controller="AccountTemplates" asp-action="Index"><i class="bi bi-ui-checks"></i>Templates for Accounts</a>
+                            <a class="nav-link @Active("AccountTemplates")" asp-controller="AccountTemplates" asp-action="Index"><i class="bi bi-ui-checks"></i>Templates Accounts</a>
                         }
                         @if (canSetApprovers || User.HasPermission(Permissions.DeparturesManage))
                         {
-                            <a class="nav-link @Active("ChecklistTemplates")" asp-controller="ChecklistTemplates" asp-action="Index" asp-route-kind="Departure"><i class="bi bi-card-checklist"></i>Templates for Departure</a>
+                            <a class="nav-link @Active("ChecklistTemplates")" asp-controller="ChecklistTemplates" asp-action="Index" asp-route-kind="Departure"><i class="bi bi-card-checklist"></i>Templates Departure</a>
                         }
                         @if (User.HasPermission(Permissions.SystemJobs))
                         {
