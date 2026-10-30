@@ -15,8 +15,12 @@ public class EmployeeConfig : IEntityTypeConfiguration<Employee>
         b.HasIndex(x => x.EmployeeNo).IsUnique();
         b.Property(x => x.Name).HasMaxLength(100).IsRequired();
         b.Property(x => x.Email).HasMaxLength(200);
-        b.Property(x => x.Department).HasMaxLength(100);
         b.Property(x => x.Position).HasMaxLength(100);
+        b.HasOne(x => x.Department).WithMany(d => d.Employees)
+            .HasForeignKey(x => x.DepartmentId)
+            .OnDelete(DeleteBehavior.Restrict);
+        b.Property(x => x.UserId).HasMaxLength(450);
+        b.HasIndex(x => x.UserId).IsUnique().HasFilter("[UserId] IS NOT NULL");
         b.HasQueryFilter(x => !x.IsDeleted);
     }
 }
@@ -30,7 +34,10 @@ public class DepartmentConfig : IEntityTypeConfiguration<Department>
         b.HasKey(x => x.Id);
         b.Property(x => x.Name).HasMaxLength(100).IsRequired();
         b.Property(x => x.Code).HasMaxLength(50);
-        b.Property(x => x.HeadUserId).HasMaxLength(450);
+        b.HasIndex(x => x.Name).IsUnique();
+        b.HasOne(x => x.Manager).WithMany()
+            .HasForeignKey(x => x.ManagerEmployeeId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
 
@@ -45,6 +52,12 @@ public class AccountTypeConfig : IEntityTypeConfiguration<AccountType>
         b.HasIndex(x => x.Code).IsUnique();
         b.Property(x => x.Name).HasMaxLength(100).IsRequired();
         b.Property(x => x.Description).HasMaxLength(500);
+        b.Property(x => x.GroupName).HasMaxLength(100);
+        b.Property(x => x.PrefixText).HasMaxLength(200);
+        b.Property(x => x.SuffixText).HasMaxLength(200);
+        b.Property(x => x.Column).HasDefaultValue(1);
+        b.Property(x => x.HasCheckbox).HasDefaultValue(true);
+        b.Property(x => x.DetailLabel).HasMaxLength(100);
         b.HasOne(x => x.ResponsibleDept)
             .WithMany(d => d.AccountTypes)
             .HasForeignKey(x => x.ResponsibleDeptId)
@@ -62,6 +75,12 @@ public class AccountRequestConfig : IEntityTypeConfiguration<AccountRequest>
         b.Property(x => x.RequestNo).HasMaxLength(30).IsRequired();
         b.HasIndex(x => x.RequestNo).IsUnique();
         b.Property(x => x.Remark).HasMaxLength(1000);
+        b.Property(x => x.ReplacementOf).HasMaxLength(100);
+        b.Property(x => x.ApproverUserId).HasMaxLength(450);
+        b.HasIndex(x => new { x.ApproverUserId, x.Status });
+        b.Property(x => x.DecidedBy).HasMaxLength(450);
+        b.Property(x => x.DecisionRemark).HasMaxLength(1000);
+        b.Property(x => x.RowVersion).IsRowVersion();
         b.HasOne(x => x.Employee)
             .WithMany(e => e.AccountRequests)
             .HasForeignKey(x => x.EmployeeId)
@@ -78,7 +97,11 @@ public class AccountRequestItemConfig : IEntityTypeConfiguration<AccountRequestI
         b.HasKey(x => x.Id);
         b.Property(x => x.AccountValue).HasMaxLength(200);
         b.Property(x => x.ResultRemark).HasMaxLength(1000);
-        b.Property(x => x.AssignedUserId).HasMaxLength(450);
+        b.Property(x => x.RequestDetail).HasMaxLength(500);
+        b.Property(x => x.ApprovedBy).HasMaxLength(450);
+        b.Property(x => x.ApprovedByName).HasMaxLength(256);
+        b.Property(x => x.ReturnReason).HasMaxLength(500);
+        b.HasIndex(x => new { x.AssignedDeptId, x.Status });
         b.HasOne(x => x.Request)
             .WithMany(r => r.Items)
             .HasForeignKey(x => x.RequestId)
@@ -111,6 +134,23 @@ public class AttachmentConfig : IEntityTypeConfiguration<Attachment>
     }
 }
 
+/// <summary>Fluent configuration for <see cref="EmployeeAttachment"/>.</summary>
+public class EmployeeAttachmentConfig : IEntityTypeConfiguration<EmployeeAttachment>
+{
+    public void Configure(EntityTypeBuilder<EmployeeAttachment> b)
+    {
+        b.ToTable("EmployeeAttachments");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.FileName).HasMaxLength(260).IsRequired();
+        b.Property(x => x.FilePath).HasMaxLength(500).IsRequired();
+        b.Property(x => x.ContentType).HasMaxLength(120);
+        b.HasOne(x => x.Employee)
+            .WithMany(e => e.Attachments)
+            .HasForeignKey(x => x.EmployeeId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
 /// <summary>Fluent configuration for <see cref="EmployeeAccount"/>.</summary>
 public class EmployeeAccountConfig : IEntityTypeConfiguration<EmployeeAccount>
 {
@@ -131,6 +171,140 @@ public class EmployeeAccountConfig : IEntityTypeConfiguration<EmployeeAccount>
     }
 }
 
+public class ChecklistRequestConfig : IEntityTypeConfiguration<ChecklistRequest>
+{
+    public void Configure(EntityTypeBuilder<ChecklistRequest> b)
+    {
+        b.ToTable("ChecklistRequests");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.RowVersion).IsRowVersion();
+        b.Property(x => x.RequestNo).HasMaxLength(30).IsRequired();
+        b.HasIndex(x => x.RequestNo).IsUnique();
+        b.HasIndex(x => new { x.Kind, x.EmployeeId, x.Status });
+        b.Property(x => x.Reason).HasMaxLength(500);
+        b.Property(x => x.Remark).HasMaxLength(1000);
+        b.Property(x => x.SubmittedBy).HasMaxLength(450);
+        b.Property(x => x.FinalizedBy).HasMaxLength(450);
+        b.Property(x => x.CancelledBy).HasMaxLength(450);
+        b.Property(x => x.CancelReason).HasMaxLength(500);
+        b.Property(x => x.FinalApproverUserId).HasMaxLength(450);
+        b.Property(x => x.FinalApproverUserName).HasMaxLength(256);
+        b.HasIndex(x => new { x.FinalApproverUserId, x.Status });
+        b.HasOne(x => x.Employee)
+            .WithMany(e => e.ChecklistRequests)
+            .HasForeignKey(x => x.EmployeeId)
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne(x => x.AccountRequest)
+            .WithMany()
+            .HasForeignKey(x => x.AccountRequestId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class ChecklistRequestLogConfig : IEntityTypeConfiguration<ChecklistRequestLog>
+{
+    public void Configure(EntityTypeBuilder<ChecklistRequestLog> b)
+    {
+        b.ToTable("ChecklistRequestLogs");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Departments).HasMaxLength(1000);
+        b.Property(x => x.Remark).HasMaxLength(1000);
+        b.Property(x => x.UserId).HasMaxLength(450);
+        b.Property(x => x.UserName).HasMaxLength(256);
+        b.HasIndex(x => new { x.ChecklistRequestId, x.At });
+        b.HasIndex(x => new { x.UserId, x.Action });
+        b.HasOne(x => x.ChecklistRequest)
+            .WithMany(r => r.Logs)
+            .HasForeignKey(x => x.ChecklistRequestId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public class ChecklistTaskConfig : IEntityTypeConfiguration<ChecklistTask>
+{
+    public void Configure(EntityTypeBuilder<ChecklistTask> b)
+    {
+        b.ToTable("ChecklistTasks");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.DepartmentName).HasMaxLength(100).IsRequired();
+        b.Property(x => x.ApprovedBy).HasMaxLength(450);
+        b.Property(x => x.ApprovedByName).HasMaxLength(256);
+        b.Property(x => x.TaskRemark).HasMaxLength(1000);
+        b.Property(x => x.HandledBy).HasMaxLength(450);
+        b.Property(x => x.ReturnReason).HasMaxLength(500);
+        b.Property(x => x.ReturnedBy).HasMaxLength(450);
+        b.Property(x => x.ReturnedByName).HasMaxLength(256);
+        b.HasIndex(x => new { x.ChecklistRequestId, x.SortOrder });
+        b.HasIndex(x => new { x.AssignedDepartmentId, x.Status });
+        b.HasOne(x => x.ChecklistRequest)
+            .WithMany(r => r.Tasks)
+            .HasForeignKey(x => x.ChecklistRequestId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public class ChecklistTaskItemConfig : IEntityTypeConfiguration<ChecklistTaskItem>
+{
+    public void Configure(EntityTypeBuilder<ChecklistTaskItem> b)
+    {
+        b.ToTable("ChecklistTaskItems");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Description).HasMaxLength(500).IsRequired();
+        b.Property(x => x.Remark).HasMaxLength(1000);
+        b.Property(x => x.CompletedBy).HasMaxLength(450);
+        b.Property(x => x.AttachmentFileName).HasMaxLength(255);
+        b.Property(x => x.AttachmentContentType).HasMaxLength(100);
+        b.HasIndex(x => new { x.ChecklistTaskId, x.SortOrder });
+        b.HasOne(x => x.ChecklistTask)
+            .WithMany(t => t.Items)
+            .HasForeignKey(x => x.ChecklistTaskId)
+            .OnDelete(DeleteBehavior.Cascade);
+        // Table splitting: the file content is the AttachmentContent column of this table.
+        b.HasOne(x => x.Attachment)
+            .WithOne()
+            .HasForeignKey<ChecklistTaskItemAttachment>(a => a.Id);
+    }
+}
+
+public class ChecklistTaskItemAttachmentConfig : IEntityTypeConfiguration<ChecklistTaskItemAttachment>
+{
+    public void Configure(EntityTypeBuilder<ChecklistTaskItemAttachment> b)
+    {
+        b.ToTable("ChecklistTaskItems");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Content).HasColumnName("AttachmentContent").IsRequired();
+    }
+}
+
+public class ChecklistTemplateConfig : IEntityTypeConfiguration<ChecklistTemplate>
+{
+    public void Configure(EntityTypeBuilder<ChecklistTemplate> b)
+    {
+        b.ToTable("ChecklistTemplates");
+        b.HasKey(x => x.Id);
+        b.HasIndex(x => new { x.Kind, x.DepartmentId }).IsUnique().HasFilter("[IsDeleted] = 0");
+        b.HasOne(x => x.Department)
+            .WithMany()
+            .HasForeignKey(x => x.DepartmentId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class ChecklistTemplateItemConfig : IEntityTypeConfiguration<ChecklistTemplateItem>
+{
+    public void Configure(EntityTypeBuilder<ChecklistTemplateItem> b)
+    {
+        b.ToTable("ChecklistTemplateItems");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Description).HasMaxLength(500).IsRequired();
+        b.HasIndex(x => new { x.ChecklistTemplateId, x.SortOrder });
+        b.HasOne(x => x.ChecklistTemplate)
+            .WithMany(t => t.Items)
+            .HasForeignKey(x => x.ChecklistTemplateId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
 /// <summary>Fluent configuration for <see cref="AuditLog"/>.</summary>
 public class AuditLogConfig : IEntityTypeConfiguration<AuditLog>
 {
@@ -144,5 +318,21 @@ public class AuditLogConfig : IEntityTypeConfiguration<AuditLog>
         b.Property(x => x.UserId).HasMaxLength(450);
         b.Property(x => x.UserName).HasMaxLength(256);
         b.HasIndex(x => x.Timestamp);
+    }
+}
+
+public class DepartmentAssigneeConfig : IEntityTypeConfiguration<DepartmentAssignee>
+{
+    public void Configure(EntityTypeBuilder<DepartmentAssignee> b)
+    {
+        b.ToTable("DepartmentAssignees");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.UserId).HasMaxLength(450).IsRequired();
+        b.HasIndex(x => new { x.DepartmentId, x.Area, x.Role, x.UserId }).IsUnique();
+        b.HasIndex(x => new { x.UserId, x.Area, x.Role });
+        b.HasOne(x => x.Department)
+            .WithMany()
+            .HasForeignKey(x => x.DepartmentId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

@@ -1,0 +1,288 @@
+@model ChecklistRequestDto
+@{
+    var isOnboarding = Model.Kind == ChecklistKind.Onboarding;
+    ViewData["Title"] = (isOnboarding ? "Onboarding " : "Departure ") + Model.RequestNo;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>@ViewData["Title"]</h2>
+    <span class="fs-6"><partial name="_ChecklistStatusBadge" model="Model.Status" /></span>
+</div>
+
+@{
+    var canSeeEmployee = User.HasPermission(Permissions.EmployeesManage);
+}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <b>Employee</b>
+        @if (canSeeEmployee)
+        {
+            <a asp-controller="Employees" asp-action="Details" asp-route-id="@Model.EmployeeId" class="small">Employee record</a>
+        }
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-3"><b>Name</b><br />@Model.EmployeeName (@Model.EmployeeNo)</div>
+            <div class="col-md-3"><b>Department</b><br />@(Model.DepartmentName ?? "-")</div>
+            <div class="col-md-3"><b>Position</b><br />@(string.IsNullOrWhiteSpace(Model.Position) ? "-" : Model.Position)</div>
+            <div class="col-md-3"><b>Category</b><br />@Model.EmployeeCategory</div>
+            <div class="col-md-3"><b>Email</b><br />@(string.IsNullOrWhiteSpace(Model.EmployeeEmail) ? "-" : Model.EmployeeEmail)</div>
+            <div class="col-md-3">
+                <b>Employee Status</b><br />
+                <span class="badge @(Model.EmployeeStatus == EmployeeStatus.Active ? "bg-success" : "bg-secondary")">@Model.EmployeeStatus</span>
+            </div>
+            <div class="col-md-3"><b>Join Date</b><br />@Model.JoinDate?.ToString("yyyy-MM-dd")</div>
+            @if (!isOnboarding)
+            {
+                <div class="col-md-3"><b>Length of Service</b><br />@(Model.ServiceLength ?? "-")</div>
+            }
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-3">
+    @if (isOnboarding)
+    {
+        <div class="col-md-3"><b>Start Date</b><br />@Model.StartDate?.ToString("yyyy-MM-dd")</div>
+    }
+    else
+    {
+        <div class="col-md-3">
+            <b>Last Working Date</b><br />@Model.LastWorkingDate?.ToString("yyyy-MM-dd")
+            @if (Model.DaysToLastWorkingDate is int days)
+            {
+                <br />
+                @if (days < 0)
+                {
+                    <span class="badge bg-danger">@(-days) day(s) ago</span>
+                }
+                else if (days == 0)
+                {
+                    <span class="badge bg-danger">Today</span>
+                }
+                else
+                {
+                    <span class="badge @(days <= 7 ? "bg-warning text-dark" : "bg-light text-dark border")">in @days day(s)</span>
+                }
+            }
+        </div>
+        <div class="col-md-3"><b>Last Employment Date</b><br />@Model.LastEmploymentDate?.ToString("yyyy-MM-dd")</div>
+    }
+    <div class="col-md-3">
+        <b>@(isOnboarding ? "Accounts to Open" : "Accounts to Disable")</b><br />
+        @if (Model.AccountRequestId is int accountRequestId)
+        {
+            <a asp-controller="Requests" asp-action="Details" asp-route-id="@accountRequestId">@Model.AccountRequestNo</a>
+            <partial name="~/Views/Requests/_RequestStatusBadge.cshtml" model="Model.AccountRequestStatus!.Value" />
+        }
+        else
+        {
+            <span class="text-muted">None</span>
+        }
+        @if (!isOnboarding && User.HasPermission(Permissions.OffboardingExport))
+        {
+            <br /><a asp-controller="Offboarding" asp-action="Employee" asp-route-id="@Model.EmployeeId" class="small">Account list &amp; Excel export</a>
+        }
+    </div>
+    @if (Model.SubmittedAt is not null)
+    {
+        <div class="col-md-3">
+            <b>Submitted</b><br />@Model.SubmittedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+            @if (Model.SubmittedByName is not null)
+            {
+                <span class="text-muted">by @Model.SubmittedByName</span>
+            }
+        </div>
+    }
+    @if (Model.CompletedAt is not null)
+    {
+        <div class="col-md-3"><b>Completed</b><br />@Model.CompletedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</div>
+    }
+</div>
+
+@if (!isOnboarding && !string.IsNullOrWhiteSpace(Model.Reason))
+{
+    <p><b>Reason:</b> @Model.Reason</p>
+}
+
+@if (!string.IsNullOrWhiteSpace(Model.Remark))
+{
+    <p><b>Remark:</b> @Model.Remark</p>
+}
+
+@if (!isOnboarding && Model.Status != ChecklistStatus.Draft)
+{
+    <p>
+        <b>Approvals:</b>
+        Department approvers →
+        @if (Model.SkipsHeadApproval)
+        {
+            <span class="text-muted">(department head step skipped: the employee heads their own department)</span>
+        }
+        else
+        {
+            <span>@Model.FinalApproverName (department head)</span>
+        }
+        → HR / management
+    </p>
+}
+
+@if (Model.Status == ChecklistStatus.Cancelled)
+{
+    <div class="alert alert-secondary">
+        <b>Cancelled</b> @Model.CancelledAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") — @Model.CancelReason
+    </div>
+}
+
+<div class="mb-3 d-flex gap-2 align-items-center">
+    @if (Model.CanSubmit)
+    {
+        <form asp-action="Submit" asp-route-id="@Model.Id" method="post"
+              onsubmit="return confirm('Submit and notify each department manager?');">
+            <button class="btn btn-primary">Submit &amp; Dispatch</button>
+        </form>
+        @if (Model.AccountRequestId is not null)
+        {
+            <span class="text-muted small">The account request is submitted at the same time.</span>
+        }
+    }
+    @if (Model.Status == ChecklistStatus.PendingFinalReview && !isOnboarding)
+    {
+        <span class="text-muted">Waiting for approval by <b>@Model.FinalApproverName</b> (head of the employee's department).</span>
+    }
+    @if (Model.Status == ChecklistStatus.PendingManagementApproval)
+    {
+        @if (Model.CanManagementDecide)
+        {
+            <a asp-controller="DepartureApprovals" asp-action="Review" asp-route-id="@Model.Id" class="btn btn-success">Review &amp; Approve</a>
+        }
+        else
+        {
+            <span class="text-muted">Waiting for HR / management approval.</span>
+        }
+    }
+    @if (Model.CanFinalize)
+    {
+        <form asp-action="Finalize" asp-route-id="@Model.Id" method="post">
+            <button class="btn btn-success">@(isOnboarding ? "Finalize Onboarding" : "Finalize Departure")</button>
+        </form>
+        @if (Model.AccountRequestStatus is not null and not RequestStatus.Completed)
+        {
+            <span class="text-muted small">Finalizing also requires the account request to be completed.</span>
+        }
+    }
+    @if (Model.CanCancel)
+    {
+        <button type="button" class="btn btn-outline-danger ms-auto" data-bs-toggle="collapse" data-bs-target="#cancel-request">Cancel Request</button>
+    }
+</div>
+
+@if (Model.CanCancel)
+{
+    <div class="collapse mb-3" id="cancel-request">
+        <div class="card card-body">
+            <form asp-action="Cancel" asp-route-id="@Model.Id" method="post"
+                  onsubmit="return confirm('Cancel this request? This cannot be undone.');">
+                <label class="form-label" for="reason">Reason for cancelling</label>
+                <textarea class="form-control mb-2" id="reason" name="reason" rows="2" maxlength="500" required></textarea>
+                <p class="text-muted small mb-2">
+                    Department tasks still open are withdrawn and their approvers are notified.
+                    @if (Model.AccountRequestId is not null)
+                    {
+                        @:The linked account request @Model.AccountRequestNo is closed; accounts it has already changed stay as they are.
+                    }
+                </p>
+                <button type="submit" class="btn btn-danger">Confirm Cancel</button>
+            </form>
+        </div>
+    </div>
+}
+
+@if (Model.Kind == ChecklistKind.Departure)
+{
+<h4>Department Tasks</h4>
+if (Model.Tasks.Count == 0)
+{
+    <p class="text-muted">Tasks are created for each department when the request is submitted.</p>
+}
+else
+{
+    <table class="table table-bordered align-middle">
+        <thead class="table-light">
+            <tr><th>Department</th><th>Required</th><th>Status</th><th>Progress</th><th>Completed At</th><th>Approved</th></tr>
+        </thead>
+        <tbody>
+        @foreach (var t in Model.Tasks.OrderBy(x => x.SortOrder))
+        {
+            var done = t.Items.Count(i => i.IsCompleted || i.IsNotApplicable);
+            <tr>
+                <td>@t.DepartmentName</td>
+                <td>@(t.IsRequired ? "Yes" : "No")</td>
+                <td>
+                    @t.Status
+                    @if (t.ReturnReason is not null)
+                    {
+                        <div class="small text-danger">Returned by @t.ReturnedByName: @t.ReturnReason</div>
+                    }
+                </td>
+                <td>@done / @t.Items.Count</td>
+                <td>@t.CompletedAt?.ToString("yyyy-MM-dd HH:mm")</td>
+                <td>@(t.IsApproved ? $"{t.ApprovedByName}, {t.ApprovedAt?.ToLocalTime():yyyy-MM-dd HH:mm}" : t.IsDone ? "waiting" : "")</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+}
+
+@if (!isOnboarding)
+{
+    <h4>Accounts Still Active</h4>
+    if (Model.ActiveAccounts.Count == 0)
+    {
+        <p class="text-muted">The employee holds no active accounts.</p>
+    }
+    else
+    {
+        <table class="table table-bordered table-sm align-middle">
+            <thead class="table-light">
+                <tr><th>Account</th><th>Account ID / Login</th><th>Responsible Department</th><th>Opened</th></tr>
+            </thead>
+            <tbody>
+            @foreach (var a in Model.ActiveAccounts)
+            {
+                <tr>
+                    <td>@a.AccountTypeName</td>
+                    <td>@a.AccountValue</td>
+                    <td>@a.DepartmentName</td>
+                    <td>@a.OpenedAt.ToLocalTime().ToString("yyyy-MM-dd")</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+}
+
+@if (canSeeEmployee && Model.EmployeeAttachments.Count > 0)
+{
+    <h4>Employee Documents</h4>
+    <ul class="list-unstyled mb-3">
+        @foreach (var file in Model.EmployeeAttachments)
+        {
+            <li>
+                <a asp-controller="Employees" asp-action="Attachment" asp-route-employeeId="@Model.EmployeeId"
+                   asp-route-attachmentId="@file.Id" target="_blank">@file.FileName</a>
+                <span class="text-muted small">(@(file.FileSize / 1024) KB)</span>
+                <a asp-controller="Employees" asp-action="Attachment" asp-route-employeeId="@Model.EmployeeId"
+                   asp-route-attachmentId="@file.Id" asp-route-download="true" class="small ms-1">Download</a>
+            </li>
+        }
+    </ul>
+}
+
+@if (Model.Status != ChecklistStatus.Draft)
+{
+    <partial name="_ChecklistLog" model="Model.Logs" />
+}
+
+<a asp-action="Index" class="btn btn-outline-secondary">Back</a>

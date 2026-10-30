@@ -7,6 +7,46 @@ public enum EmployeeStatus
     Resigned = 1    // Left the company
 }
 
+/// <summary>Employee gender. Unspecified only exists for records created before the field was added.</summary>
+public enum Gender
+{
+    Unspecified = 0,
+    Male = 1,
+    Female = 2
+}
+
+/// <summary>
+/// The category of employee, which determines which paper form layout
+/// ("Staff Requisition Form" vs "AE/Sales/SA Requisition Form") and account
+/// type checklist applies to the account request.
+/// </summary>
+public enum EmployeeCategory
+{
+    Staff = 0,  // General staff - uses the "Staff Requisition Form" layout
+    AE = 1      // Account Executive / Sales / SA (broker) - uses the AE form
+}
+
+/// <summary>Which employee category(ies) an account type applies to.</summary>
+public enum AccountTypeAudience
+{
+    Both = 0,       // Shown on both the Staff and AE forms
+    StaffOnly = 1,  // Shown only on the Staff form
+    AEOnly = 2      // Shown only on the AE/Sales/SA form
+}
+
+/// <summary>Helpers bridging <see cref="EmployeeCategory"/> and <see cref="AccountTypeAudience"/>.</summary>
+public static class EmployeeCategoryExtensions
+{
+    /// <summary>
+    /// The form-specific audience matching this employee category (used to
+    /// filter account types, in addition to <see cref="AccountTypeAudience.Both"/>).
+    /// Kept in one place so the checklist shown to HR and the server-side
+    /// validation in <c>AccountRequestService</c> can never disagree.
+    /// </summary>
+    public static AccountTypeAudience ToAudience(this EmployeeCategory category) =>
+        category == EmployeeCategory.AE ? AccountTypeAudience.AEOnly : AccountTypeAudience.StaffOnly;
+}
+
 /// <summary>
 /// The kind of account request. A single request table serves the whole
 /// lifecycle: onboarding, in-service add/remove, and offboarding.
@@ -22,11 +62,13 @@ public enum RequestType
 /// <summary>Overall status of an account request (the master ticket).</summary>
 public enum RequestStatus
 {
-    Draft = 0,       // Being prepared by HR, not submitted
-    Submitted = 1,   // Submitted, emails dispatched to department heads
-    InProgress = 2,  // At least one item handled, not all completed
-    Completed = 3,   // All items completed
-    Closed = 4       // Archived
+    Draft = 0,            // Being prepared, not submitted
+    Submitted = 1,        // Dispatched to the responsible departments
+    InProgress = 2,       // At least one item handled, not all completed
+    Completed = 3,        // All items completed
+    Closed = 4,           // Archived
+    PendingApproval = 5,  // Raised by the employee; waiting for their department manager
+    Rejected = 6          // Rejected by the approving manager; never dispatched
 }
 
 /// <summary>
@@ -47,4 +89,61 @@ public enum AccountStatus
 {
     Active = 0,     // Account is live
     Disabled = 1    // Account has been disabled
+}
+
+/// <summary>Which lifecycle process a checklist request belongs to.</summary>
+public enum ChecklistKind
+{
+    Onboarding = 1,
+    Departure = 2
+}
+
+/// <summary>Overall status of a checklist request (onboarding or departure).</summary>
+public enum ChecklistStatus
+{
+    Draft = 0,
+    Submitted = 1,
+    InProgress = 2,
+    PendingFinalReview = 3,         // Departure: waiting for the leaver's department head
+    Completed = 4,
+    Cancelled = 5,
+    PendingManagementApproval = 6   // Departure: waiting for HR / management (departures.approve)
+}
+
+/// <summary>One step of a checklist request's workflow, recorded in its log.</summary>
+public enum ChecklistLogAction
+{
+    Submitted = 1,
+    TaskCompleted = 2,          // department handlers completed their task
+    TaskApproved = 3,           // department approver approved it
+    TaskReturned = 4,           // department approver returned it to the handlers
+    HeadApproved = 5,           // leaver's department head approved; on to HR / management
+    HeadReturned = 6,           // department head returned chosen departments' tasks
+    ManagementApproved = 7,     // HR / management approved; the request is completed
+    ManagementReturned = 8,     // HR / management returned it to the department head (or to departments)
+    Cancelled = 9,
+    Finalized = 10              // onboarding finalized by HR
+}
+
+/// <summary>Status of one department's checklist task.</summary>
+public enum ChecklistTaskStatus
+{
+    NotStarted = 0,
+    InProgress = 1,
+    Completed = 2,
+    Returned = 3,
+    NotApplicable = 4
+}
+
+/// <summary>The kind of department work that handlers and approvers are set for.</summary>
+public enum WorkArea
+{
+    Account = 1,    // Account request items (open / disable accounts)
+    Departure = 2   // Departure checklist tasks
+}
+
+public enum AssignmentRole
+{
+    Handler = 1,    // Processes the department's work (save / complete)
+    Approver = 2    // Approves or returns the work the handlers completed
 }

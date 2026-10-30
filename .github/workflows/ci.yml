@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "copilot/**"]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2019-latest
+        env:
+          ACCEPT_EULA: "Y"
+          # Throw-away container that only lives for this job; not a real credential.
+          MSSQL_SA_PASSWORD: "Ci-Only_Passw0rd"
+        ports:
+          - 1433:1433
+
+    env:
+      DOTNET_NOLOGO: true
+      HRSYSTEM_TEST_SQL: "Server=localhost,1433;User Id=sa;Password=Ci-Only_Passw0rd;TrustServerCertificate=True"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore src/HRSystem.sln
+
+      - name: Build
+        run: dotnet build src/HRSystem.sln --no-restore -c Release
+
+      - name: Test
+        run: dotnet test src/HRSystem.sln --no-build -c Release --logger "trx;LogFileName=results.trx" --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults

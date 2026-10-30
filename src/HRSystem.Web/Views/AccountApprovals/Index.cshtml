@@ -1,0 +1,55 @@
+@model IReadOnlyList<RequestItemDto>
+@{
+    ViewData["Title"] = "Account Approval";
+    var pendingRequests = (IReadOnlyList<RequestDto>)ViewBag.PendingRequests;
+    var waiting = Model.Where(i => i.CanApprove).ToList();
+    var inProgress = Model.Where(i => !i.CanApprove).ToList();
+    var approvalView = new ViewDataDictionary(ViewData) { ["FromApproval"] = true };
+}
+
+<h2>Account Approval</h2>
+<p class="page-subtitle">Account items of the departments you approve. You can also process items the handlers have not finished.</p>
+
+@if (Model.Count == 0 && pendingRequests.Count == 0)
+{
+    <div class="alert alert-info">Nothing to approve.</div>
+}
+
+@if (pendingRequests.Count > 0)
+{
+    <h5>Employee requests waiting for your approval</h5>
+    <table class="table table-hover align-middle mb-4">
+        <thead><tr><th>Request</th><th>Employee</th><th>Type</th><th>Accounts</th><th>Submitted</th><th></th></tr></thead>
+        <tbody>
+        @foreach (var r in pendingRequests)
+        {
+            <tr>
+                <td>@r.RequestNo</td>
+                <td>@r.EmployeeName (@r.EmployeeNo)</td>
+                <td>@r.RequestType</td>
+                <td>@string.Join(", ", r.Items.Select(i => i.AccountTypeName))</td>
+                <td>@r.AppliedAt?.ToLocalTime().ToString("yyyy-MM-dd")</td>
+                <td class="text-end"><a class="btn btn-sm btn-primary" asp-controller="Requests" asp-action="Details" asp-route-id="@r.Id">Review</a></td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+@if (waiting.Count > 0)
+{
+    <h5>Waiting for your approval</h5>
+    @foreach (var i in waiting)
+    {
+        <partial name="_AccountItemCard" model="i" view-data="approvalView" />
+    }
+}
+
+@if (inProgress.Count > 0)
+{
+    <h5 class="mt-4">Still with the handlers</h5>
+    @foreach (var i in inProgress)
+    {
+        <partial name="_AccountItemCard" model="i" view-data="approvalView" />
+    }
+}

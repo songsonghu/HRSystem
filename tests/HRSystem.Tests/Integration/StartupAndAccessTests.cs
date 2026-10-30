@@ -1,0 +1,121 @@
+using System.Net;
+using HRSystem.Application.Security;
+using HRSystem.Domain.Enums;
+using HRSystem.Infrastructure.Identity;
+using HRSystem.Tests.Infrastructure;
+using Microsoft.EntityFrameworkCore;
+
+namespace HRSystem.Tests.Integration;
+
+public class StartupAndAccessTests : IntegrationTest
+{
+    public StartupAndAccessTests(TestApp app) : base(app) { }
+
+    [SkippableFact]
+    public async Task Empty_database_is_migrated_and_seeded()
+    {
+        RequireDatabase();
+
+        var hrPermissions = await Data.ReadAsync(db =>
+            (from c in db.RoleClaims
+             join r in db.Roles on c.RoleId equals r.Id
+             where r.Name == Roles.HR && c.ClaimType == Permissions.ClaimType
+             select c.ClaimValue!).ToListAsync());
+        Assert.Equal(
+            new[]
+            {
+                Permissions.AccountRequestsManage, Permissions.DepartmentsManage, Permissions.DeparturesApprove,
+                Permissions.DeparturesManage, Permissions.EmployeesManage, Permissions.OffboardingExport,
+                Permissions.OnboardingManage
+            },
+            hrPermissions.OrderBy(p => p, StringComparer.Ordinal));
+
+        var admins = await Data.ReadAsync(db =>
+            (from ur in db.UserRoles join r in db.Roles on ur.RoleId equals r.Id where r.Name == Roles.Admin select ur.UserId).CountAsync());
+        Assert.Equal(1, admins);
+
+        var templates = await Data.ReadAsync(db => db.ChecklistTemplates.Include(t => t.Items).ToListAsync());
+        Assert.Equal(5, templates.Count(t => t.Kind == ChecklistKind.Departure));
+        Assert.Equal(4, templates.Count(t => t.Kind == ChecklistKind.Onboarding));
+        Assert.All(templates.Where(t => t.Kind == ChecklistKind.Onboarding).SelectMany(t => t.Items).Where(i => i.Description == "Others"),
+            item => Assert.False(item.IsRequired));
+    }
+
+    [SkippableFact]
+    public async Task Anonymous_users_are_sent_to_login()
+    {
+        RequireDatabase();
+        var response = await App.CreateClient(new() { AllowAutoRedirect = false }).GetAsync("/Employees");
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Contains("/Identity/Account/Login", response.Headers.Location!.ToString());
+    }
+
+    [SkippableFact]
+    public async Task Pages_follow_role_permissions()
+    {
+        RequireDatabase();
+        var hr = await Data.PersonAsync(null, Roles.HR);
+        var client = await SignedInClientAsync(hr.Email, TestData.Password);
+
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/Employees")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/Onboarding")).StatusCode);
+        var users = await client.GetAsync("/Users");
+        Assert.Equal(HttpStatusCode.Redirect, users.StatusCode);
+        Assert.Contains("AccessDenied", users.Headers.Location!.ToString());
+        // HR edits the templates but needs checklist-approvers.manage to choose the handlers and approvers.
+        var templateId = await Data.ReadAsync(db => db.ChecklistTemplates.Where(t => t.Kind == ChecklistKind.Departure && !t.IsDeleted).Select(t => t.Id).FirstAsync());
+        foreach (var page in new[] { "/AccountTemplates/Edit/" + await Data.DepartmentAsync(), "/ChecklistTemplates/Edit/" + templateId })
+        {
+            var html = await client.GetStringAsync(page);
+            Assert.Contains("Handlers &amp; Approvers", html);
+            Assert.DoesNotContain("user-picker", html);
+        }
+    }
+
+    [SkippableFact]
+    public async Task Task_pages_are_open_to_users_without_roles()
+    {
+        RequireDatabase();
+        var plain = await Data.PersonAsync(null);
+        var client = await SignedInClientAsync(plain.Email, TestData.Password);
+
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/MyTasks")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/ChecklistTasks")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/ChecklistTasks/History?Keyword=x")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/AccountApprovals")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/DepartureApprovals")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/DepartureApprovals/History")).StatusCode);
+        Assert.Equal(HttpStatusCode.Redirect, (await client.GetAsync("/AccountTemplates")).StatusCode);
+        Assert.Equal(HttpStatusCode.Redirect, (await client.GetAsync("/Employees")).StatusCode);
+    }
+
+    [SkippableFact]
+    public async Task Admin_can_open_administration_pages()
+    {
+        RequireDatabase();
+        var client = await SignedInClientAsync("admin@hrsystem.local", "Admin@12345");
+
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/Users")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/Roles")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/ChecklistTemplates?kind=Departure")).StatusCode);
+        var accounts = await client.GetAsync("/AccountTemplates/Edit/" + await Data.DepartmentAsync());
+        Assert.Equal(HttpStatusCode.OK, accounts.StatusCode);
+        Assert.Contains("user-picker", await accounts.Content.ReadAsStringAsync());
+    }
+
+    [SkippableFact]
+    public async Task Role_page_lists_its_users_and_permissions_are_editable()
+    {
+        RequireDatabase();
+        var hr = await Data.PersonAsync(null, Roles.HR);
+        var hrRoleId = await Data.ReadAsync(db => db.Roles.Where(r => r.Name == Roles.HR).Select(r => r.Id).SingleAsync());
+        var client = await SignedInClientAsync("admin@hrsystem.local", "Admin@12345");
+
+        var html = await client.GetStringAsync($"/Roles/Edit/{hrRoleId}");
+
+        Assert.Contains(hr.Email, html);
+        Assert.DoesNotContain("disabled=\"False\"", html);
+        Assert.DoesNotContain("disabled=\"disabled\"", html);
+    }
+}

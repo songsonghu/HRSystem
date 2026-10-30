@@ -1,16 +1,18 @@
-Microsoft Visual Studio Solution File, Format Version 12.00
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{4EC3A436-B762-483F-829B-01300CA83ABB}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HRSystem.Application", "src\HRSystem.Application\HRSystem.Application.csproj", "{C44022DB-68BB-0B83-B68D-5A5F56AE0EBB}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HRSystem.Application", "HRSystem.Application\HRSystem.Application.csproj", "{C44022DB-68BB-0B83-B68D-5A5F56AE0EBB}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HRSystem.Domain", "src\HRSystem.Domain\HRSystem.Domain.csproj", "{5CE9F3CB-99E0-FADE-B430-A760FD990327}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HRSystem.Domain", "HRSystem.Domain\HRSystem.Domain.csproj", "{5CE9F3CB-99E0-FADE-B430-A760FD990327}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HRSystem.Infrastructure", "src\HRSystem.Infrastructure\HRSystem.Infrastructure.csproj", "{F93B9C59-40A0-3E36-79C1-C5E0B5F3A520}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HRSystem.Infrastructure", "HRSystem.Infrastructure\HRSystem.Infrastructure.csproj", "{F93B9C59-40A0-3E36-79C1-C5E0B5F3A520}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HRSystem.Web", "src\HRSystem.Web\HRSystem.Web.csproj", "{6C76F758-E840-9B93-0BA9-65695630F173}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HRSystem.Web", "HRSystem.Web\HRSystem.Web.csproj", "{6C76F758-E840-9B93-0BA9-65695630F173}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HRSystem.Tests", "..\tests\HRSystem.Tests\HRSystem.Tests.csproj", "{BD5870B7-7F37-4779-A8D0-FB7DA19330C3}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -34,6 +36,10 @@ Global
 		{6C76F758-E840-9B93-0BA9-65695630F173}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6C76F758-E840-9B93-0BA9-65695630F173}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6C76F758-E840-9B93-0BA9-65695630F173}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BD5870B7-7F37-4779-A8D0-FB7DA19330C3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BD5870B7-7F37-4779-A8D0-FB7DA19330C3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BD5870B7-7F37-4779-A8D0-FB7DA19330C3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BD5870B7-7F37-4779-A8D0-FB7DA19330C3}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

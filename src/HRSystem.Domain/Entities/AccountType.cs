@@ -1,4 +1,5 @@
 using HRSystem.Domain.Common;
+using HRSystem.Domain.Enums;
 
 namespace HRSystem.Domain.Entities;
 
@@ -26,6 +27,34 @@ public class AccountType : BaseEntity
 
     /// <summary>Display order in the request form.</summary>
     public int SortOrder { get; set; }
+
+    /// <summary>Paper-form section name used to group this item.</summary>
+    public string? GroupName { get; set; }
+
+    /// <summary>Paper-form column: 1 for left and 2 for right.</summary>
+    public int Column { get; set; } = 1;
+
+    /// <summary>Whether the item is rendered with a selectable checkbox.</summary>
+    public bool HasCheckbox { get; set; } = true;
+
+    /// <summary>Optional text displayed before the item label.</summary>
+    public string? PrefixText { get; set; }
+
+    /// <summary>Optional text displayed after the item label.</summary>
+    public string? SuffixText { get; set; }
+
+    /// <summary>Which requisition form (Staff / AE / both) shows this item.</summary>
+    public AccountTypeAudience Audience { get; set; } = AccountTypeAudience.Both;
+
+    /// <summary>
+    /// Whether HR must supply a free-text detail when selecting this item
+    /// (e.g. "Group(s)/Sub-group(s)" for E-mail, "Access profile" for
+    /// E-report/FXES, the license number for SFC License(s)).
+    /// </summary>
+    public bool RequiresDetail { get; set; }
+
+    /// <summary>Label shown next to the detail input, e.g. "Access profile".</summary>
+    public string? DetailLabel { get; set; }
 
     // Navigation
     public Department? ResponsibleDept { get; set; }

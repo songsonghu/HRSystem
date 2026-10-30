@@ -19,5 +19,7 @@ public class CurrentUser : ICurrentUser
 
     public string? UserName => Principal?.Identity?.Name;
 
-    public bool IsInRole(string role) => Principal?.IsInRole(role) ?? false;
+    public bool IsAdmin => Principal?.IsAdmin() ?? false;
+
+    public bool HasPermission(string permission) => Principal?.HasPermission(permission) ?? false;
 }
