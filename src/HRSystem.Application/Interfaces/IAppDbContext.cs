@@ -18,6 +18,16 @@ public interface IAppDbContext
     DbSet<EmployeeAttachment> EmployeeAttachments { get; }
     DbSet<EmployeeAccount> EmployeeAccounts { get; }
     DbSet<AuditLog> AuditLogs { get; }
+    DbSet<ChecklistRequest> ChecklistRequests { get; }
+    DbSet<ChecklistTask> ChecklistTasks { get; }
+    DbSet<ChecklistRequestLog> ChecklistRequestLogs { get; }
+    DbSet<ChecklistTaskItem> ChecklistTaskItems { get; }
+    DbSet<ChecklistTemplate> ChecklistTemplates { get; }
+    DbSet<ChecklistTemplateItem> ChecklistTemplateItems { get; }
+    DbSet<DepartmentAssignee> DepartmentAssignees { get; }
+
+    /// <summary>Used to discard tracked state before retrying after a concurrency conflict.</summary>
+    Microsoft.EntityFrameworkCore.ChangeTracking.ChangeTracker ChangeTracker { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

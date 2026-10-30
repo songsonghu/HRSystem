@@ -17,7 +17,11 @@ public class EmployeeDto
     public int Id { get; set; }
     public string EmployeeNo { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
+    public Gender Gender { get; set; }
     public string? Email { get; set; }
+    public int? DepartmentId { get; set; }
+
+    /// <summary>Department name, for display.</summary>
     public string? Department { get; set; }
     public string? Position { get; set; }
     public DateTime JoinDate { get; set; }
@@ -33,8 +37,9 @@ public class EmployeeEditDto
     public int Id { get; set; }
     public string EmployeeNo { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
+    public Gender Gender { get; set; }
     public string? Email { get; set; }
-    public string? Department { get; set; }
+    public int? DepartmentId { get; set; }
     public string? Position { get; set; }
     public DateTime JoinDate { get; set; } = DateTime.Today;
     public DateTime? ResignDate { get; set; }

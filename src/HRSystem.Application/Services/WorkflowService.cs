@@ -33,7 +33,7 @@ public class WorkflowService
 
     /// <summary>
     /// Recompute the master request status from the aggregate state of its items.
-    /// - All Completed/Rejected  => Completed
+    /// - All Completed/Rejected and approved by their department approver => Completed
     /// - Any WIP/Completed/KIV   => InProgress
     /// - Otherwise               => Submitted
     /// </summary>
@@ -42,7 +42,7 @@ public class WorkflowService
         var list = items.ToList();
         if (list.Count == 0) return RequestStatus.Submitted;
 
-        bool allDone = list.All(i => i.Status is ItemStatus.Completed or ItemStatus.Rejected);
+        bool allDone = list.All(i => i.Status is ItemStatus.Completed or ItemStatus.Rejected && i.ApprovedAt is not null);
         if (allDone) return RequestStatus.Completed;
 
         bool anyProgress = list.Any(i => i.Status is ItemStatus.WIP or ItemStatus.Completed or ItemStatus.KIV);

@@ -20,14 +20,23 @@
         <span asp-validation-for="Name" class="text-danger"></span>
     </div>
     <div class="mb-3">
+        <label asp-for="Gender" class="form-label">Gender</label>
+        <select asp-for="Gender" class="form-select"
+                asp-items="Html.GetEnumSelectList<Gender>().Where(i => i.Value != ((int)Gender.Unspecified).ToString())">
+            <option value="0">-- select gender --</option>
+        </select>
+        <span asp-validation-for="Gender" class="text-danger"></span>
+    </div>
+    <div class="mb-3">
         <label asp-for="Position" class="form-label">Position</label>
         <input asp-for="Position" class="form-control" />
     </div>
     <div class="mb-3">
-        <label asp-for="Department" class="form-label">Department</label>
-        <select asp-for="Department" class="form-select" asp-items="ViewBag.Departments">
+        <label asp-for="DepartmentId" class="form-label">Department</label>
+        <select asp-for="DepartmentId" class="form-select" asp-items="ViewBag.Departments">
             <option value="">-- select department --</option>
         </select>
+        <span asp-validation-for="DepartmentId" class="text-danger"></span>
     </div>
     <div class="mb-3">
         <label asp-for="Email" class="form-label">Email</label>

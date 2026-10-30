@@ -1,73 +1,138 @@
-@using System.Security.Claims
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - HR System</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
-    <link rel="stylesheet" href="~/css/site.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
 <body>
-    <header>
-        <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom mb-3">
-            <div class="container-fluid">
-                <a class="navbar-brand" asp-controller="Home" asp-action="Index">HR System</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="collapse navbar-collapse" id="nav">
-                    <ul class="navbar-nav me-auto">
-                        @if (User.Identity?.IsAuthenticated == true)
+@{
+    var signedIn = User.Identity?.IsAuthenticated == true;
+    var controller = ViewContext.RouteData.Values["controller"]?.ToString();
+    var action = ViewContext.RouteData.Values["action"]?.ToString();
+    string Active(string c, string? a = null)
+    {
+        return string.Equals(controller, c, StringComparison.OrdinalIgnoreCase)
+               && (a is null || string.Equals(action, a, StringComparison.OrdinalIgnoreCase)) ? "active" : "";
+    }
+
+    var canSetApprovers = User.HasPermission(Permissions.ChecklistApproversManage);
+    var settingsMenu = User.HasPermission(Permissions.UsersManage) || User.HasPermission(Permissions.RolesManage)
+                       || User.HasPermission(Permissions.SystemJobs) || canSetApprovers
+                       || User.HasPermission(Permissions.AccountRequestsManage) || User.HasPermission(Permissions.DeparturesManage);
+    var userName = User.Identity?.Name ?? string.Empty;
+}
+
+@if (!signedIn)
+{
+    <div class="container">
+        <partial name="_Alerts" />
+        <main role="main">@RenderBody()</main>
+    </div>
+}
+else
+{
+    <div class="d-flex">
+        <aside class="sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="sidebar" aria-labelledby="sidebarLabel">
+            <div class="offcanvas-header border-bottom">
+                <span class="offcanvas-title d-flex align-items-center gap-2 fw-semibold" id="sidebarLabel">
+                    <span class="brand-mark"><i class="bi bi-people-fill"></i></span>HR System
+                </span>
+                <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#sidebar" aria-label="Close"></button>
+            </div>
+            <div class="offcanvas-body d-flex flex-column p-0">
+                <a class="sidebar-brand d-none d-lg-flex" asp-controller="Home" asp-action="Index">
+                    <span class="brand-mark"><i class="bi bi-people-fill"></i></span>HR System
+                </a>
+
+                <nav class="nav flex-column pb-3">
+                    <a class="nav-link @Active("Home")" asp-controller="Home" asp-action="Index"><i class="bi bi-grid"></i>Home</a>
+
+                    <div class="sidebar-heading">Workspace</div>
+                    <a class="nav-link @Active("MyTasks")" asp-controller="MyTasks" asp-action="Index"><i class="bi bi-check2-square"></i>Account Checklist</a>
+                    <a class="nav-link @Active("AccountApprovals")" asp-controller="AccountApprovals" asp-action="Index"><i class="bi bi-patch-check"></i>Account Approval</a>
+                    <a class="nav-link @Active("ChecklistTasks")" asp-controller="ChecklistTasks" asp-action="Index"><i class="bi bi-list-check"></i>Departure Checklist</a>
+                    <a class="nav-link @Active("DepartureApprovals")" asp-controller="DepartureApprovals" asp-action="Index"><i class="bi bi-clipboard-check"></i>Departure Approval</a>
+
+                    @* Account Request is for everyone: employees raise requests for themselves and managers for their team. *@
+                    <div class="sidebar-heading">HR</div>
+                    @if (User.HasPermission(Permissions.EmployeesManage))
+                    {
+                        <a class="nav-link @Active("Employees")" asp-controller="Employees" asp-action="Index"><i class="bi bi-people"></i>Employees</a>
+                    }
+                    @if (User.HasPermission(Permissions.DepartmentsManage))
+                    {
+                        <a class="nav-link @Active("Departments")" asp-controller="Departments" asp-action="Index"><i class="bi bi-diagram-3"></i>Departments</a>
+                    }
+                    <a class="nav-link @Active("Requests")" asp-controller="Requests" asp-action="Index"><i class="bi bi-person-badge"></i>Account Request</a>
+                    @if (User.HasPermission(Permissions.OnboardingManage))
+                    {
+                        <a class="nav-link @Active("Onboarding")" asp-controller="Onboarding" asp-action="Index"><i class="bi bi-person-plus"></i>Onboarding</a>
+                    }
+                    @if (User.HasPermission(Permissions.DeparturesManage))
+                    {
+                        <a class="nav-link @Active("Departures")" asp-controller="Departures" asp-action="Index"><i class="bi bi-person-dash"></i>Departures</a>
+                    }
+
+                    @if (settingsMenu)
+                    {
+                        <div class="sidebar-heading">Settings</div>
+                        @if (User.HasPermission(Permissions.UsersManage))
                         {
-                            @if (User.IsInRole("Admin") || User.IsInRole("HR"))
-                            {
-                                <li class="nav-item"><a class="nav-link" asp-controller="Employees" asp-action="Index">Employees</a></li>
-                                <li class="nav-item"><a class="nav-link" asp-controller="Requests" asp-action="Index">Requests</a></li>
-                            }
-                            @if (User.IsInRole("Admin") || User.IsInRole("DeptHead"))
-                            {
-                                <li class="nav-item"><a class="nav-link" asp-controller="MyTasks" asp-action="Index">My Tasks</a></li>
-                            }
+                            <a class="nav-link @Active("Users")" asp-controller="Users" asp-action="Index"><i class="bi bi-person-gear"></i>Users</a>
                         }
-                    </ul>
-                    <ul class="navbar-nav">
-                        @if (User.Identity?.IsAuthenticated == true)
+                        @if (User.HasPermission(Permissions.RolesManage))
                         {
-                            <li class="nav-item"><span class="nav-link text-info">@User.Identity!.Name</span></li>
-                            <li class="nav-item">
-                                <form asp-area="Identity" asp-page="/Account/Logout" method="post">
-                                    <button type="submit" class="btn btn-link nav-link">Logout</button>
-                                </form>
-                            </li>
+                            <a class="nav-link @Active("Roles")" asp-controller="Roles" asp-action="Index"><i class="bi bi-shield-check"></i>Roles</a>
                         }
-                        else
+                        @if (canSetApprovers || User.HasPermission(Permissions.AccountRequestsManage))
                         {
-                            <li class="nav-item"><a class="nav-link" asp-area="Identity" asp-page="/Account/Login">Login</a></li>
+                            <a class="nav-link @Active("AccountTemplates")" asp-controller="AccountTemplates" asp-action="Index"><i class="bi bi-ui-checks"></i>Templates Accounts</a>
                         }
-                    </ul>
+                        @if (canSetApprovers || User.HasPermission(Permissions.DeparturesManage))
+                        {
+                            <a class="nav-link @Active("ChecklistTemplates")" asp-controller="ChecklistTemplates" asp-action="Index" asp-route-kind="Departure"><i class="bi bi-card-checklist"></i>Templates Departure</a>
+                        }
+                        @if (User.HasPermission(Permissions.SystemJobs))
+                        {
+                            <a class="nav-link" href="~/hangfire"><i class="bi bi-clock-history"></i>Background Jobs</a>
+                        }
+                    }
+                </nav>
+
+                <div class="sidebar-user mt-auto">
+                    <partial name="_Avatar" model="userName" />
+                    <div class="small text-truncate flex-grow-1 min-w-0" title="@userName">@userName</div>
+                    <form asp-area="Identity" asp-page="/Account/Logout" method="post">
+                        <button type="submit" class="btn btn-link" title="Logout" aria-label="Logout"><i class="bi bi-box-arrow-right"></i></button>
+                    </form>
                 </div>
             </div>
-        </nav>
-    </header>
+        </aside>
 
-    <div class="container">
-        @if (TempData["Success"] is string ok)
-        {
-            <div class="alert alert-success alert-dismissible fade show">@ok<button class="btn-close" data-bs-dismiss="alert"></button></div>
-        }
-        @if (TempData["Error"] is string err)
-        {
-            <div class="alert alert-danger alert-dismissible fade show">@err<button class="btn-close" data-bs-dismiss="alert"></button></div>
-        }
-        <main role="main">
-            @RenderBody()
-        </main>
+        <div class="flex-grow-1 min-w-0 d-flex flex-column">
+            <nav class="navbar mobile-topbar d-lg-none">
+                <div class="container-fluid">
+                    <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebar" aria-controls="sidebar" aria-label="Open menu">
+                        <i class="bi bi-list"></i>
+                    </button>
+                    <a class="navbar-brand ms-2 me-auto fw-semibold" asp-controller="Home" asp-action="Index">HR System</a>
+                </div>
+            </nav>
+            <div class="container-fluid px-4 px-xl-5 py-4 flex-grow-1">
+                <partial name="_Alerts" />
+                <main role="main">@RenderBody()</main>
+            </div>
+            <footer class="app-footer text-center py-3">&copy; @DateTime.Now.Year HR System</footer>
+        </div>
     </div>
-
-    <footer class="border-top text-muted text-center py-3 mt-4">
-        <div class="container">&copy; @DateTime.Now.Year - HR System &middot; ASP.NET Core 8.0</div>
-    </footer>
+}
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     @await RenderSectionAsync("Scripts", required: false)

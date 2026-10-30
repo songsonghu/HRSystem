@@ -1,0 +1,23 @@
+@model DepartmentEditDto
+
+<div class="mb-3">
+    <label asp-for="Name" class="form-label">Department Name</label>
+    <input asp-for="Name" class="form-control" />
+    <span asp-validation-for="Name" class="text-danger"></span>
+</div>
+<div class="mb-3">
+    <label asp-for="Code" class="form-label">Code</label>
+    <input asp-for="Code" class="form-control" />
+    <span asp-validation-for="Code" class="text-danger"></span>
+</div>
+<div class="mb-3">
+    <label asp-for="ManagerEmployeeId" class="form-label">Manager</label>
+    <select asp-for="ManagerEmployeeId" class="form-select" asp-items="ViewBag.Managers">
+        <option value="">-- no manager --</option>
+    </select>
+    <div class="form-text">Account and departure tasks for this department are assigned to the manager's login account.</div>
+</div>
+<div class="form-check mb-3">
+    <input asp-for="IsActive" class="form-check-input" />
+    <label asp-for="IsActive" class="form-check-label">Active</label>
+</div>

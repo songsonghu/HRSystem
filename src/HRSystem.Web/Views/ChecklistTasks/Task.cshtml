@@ -1,0 +1,237 @@
+@model ChecklistTaskEditViewModel
+@using HRSystem.Application.Common
+@{
+    ViewData["Title"] = Model.Kind + " Task";
+    var readOnly = !Model.CanEdit;
+    var hasAttachments = Model.Items.Any(i => i.AllowAttachment);
+    var everyItemNeedsChoice = Model.Kind == ChecklistKind.Departure;
+    // Approvers come from (and go back to) Departure Approval; handlers use Departure Checklist.
+    var backController = Model.IsApprover && !Model.IsHandler ? "DepartureApprovals" : "ChecklistTasks";
+    var backAction = readOnly && !Model.CanApprove ? "History" : "Index";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0">@Model.Kind Task - @Model.DepartmentName</h2>
+    <span>
+        <span class="badge @(Model.IsDone ? "bg-success" : "bg-warning text-dark")">@Model.Status</span>
+        @if (Model.ApprovedAt is not null)
+        {
+            <span class="badge bg-success">Approved by @Model.ApprovedByName</span>
+        }
+        else if (Model.IsDone)
+        {
+            <span class="badge bg-primary">Waiting for approval</span>
+        }
+    </span>
+</div>
+<p class="text-muted">Request @Model.RequestNo · @Model.EmployeeName (@Model.EmployeeNo)</p>
+
+@if (!string.IsNullOrWhiteSpace(Model.ReturnReason) && (!readOnly || Model.CanApprove))
+{
+    <div class="alert alert-warning">
+        <b>@(readOnly ? "Completed again after being returned" : "Returned")</b>
+        by @Model.ReturnedByName on @(Model.ReturnedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")):
+        @Model.ReturnReason
+        @if (readOnly)
+        {
+            <div class="small mt-1">Check that this has been fixed before approving.</div>
+        }
+    </div>
+}
+
+@if (readOnly)
+{
+    <div class="alert alert-info">
+        @if (Model.CanApprove)
+        {
+            @:Completed @(Model.CompletedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")). Approve it below, or return it to the handlers.
+        }
+        else if (Model.IsRequestOpen && Model.IsDone && Model.ApprovedAt is null)
+        {
+            @:Completed @(Model.CompletedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")) and waiting for the department approver. If it needs changes, the approver can return it to you.
+        }
+        else if (Model.ApprovedAt is not null)
+        {
+            @:Approved by @Model.ApprovedByName on @(Model.ApprovedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")), so the task is read-only.
+        }
+        else
+        {
+            @:This request is closed, so the task is read-only.
+        }
+    </div>
+}
+
+<form asp-action="Task" method="post" enctype="multipart/form-data" id="taskForm">
+    <input type="hidden" asp-for="TaskId" />
+    <input type="hidden" asp-for="RequestId" />
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+    <fieldset disabled="@readOnly">
+        <div class="table-responsive">
+            <table class="table table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>Done</th>
+                        <th>N/A</th>
+                        <th>Checklist Item</th>
+                        @if (hasAttachments)
+                        {
+                            <th>Attachment</th>
+                        }
+                        <th>Remark</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @for (int i = 0; i < Model.Items.Count; i++)
+                {
+                    var item = Model.Items[i];
+                    <tr class="checklist-item">
+                        <td>
+                            <input type="hidden" asp-for="Items[i].Id" />
+                            <input asp-for="Items[i].IsCompleted" class="form-check-input item-choice" />
+                        </td>
+                        <td><input asp-for="Items[i].IsNotApplicable" class="form-check-input item-choice" /></td>
+                        <td>
+                            @item.Description
+                            @if (item.IsRequired)
+                            {
+                                <span class="text-danger">*</span>
+                            }
+                        </td>
+                        @if (hasAttachments)
+                        {
+                            <td style="min-width:240px">
+                                @if (item.AllowAttachment)
+                                {
+                                    @if (item.AttachmentFileName is not null)
+                                    {
+                                        <div class="small mb-1">
+                                            <a asp-action="Attachment" asp-route-id="@item.Id" target="_blank" rel="noopener">
+                                                <i class="bi bi-paperclip"></i>@item.AttachmentFileName</a>
+                                            <span class="text-muted">(@((item.AttachmentSize ?? 0) / 1024 + 1) KB)</span>
+                                        </div>
+                                        @if (!readOnly)
+                                        {
+                                            <div class="form-check small mb-1">
+                                                <input asp-for="Items[i].RemoveAttachment" class="form-check-input" />
+                                                <label asp-for="Items[i].RemoveAttachment" class="form-check-label">Remove</label>
+                                            </div>
+                                        }
+                                    }
+                                    @if (!readOnly)
+                                    {
+                                        <input type="file" name="Items[@i].Attachment" accept="@ChecklistAttachmentRules.Accept"
+                                               class="form-control form-control-sm" title="@ChecklistAttachmentRules.Description" />
+                                    }
+                                    else if (item.AttachmentFileName is null)
+                                    {
+                                        <span class="text-muted small">—</span>
+                                    }
+                                }
+                            </td>
+                        }
+                        <td><input asp-for="Items[i].Remark" class="form-control" /></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="TaskRemark" class="form-label"></label>
+            <textarea asp-for="TaskRemark" class="form-control" rows="3"></textarea>
+        </div>
+    </fieldset>
+
+    @if (!readOnly)
+    {
+        <p class="text-muted small">
+            Items marked <span class="text-danger">*</span> are required.
+            @if (everyItemNeedsChoice)
+            {
+                @:Tick either Done or N/A for every item before completing.
+            }
+            @if (hasAttachments)
+            {
+                @:Attachments: @ChecklistAttachmentRules.Description, one per item.
+            }
+            "Complete Task" sends this department's part to the department approvers.
+        </p>
+    }
+    @if (Model.CanApprove)
+    {
+        <div class="mb-3">
+            <label class="form-label" for="approve-remark">Approval remark <span class="text-muted small">(optional)</span></label>
+            <textarea class="form-control" id="approve-remark" name="remark" form="approveForm" rows="2" maxlength="1000"></textarea>
+            <div class="form-text">Recorded in the departure's workflow log.</div>
+        </div>
+    }
+    <div class="d-flex flex-wrap gap-2 align-items-start">
+        @if (!readOnly)
+        {
+            <button type="submit" name="MarkAsCompleted" value="true" class="btn btn-success" id="completeTask">Complete Task</button>
+            <button type="submit" name="MarkAsCompleted" value="false" class="btn btn-primary">Save Progress</button>
+        }
+        else if (Model.IsApprover && Model.IsDone && Model.ApprovedAt is null)
+        {
+            @* The handlers already completed it: the approver's Complete is greyed out and Approve is live. *@
+            <button type="button" class="btn btn-success" disabled>Complete Task</button>
+        }
+        @if (Model.CanApprove)
+        {
+            <button type="submit" form="approveForm" class="btn btn-primary">Approve</button>
+            <button type="button" class="btn btn-outline-danger" data-bs-toggle="collapse" data-bs-target="#return-task">Return to Handlers</button>
+        }
+        else if (Model.IsApprover && Model.ApprovedAt is null)
+        {
+            <button type="button" class="btn btn-primary" disabled title="Available once the task is completed">Approve</button>
+        }
+        <a asp-controller="@backController" asp-action="@backAction" class="btn btn-outline-secondary">Back</a>
+    </div>
+</form>
+
+@if (Model.CanApprove)
+{
+    <form asp-action="Approve" asp-route-id="@Model.TaskId" method="post" id="approveForm"
+          onsubmit="return confirm('Approve this department task?');"></form>
+    <div class="collapse mt-3" id="return-task">
+        <div class="card card-body">
+            <form asp-action="Return" asp-route-id="@Model.TaskId" method="post">
+                <label class="form-label" for="reason">What needs to be fixed</label>
+                <textarea class="form-control" id="reason" name="reason" rows="2" maxlength="500" required></textarea>
+                <div class="form-text">The handlers of @Model.DepartmentName get this reason by email and on the task.</div>
+                <button type="submit" class="btn btn-danger mt-2">Return Task</button>
+            </form>
+        </div>
+    </div>
+}
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (() => {
+            // Done and N/A exclude each other.
+            document.querySelectorAll('.checklist-item').forEach(row => {
+                const choices = row.querySelectorAll('.item-choice');
+                choices.forEach(box => box.addEventListener('change', () => {
+                    if (box.checked) choices.forEach(other => { if (other !== box) other.checked = false; });
+                }));
+            });
+
+            const complete = document.getElementById('completeTask');
+            if (!complete) return;
+            complete.addEventListener('click', e => {
+                const everyItemNeedsChoice = @Json.Serialize(everyItemNeedsChoice);
+                const missing = [...document.querySelectorAll('.checklist-item')]
+                    .filter(row => ![...row.querySelectorAll('.item-choice')].some(box => box.checked));
+                if (everyItemNeedsChoice && missing.length > 0) {
+                    e.preventDefault();
+                    alert('Tick either Done or N/A for every checklist item before completing the task.');
+                    missing[0].querySelector('.item-choice').focus();
+                    return;
+                }
+                if (!confirm('Complete this department task?')) e.preventDefault();
+            });
+        })();
+    </script>
+}

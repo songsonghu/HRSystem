@@ -49,14 +49,38 @@ public class RequestDto
     public DateTime? LastDay { get; set; }
     public DateTime? AppliedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
+    public string? ApproverName { get; set; }
+    public string? DecidedByName { get; set; }
+    public DateTime? DecidedAt { get; set; }
+    public string? DecisionRemark { get; set; }
     public List<RequestItemDto> Items { get; set; } = new();
     public List<AttachmentDto> Attachments { get; set; } = new();
+
+    // What the current user may do with this request.
+    public bool CanSubmit { get; set; }
+    public bool CanApprove { get; set; }
+    public bool CanUpload { get; set; }
+
+    /// <summary>True when submitting sends the request to the employee's manager for approval first.</summary>
+    public bool SubmitNeedsApproval { get; set; }
+}
+
+/// <summary>Who the current user may raise requests for, and which request types.</summary>
+public class RequestCreateContextDto
+{
+    public IReadOnlyList<EmployeeOptionDto> Employees { get; set; } = Array.Empty<EmployeeOptionDto>();
+    public IReadOnlyList<RequestType> RequestTypes { get; set; } = Array.Empty<RequestType>();
 }
 
 /// <summary>Read model for a request item (one account type / department).</summary>
 public class RequestItemDto
 {
     public int Id { get; set; }
+    public int RequestId { get; set; }
+    public string RequestNo { get; set; } = string.Empty;
+    public string EmployeeName { get; set; } = string.Empty;
+    public string EmployeeNo { get; set; } = string.Empty;
+    public RequestType RequestType { get; set; }
     public int AccountTypeId { get; set; }
     public string AccountTypeName { get; set; } = string.Empty;
     public int AssignedDeptId { get; set; }
@@ -66,9 +90,24 @@ public class RequestItemDto
     public string? RequestDetail { get; set; }
     public string? ResultRemark { get; set; }
     public DateTime? HandledAt { get; set; }
+    public RequestStatus RequestStatus { get; set; }
+    public string? ApprovedByName { get; set; }
+    public DateTime? ApprovedAt { get; set; }
+    public string? ReturnReason { get; set; }
+
+    /// <summary>Completed or rejected by the handlers: waiting for (or past) the department approval.</summary>
+    public bool IsSubmitted => Status is ItemStatus.Completed or ItemStatus.Rejected;
+    public bool IsApproved => ApprovedAt is not null;
+    public bool IsRequestOpen => RequestStatus is Domain.Enums.RequestStatus.Submitted or Domain.Enums.RequestStatus.InProgress;
+
+    // What the current user may do, as a handler or an approver of the item's department.
+    public bool IsHandler { get; set; }
+    public bool IsApprover { get; set; }
+    public bool CanEdit => IsRequestOpen && !IsSubmitted && (IsHandler || IsApprover);
+    public bool CanApprove => IsRequestOpen && IsSubmitted && !IsApproved && IsApprover;
 }
 
-/// <summary>Input model used by a department head to update an item.</summary>
+/// <summary>Input model used by a department handler or approver to update an item.</summary>
 public class UpdateItemDto
 {
     public int ItemId { get; set; }

@@ -1,0 +1,26 @@
+@model ChecklistTaskDto
+@{
+    var done = Model.Items.Count(i => i.IsCompleted || i.IsNotApplicable);
+}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between">
+        <span><b>@Model.DepartmentName</b> · @Model.EmployeeName (@Model.EmployeeNo)</span>
+        <span class="badge @(Model.CanApprove ? "bg-primary" : Model.IsReturned ? "bg-danger" : "bg-warning text-dark")">
+            @(Model.CanApprove ? (Model.IsResubmitted ? "Completed again - waiting for approval" : "Completed - waiting for approval")
+              : Model.IsReturned ? "Returned" : Model.Status.ToString())
+        </span>
+    </div>
+    <div class="card-body">
+        <p class="mb-2">
+            Request: @Model.RequestNo · Progress: @done / @Model.Items.Count
+            @if (Model.CompletedAt is not null) { <span>· Completed @Model.CompletedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span> }
+        </p>
+        @if (Model.ReturnReason is not null)
+        {
+            <p class="mb-2 text-danger small">Returned by @Model.ReturnedByName: @Model.ReturnReason</p>
+        }
+        <a asp-controller="ChecklistTasks" asp-action="Task" asp-route-id="@Model.Id" class="btn btn-sm @(Model.CanApprove ? "btn-primary" : "btn-outline-primary")">
+            @(Model.CanApprove ? "Review & Approve" : "Open Task")
+        </a>
+    </div>
+</div>

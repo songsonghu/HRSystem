@@ -25,7 +25,7 @@ public class EmployeeService : IEmployeeService
 
     public async Task<IReadOnlyList<EmployeeDto>> GetListAsync(string? keyword = null, CancellationToken ct = default)
     {
-        var query = _db.Employees.AsNoTracking().Where(e => !e.IsDeleted);
+        var query = _db.Employees.AsNoTracking().Include(e => e.Department).Where(e => !e.IsDeleted);
 
         if (!string.IsNullOrWhiteSpace(keyword))
         {
@@ -33,7 +33,7 @@ public class EmployeeService : IEmployeeService
             query = query.Where(e =>
                 e.Name.Contains(keyword) ||
                 e.EmployeeNo.Contains(keyword) ||
-                (e.Department != null && e.Department.Contains(keyword)));
+                (e.Department != null && e.Department.Name.Contains(keyword)));
         }
 
         return await query
@@ -45,6 +45,7 @@ public class EmployeeService : IEmployeeService
     public async Task<EmployeeDto?> GetAsync(int id, CancellationToken ct = default)
     {
         var e = await _db.Employees.AsNoTracking()
+            .Include(x => x.Department)
             .Include(x => x.Attachments)
             .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, ct);
         return e is null ? null : Map(e);
@@ -55,12 +56,16 @@ public class EmployeeService : IEmployeeService
         bool exists = await _db.Employees.AnyAsync(e => e.EmployeeNo == dto.EmployeeNo && !e.IsDeleted, ct);
         if (exists) return Result<int>.Fail($"Employee number '{dto.EmployeeNo}' already exists.");
 
+        var departmentError = await ValidateDepartmentAsync(dto.DepartmentId, null, ct);
+        if (departmentError is not null) return Result<int>.Fail(departmentError);
+
         var entity = new Employee
         {
             EmployeeNo = dto.EmployeeNo,
             Name = dto.Name,
+            Gender = dto.Gender,
             Email = dto.Email,
-            Department = dto.Department,
+            DepartmentId = dto.DepartmentId,
             Position = dto.Position,
             JoinDate = dto.JoinDate,
             ResignDate = dto.ResignDate,
@@ -79,9 +84,13 @@ public class EmployeeService : IEmployeeService
         var entity = await _db.Employees.FirstOrDefaultAsync(e => e.Id == dto.Id && !e.IsDeleted, ct);
         if (entity is null) return Result.Fail("Employee not found.");
 
+        var departmentError = await ValidateDepartmentAsync(dto.DepartmentId, entity.DepartmentId, ct);
+        if (departmentError is not null) return Result.Fail(departmentError);
+
         entity.Name = dto.Name;
+        entity.Gender = dto.Gender;
         entity.Email = dto.Email;
-        entity.Department = dto.Department;
+        entity.DepartmentId = dto.DepartmentId;
         entity.Position = dto.Position;
         entity.JoinDate = dto.JoinDate;
         entity.ResignDate = dto.ResignDate;
@@ -102,7 +111,12 @@ public class EmployeeService : IEmployeeService
         var entity = await _db.Employees.FirstOrDefaultAsync(e => e.Id == id && !e.IsDeleted, ct);
         if (entity is null) return Result.Fail("Employee not found.");
 
+        var managerOf = await _db.Departments.Where(d => d.ManagerEmployeeId == id).Select(d => d.Name).ToListAsync(ct);
+        if (managerOf.Count > 0)
+            return Result.Fail($"{entity.Name} is the manager of: {string.Join(", ", managerOf)}. Assign another manager first.");
+
         entity.IsDeleted = true; // soft delete keeps the audit trail intact
+        entity.UserId = null;    // free the login so it can be linked to another employee
         await _db.SaveChangesAsync(ct);
         await _audit.LogAsync("DeleteEmployee", nameof(Employee), entity.Id.ToString(), null, ct);
         return Result.Success();
@@ -186,13 +200,13 @@ public class EmployeeService : IEmployeeService
         return new EmployeeAttachmentFile(content, attachment.FileName, attachment.ContentType);
     }
 
-    public async Task<IReadOnlyList<string>> GetDepartmentNamesAsync(CancellationToken ct = default)
+    // An employee may keep an existing department after it is deactivated, but cannot be moved into one.
+    private async Task<string?> ValidateDepartmentAsync(int? departmentId, int? currentDepartmentId, CancellationToken ct)
     {
-        return await _db.Departments.AsNoTracking()
-            .Where(d => d.IsActive)
-            .OrderBy(d => d.Name)
-            .Select(d => d.Name)
-            .ToListAsync(ct);
+        if (departmentId is null || departmentId == currentDepartmentId) return null;
+        var department = await _db.Departments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == departmentId, ct);
+        if (department is null) return "Selected department not found.";
+        return department.IsActive ? null : $"Department '{department.Name}' is inactive.";
     }
 
     private static EmployeeDto Map(Employee e) => new()
@@ -200,8 +214,10 @@ public class EmployeeService : IEmployeeService
         Id = e.Id,
         EmployeeNo = e.EmployeeNo,
         Name = e.Name,
+        Gender = e.Gender,
         Email = e.Email,
-        Department = e.Department,
+        DepartmentId = e.DepartmentId,
+        Department = e.Department?.Name,
         Position = e.Position,
         JoinDate = e.JoinDate,
         ResignDate = e.ResignDate,

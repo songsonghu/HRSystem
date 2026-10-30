@@ -1,36 +1,41 @@
 using HRSystem.Application.DTOs;
 using HRSystem.Application.Interfaces;
+using HRSystem.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace HRSystem.Web.Controllers;
 
 /// <summary>
-/// Department-head workbench (Module 3, department side). Shows only the items
-/// dispatched to the current user's department and lets them provision/close.
+/// Account Checklist: account request items of the departments the current user handles. The
+/// department approvers process items with the same form from Account Approval.
 /// </summary>
-[Authorize(Policy = "RequireDeptHead")]
+[Authorize]
 public class MyTasksController : Controller
 {
     private readonly IAccountRequestService _service;
 
     public MyTasksController(IAccountRequestService service) => _service = service;
 
-    // GET: /MyTasks -> pending items for the current department head
-    public async Task<IActionResult> Index()
-    {
-        var items = await _service.GetMyPendingItemsAsync();
-        return View(items);
-    }
+    public async Task<IActionResult> Index() => View(await _service.GetMyPendingItemsAsync());
 
-    // POST: /MyTasks/Update -> set status / account value / remark on an item
+    /// <summary>"save" keeps the chosen in-progress status; "complete" and "reject" submit the item for approval.</summary>
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Update(UpdateItemDto dto)
+    public async Task<IActionResult> Update(UpdateItemDto dto, string? submit, bool fromApproval = false)
     {
+        dto.Status = submit switch
+        {
+            "complete" => ItemStatus.Completed,
+            "reject" => ItemStatus.Rejected,
+            _ => dto.Status
+        };
         var result = await _service.UpdateItemAsync(dto);
-        TempData[result.Succeeded ? "Success" : "Error"] =
-            result.Succeeded ? "Item updated." : result.Error;
-        return RedirectToAction(nameof(Index));
+        TempData[result.Succeeded ? "Success" : "Error"] = result.Succeeded
+            ? dto.Status is ItemStatus.Completed or ItemStatus.Rejected ? "Item submitted to the department approvers." : "Item saved."
+            : result.Error;
+        return fromApproval
+            ? RedirectToAction(nameof(AccountApprovalsController.Index), "AccountApprovals")
+            : RedirectToAction(nameof(Index));
     }
 }

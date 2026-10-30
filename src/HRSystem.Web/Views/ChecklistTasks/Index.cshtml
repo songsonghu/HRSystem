@@ -1,0 +1,36 @@
+@model IReadOnlyList<ChecklistTaskDto>
+@{
+    ViewData["Title"] = "Departure Checklist";
+}
+
+<h2>Departure Checklist</h2>
+<p class="page-subtitle">Departure checklists of the departments you handle. Complete them here; your department approvers then approve them.</p>
+
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item"><a class="nav-link active" asp-action="Index">Pending (@Model.Count)</a></li>
+    <li class="nav-item"><a class="nav-link" asp-action="History">History</a></li>
+</ul>
+
+@if (Model.Count == 0)
+{
+    <div class="alert alert-info">No pending departure checklists.</div>
+}
+
+@foreach (var t in Model)
+{
+    var completed = t.Items.Count(i => i.IsCompleted || i.IsNotApplicable);
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between">
+            <span><b>@t.DepartmentName</b> · @t.EmployeeName (@t.EmployeeNo)</span>
+            <span class="badge @(t.IsReturned ? "bg-danger" : "bg-warning text-dark")">@(t.IsReturned ? "Returned" : t.Status.ToString())</span>
+        </div>
+        <div class="card-body">
+            <p class="mb-2">Request: @t.RequestNo · Progress: @completed / @t.Items.Count</p>
+            @if (t.IsReturned)
+            {
+                <p class="mb-2 text-danger small">Returned by @t.ReturnedByName: @t.ReturnReason</p>
+            }
+            <a asp-action="Task" asp-route-id="@t.Id" class="btn btn-primary btn-sm">Open Task</a>
+        </div>
+    </div>
+}
