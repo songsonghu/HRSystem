@@ -9,6 +9,12 @@ public interface IUserDirectoryService
 
     /// <summary>Logins that are not disabled, ordered by name.</summary>
     Task<IReadOnlyList<UserDirectoryEntry>> GetActiveUsersAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Active logins in a role granted <paramref name="permission"/>. Admins hold every permission
+    /// implicitly but are not listed unless such a role is theirs too.
+    /// </summary>
+    Task<IReadOnlyList<UserDirectoryEntry>> GetUsersWithPermissionAsync(string permission, CancellationToken ct = default);
 }
 
 public class UserDirectoryEntry

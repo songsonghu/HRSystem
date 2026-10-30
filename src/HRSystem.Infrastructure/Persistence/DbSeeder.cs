@@ -17,14 +17,15 @@ namespace HRSystem.Infrastructure.Persistence;
 public static class DbSeeder
 {
     // Keep in sync with the migrations that grant the same permissions to existing databases
-    // (AddEmployeeUserLinkAndPermissions, AddDepartmentsAndGender, AddOnboardingChecklists).
+    // (AddEmployeeUserLinkAndPermissions, AddDepartmentsAndGender, AddOnboardingChecklists,
+    // AddDepartureManagementApproval).
     private static readonly (string Role, string[] Permissions)[] DefaultRolePermissions =
     {
         (Roles.HR, new[]
         {
             Permissions.EmployeesManage, Permissions.DepartmentsManage, Permissions.AccountRequestsManage,
             Permissions.OnboardingManage,
-            Permissions.DeparturesManage, Permissions.OffboardingExport
+            Permissions.DeparturesManage, Permissions.DeparturesApprove, Permissions.OffboardingExport
         })
     };
 

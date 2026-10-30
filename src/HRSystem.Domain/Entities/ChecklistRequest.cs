@@ -4,9 +4,9 @@ using HRSystem.Domain.Enums;
 namespace HRSystem.Domain.Entities;
 
 /// <summary>
-/// An onboarding or departure case for one employee. On submit it fans out into one
-/// <see cref="ChecklistTask"/> per active template department, each handled in parallel
-/// by that department's manager.
+/// An onboarding or departure case for one employee. On submit a departure fans out into one
+/// <see cref="ChecklistTask"/> per active template department, handled in parallel. Once every
+/// department's approver approved, the leaver's department head approves, then HR / management.
 /// </summary>
 public class ChecklistRequest : BaseEntity
 {
@@ -33,8 +33,9 @@ public class ChecklistRequest : BaseEntity
     public int? AccountRequestId { get; set; }
 
     /// <summary>
-    /// Departure: head of the leaver's department, fixed at submit time, who gives the final
-    /// approval. Empty when the leaver is that head (HR finalizes) and for onboarding.
+    /// Departure: head of the leaver's department, fixed at submit time, who approves after the
+    /// departments and before HR / management. Empty when the leaver is that head (the step is
+    /// skipped) and for onboarding.
     /// </summary>
     public string? FinalApproverUserId { get; set; }
     public string? FinalApproverUserName { get; set; }
@@ -51,4 +52,5 @@ public class ChecklistRequest : BaseEntity
     public Employee? Employee { get; set; }
     public AccountRequest? AccountRequest { get; set; }
     public ICollection<ChecklistTask> Tasks { get; set; } = new List<ChecklistTask>();
+    public ICollection<ChecklistRequestLog> Logs { get; set; } = new List<ChecklistRequestLog>();
 }

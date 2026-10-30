@@ -24,8 +24,9 @@ public class StartupAndAccessTests : IntegrationTest
         Assert.Equal(
             new[]
             {
-                Permissions.AccountRequestsManage, Permissions.DepartmentsManage, Permissions.DeparturesManage,
-                Permissions.EmployeesManage, Permissions.OffboardingExport, Permissions.OnboardingManage
+                Permissions.AccountRequestsManage, Permissions.DepartmentsManage, Permissions.DeparturesApprove,
+                Permissions.DeparturesManage, Permissions.EmployeesManage, Permissions.OffboardingExport,
+                Permissions.OnboardingManage
             },
             hrPermissions.OrderBy(p => p, StringComparer.Ordinal));
 

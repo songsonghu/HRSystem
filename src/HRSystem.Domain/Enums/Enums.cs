@@ -104,9 +104,25 @@ public enum ChecklistStatus
     Draft = 0,
     Submitted = 1,
     InProgress = 2,
-    PendingFinalReview = 3,
+    PendingFinalReview = 3,         // Departure: waiting for the leaver's department head
     Completed = 4,
-    Cancelled = 5
+    Cancelled = 5,
+    PendingManagementApproval = 6   // Departure: waiting for HR / management (departures.approve)
+}
+
+/// <summary>One step of a checklist request's workflow, recorded in its log.</summary>
+public enum ChecklistLogAction
+{
+    Submitted = 1,
+    TaskCompleted = 2,          // department handlers completed their task
+    TaskApproved = 3,           // department approver approved it
+    TaskReturned = 4,           // department approver returned it to the handlers
+    HeadApproved = 5,           // leaver's department head approved; on to HR / management
+    HeadReturned = 6,           // department head returned chosen departments' tasks
+    ManagementApproved = 7,     // HR / management approved; the request is completed
+    ManagementReturned = 8,     // HR / management returned it to the department head (or to departments)
+    Cancelled = 9,
+    Finalized = 10              // onboarding finalized by HR
 }
 
 /// <summary>Status of one department's checklist task.</summary>

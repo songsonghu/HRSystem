@@ -29,6 +29,12 @@ public class ChecklistRequestDto
     public int EmployeeId { get; set; }
     public string EmployeeNo { get; set; } = string.Empty;
     public string EmployeeName { get; set; } = string.Empty;
+    public string? DepartmentName { get; set; }
+    public string? Position { get; set; }
+    public EmployeeCategory EmployeeCategory { get; set; }
+    public string? EmployeeEmail { get; set; }
+    public EmployeeStatus EmployeeStatus { get; set; }
+    public DateTime? JoinDate { get; set; }
     public ChecklistStatus Status { get; set; }
     public DateTime? StartDate { get; set; }
     public DateTime? LastWorkingDate { get; set; }
@@ -36,14 +42,24 @@ public class ChecklistRequestDto
     public string? Reason { get; set; }
     public string? Remark { get; set; }
     public DateTime? SubmittedAt { get; set; }
+    public string? SubmittedByName { get; set; }
     public DateTime? FinalizedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
     public DateTime? CancelledAt { get; set; }
     public string? CancelReason { get; set; }
 
-    /// <summary>Departure: the leaver's department head who gives the final approval.</summary>
+    /// <summary>Departure: the leaver's department head, who approves before HR / management. Null when the leaver is that head.</summary>
     public string? FinalApproverUserId { get; set; }
     public string? FinalApproverName { get; set; }
+
+    /// <summary>Set for the current user: the department head may approve or return to departments now.</summary>
+    public bool CanHeadDecide { get; set; }
+
+    /// <summary>Set for the current user: HR / management may approve or return now.</summary>
+    public bool CanManagementDecide { get; set; }
+
+    /// <summary>Every workflow step with its remark, oldest first.</summary>
+    public List<ChecklistLogDto> Logs { get; set; } = new();
 
     public int? AccountRequestId { get; set; }
     public string? AccountRequestNo { get; set; }
@@ -51,21 +67,78 @@ public class ChecklistRequestDto
 
     public List<ChecklistTaskDto> Tasks { get; set; } = new();
 
+    /// <summary>Details page only: accounts the employee still holds, from the account ledger.</summary>
+    public List<ChecklistHeldAccountDto> ActiveAccounts { get; set; } = new();
+
+    /// <summary>Details page only: documents on the employee record.</summary>
+    public List<EmployeeAttachmentDto> EmployeeAttachments { get; set; } = new();
+
+    /// <summary>Length of service from the join date to the last employment date (or today), e.g. "3 years 2 months".</summary>
+    public string? ServiceLength
+    {
+        get
+        {
+            if (JoinDate is not DateTime joined) return null;
+            var end = (Kind == ChecklistKind.Departure ? LastEmploymentDate : null) ?? DateTime.Today;
+            var months = (end.Year - joined.Year) * 12 + end.Month - joined.Month - (end.Day < joined.Day ? 1 : 0);
+            if (months < 0) return null;
+            if (months == 0) return "less than 1 month";
+            var parts = new List<string>();
+            if (months / 12 > 0) parts.Add(months / 12 == 1 ? "1 year" : $"{months / 12} years");
+            if (months % 12 > 0) parts.Add(months % 12 == 1 ? "1 month" : $"{months % 12} months");
+            return string.Join(" ", parts);
+        }
+    }
+
+    /// <summary>Departure still open: days from today to the last working date (negative once it has passed).</summary>
+    public int? DaysToLastWorkingDate => Kind == ChecklistKind.Departure && LastWorkingDate is DateTime last
+        && Status is not (ChecklistStatus.Completed or ChecklistStatus.Cancelled)
+            ? (last.Date - DateTime.Today).Days
+            : null;
+
     public bool CanSubmit => Status == ChecklistStatus.Draft;
     /// <summary>
     /// Onboarding has no department tasks: HR finalizes it once its accounts are open. A departure
-    /// waits until every required department task is approved.
+    /// is completed by the department head and HR / management approvals instead.
     /// </summary>
     public bool CanFinalize => Kind == ChecklistKind.Onboarding
-        ? Status is ChecklistStatus.Submitted or ChecklistStatus.InProgress or ChecklistStatus.PendingFinalReview
-        : Status == ChecklistStatus.PendingFinalReview;
+        && Status is ChecklistStatus.Submitted or ChecklistStatus.InProgress or ChecklistStatus.PendingFinalReview;
 
-    /// <summary>
-    /// HR finalizes onboarding, and departures whose leaver heads their own department (or that
-    /// were submitted before final approval existed). Otherwise the department head approves.
-    /// </summary>
-    public bool FinalizedByHr => Kind == ChecklistKind.Onboarding || FinalApproverUserId is null;
+    /// <summary>Departure: the leaver heads their own department, so the head step is skipped.</summary>
+    public bool SkipsHeadApproval => Kind == ChecklistKind.Departure && FinalApproverUserId is null;
     public bool CanCancel => Status is not (ChecklistStatus.Completed or ChecklistStatus.Cancelled);
+}
+
+/// <summary>An account the employee still holds.</summary>
+public record ChecklistHeldAccountDto(string AccountTypeName, string? AccountValue, string? DepartmentName, DateTime OpenedAt);
+
+/// <summary>One step of a request's workflow log.</summary>
+public class ChecklistLogDto
+{
+    public ChecklistLogAction Action { get; set; }
+    public string? Departments { get; set; }
+    public string? Remark { get; set; }
+    public string? UserName { get; set; }
+    public DateTime At { get; set; }
+
+    /// <summary>What happened, in words for the log table.</summary>
+    public string Step => Action switch
+    {
+        ChecklistLogAction.Submitted => "Submitted",
+        ChecklistLogAction.TaskCompleted => "Department task completed",
+        ChecklistLogAction.TaskApproved => "Department task approved",
+        ChecklistLogAction.TaskReturned => "Department task returned to handlers",
+        ChecklistLogAction.HeadApproved => "Approved by department head",
+        ChecklistLogAction.HeadReturned => "Returned by department head to departments",
+        ChecklistLogAction.ManagementApproved => "Approved by HR / management - completed",
+        ChecklistLogAction.ManagementReturned => "Returned by HR / management",
+        ChecklistLogAction.Cancelled => "Cancelled",
+        ChecklistLogAction.Finalized => "Finalized",
+        _ => Action.ToString()
+    };
+
+    public bool IsReturn => Action is ChecklistLogAction.TaskReturned or ChecklistLogAction.HeadReturned
+        or ChecklistLogAction.ManagementReturned or ChecklistLogAction.Cancelled;
 }
 
 public class ChecklistTaskDto

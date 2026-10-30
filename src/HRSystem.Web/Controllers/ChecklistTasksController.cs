@@ -33,9 +33,9 @@ public class ChecklistTasksController : Controller
     /// <summary>The department approver accepts the completed task.</summary>
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Approve(int id)
+    public async Task<IActionResult> Approve(int id, string? remark)
     {
-        var result = await _service.ApproveTaskAsync(id);
+        var result = await _service.ApproveTaskAsync(id, remark);
         if (!result.Succeeded)
         {
             TempData["Error"] = result.Error;

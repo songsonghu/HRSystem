@@ -1,13 +1,16 @@
 @model ChecklistRequestDto
 @{
-    ViewData["Title"] = "Final Review " + Model.RequestNo;
-    var canDecide = Model.Status == ChecklistStatus.PendingFinalReview;
+    ViewData["Title"] = "Departure Approval " + Model.RequestNo;
+    var canDecide = Model.CanHeadDecide || Model.CanManagementDecide;
     var accountsPending = Model.AccountRequestStatus is not null and not RequestStatus.Completed;
     var returnable = Model.Tasks.Where(t => t.IsDone).OrderBy(t => t.SortOrder).ToList();
+    // The head returns to departments; HR / management return to the head, or to departments when there is no head step.
+    var returnsToDepartments = Model.CanHeadDecide || (Model.CanManagementDecide && Model.SkipsHeadApproval);
+    var stepName = Model.CanHeadDecide ? "Department head approval" : "HR / management approval";
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2 class="mb-0">Departure Final Review · @Model.RequestNo</h2>
+    <h2 class="mb-0">Departure Approval · @Model.RequestNo</h2>
     <span class="fs-6"><partial name="_ChecklistStatusBadge" model="Model.Status" /></span>
 </div>
 
@@ -40,9 +43,27 @@
 {
     <div class="alert alert-secondary"><b>Cancelled</b> @Model.CancelledAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") — @Model.CancelReason</div>
 }
-@if (canDecide && accountsPending)
+<p>
+    <b>Approvals:</b> Department approvers →
+    @(Model.SkipsHeadApproval ? "(no department head step: the employee heads their own department)" : $"{Model.FinalApproverName} (department head)")
+    → HR / management
+</p>
+@if (Model.CanManagementDecide && accountsPending)
 {
     <div class="alert alert-warning">Account request @Model.AccountRequestNo is not completed yet, so the departure cannot be approved.</div>
+}
+@{
+    // While the head decides again, show why HR / management returned it to them.
+    var lastToHead = Model.CanHeadDecide
+        ? Model.Logs.LastOrDefault(l => l.Action is ChecklistLogAction.ManagementReturned or ChecklistLogAction.HeadApproved)
+        : null;
+}
+@if (lastToHead?.Action == ChecklistLogAction.ManagementReturned)
+{
+    <div class="alert alert-warning">
+        <b>Returned by @lastToHead.UserName (HR / management)</b> on @lastToHead.At.ToLocalTime().ToString("yyyy-MM-dd HH:mm"):
+        @lastToHead.Remark
+    </div>
 }
 
 <h4>Department Checklists</h4>
@@ -97,56 +118,104 @@
 
 @if (canDecide)
 {
-    <div class="d-flex gap-2 align-items-start mb-3">
-        <form asp-action="Approve" asp-route-id="@Model.Id" method="post"
-              onsubmit="return confirm('Approve this departure? The request is completed and the employee is marked as resigned.');">
-            <button class="btn btn-success" disabled="@accountsPending">Approve Departure</button>
-        </form>
-        @if (returnable.Count > 0)
-        {
-            <button type="button" class="btn btn-outline-danger" data-bs-toggle="collapse" data-bs-target="#return-departure">Return to Departments</button>
-        }
-        <a asp-action="Index" class="btn btn-outline-secondary">Back</a>
-    </div>
+    var approveConfirm = Model.CanHeadDecide
+        ? "Approve this departure and send it to HR / management?"
+        : "Approve this departure? The request is completed and the employee is marked as resigned.";
+    var headConfirm = $"Return this departure to {Model.FinalApproverName}?";
+    <div class="card mb-3 border-primary-subtle">
+        <div class="card-header"><b>@stepName</b></div>
+        <div class="card-body">
+            <div class="d-flex flex-wrap gap-2 mb-2">
+                <button type="button" class="btn btn-success" data-bs-toggle="collapse" data-bs-target="#approve-departure"
+                        disabled="@(Model.CanManagementDecide && accountsPending)">
+                    @(Model.CanHeadDecide ? "Approve" : "Approve Departure")
+                </button>
+                @if (returnsToDepartments && returnable.Count > 0)
+                {
+                    <button type="button" class="btn btn-outline-danger" data-bs-toggle="collapse" data-bs-target="#return-departure">Return to Departments</button>
+                }
+                @if (Model.CanManagementDecide && !Model.SkipsHeadApproval)
+                {
+                    <button type="button" class="btn btn-outline-danger" data-bs-toggle="collapse" data-bs-target="#return-head">Return to Department Head</button>
+                }
+                <a asp-action="Index" class="btn btn-outline-secondary">Back</a>
+            </div>
 
-    @if (returnable.Count > 0)
-    {
-        <div class="collapse mb-3" id="return-departure">
-            <div class="card card-body">
-                <form asp-action="Return" asp-route-id="@Model.Id" method="post" id="returnForm">
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <span class="form-label d-block mb-1">Departments to redo their task</span>
-                            @foreach (var t in returnable)
-                            {
-                                <div class="form-check">
-                                    <input class="form-check-input return-dept" type="checkbox" name="taskIds" value="@t.Id" id="return-@t.Id" />
-                                    <label class="form-check-label" for="return-@t.Id">@t.DepartmentName</label>
+            <div id="decision">
+                <div class="collapse" id="approve-departure" data-bs-parent="#decision">
+                    <form asp-action="@(Model.CanHeadDecide ? "HeadApprove" : "ManagementApprove")" asp-route-id="@Model.Id" method="post"
+                          class="confirm-submit" data-confirm="@approveConfirm">
+                        <label class="form-label" for="approve-remark">Remark <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="approve-remark" name="remark" rows="2" maxlength="1000" required></textarea>
+                        <div class="form-text">
+                            @(Model.CanHeadDecide
+                                ? "Recorded in the workflow log. The departure then goes to HR / management."
+                                : "Recorded in the workflow log. The departure is completed and the employee marked as resigned.")
+                        </div>
+                        <button type="submit" class="btn btn-success mt-2">Confirm Approval</button>
+                    </form>
+                </div>
+
+                @if (returnsToDepartments && returnable.Count > 0)
+                {
+                    <div class="collapse" id="return-departure" data-bs-parent="#decision">
+                        <form asp-action="Return" asp-route-id="@Model.Id" method="post" id="returnForm">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <span class="form-label d-block mb-1">Departments to redo their task <span class="text-danger">*</span></span>
+                                    @foreach (var t in returnable)
+                                    {
+                                        <div class="form-check">
+                                            <input class="form-check-input return-dept" type="checkbox" name="taskIds" value="@t.Id" id="return-@t.Id" />
+                                            <label class="form-check-label" for="return-@t.Id">@t.DepartmentName</label>
+                                        </div>
+                                    }
                                 </div>
-                            }
-                        </div>
-                        <div class="col-md-8">
-                            <label class="form-label" for="reason">What needs to be fixed</label>
-                            <textarea class="form-control" id="reason" name="reason" rows="3" maxlength="500" required></textarea>
-                            <div class="form-text">
-                                Each chosen department's handlers get this reason. Their approvers approve the task again,
-                                and the departure then comes back to you.
+                                <div class="col-md-8">
+                                    <label class="form-label" for="reason">What needs to be fixed <span class="text-danger">*</span></label>
+                                    <textarea class="form-control" id="reason" name="reason" rows="3" maxlength="500" required></textarea>
+                                    <div class="form-text">
+                                        Each chosen department's handlers get this reason. Their approvers approve the task again,
+                                        and the departure then comes back to you.
+                                    </div>
+                                </div>
                             </div>
-                        </div>
+                            <button type="submit" class="btn btn-danger mt-2">Return Departure</button>
+                        </form>
                     </div>
-                    <button type="submit" class="btn btn-danger mt-2">Return Departure</button>
-                </form>
+                }
+
+                @if (Model.CanManagementDecide && !Model.SkipsHeadApproval)
+                {
+                    <div class="collapse" id="return-head" data-bs-parent="#decision">
+                        <form asp-action="ReturnToHead" asp-route-id="@Model.Id" method="post"
+                              class="confirm-submit" data-confirm="@headConfirm">
+                            <label class="form-label" for="head-reason">Reason <span class="text-danger">*</span></label>
+                            <textarea class="form-control" id="head-reason" name="reason" rows="2" maxlength="500" required></textarea>
+                            <div class="form-text">
+                                @Model.FinalApproverName gets this reason and can approve again, or return it to the departments that must redo their tasks.
+                            </div>
+                            <button type="submit" class="btn btn-danger mt-2">Return to Department Head</button>
+                        </form>
+                    </div>
+                }
             </div>
         </div>
-    }
+    </div>
 }
-else
+
+<partial name="_ChecklistLog" model="Model.Logs" />
+
+@if (!canDecide)
 {
     <a asp-action="@(Model.Status is ChecklistStatus.Completed or ChecklistStatus.Cancelled ? "History" : "Index")" class="btn btn-outline-secondary">Back</a>
 }
 
 @section Scripts {
     <script>
+        document.querySelectorAll('form.confirm-submit').forEach(form => form.addEventListener('submit', e => {
+            if (!confirm(form.dataset.confirm)) e.preventDefault();
+        }));
         document.getElementById('returnForm')?.addEventListener('submit', e => {
             const chosen = [...document.querySelectorAll('.return-dept:checked')]
                 .map(box => box.nextElementSibling.textContent.trim());

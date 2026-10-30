@@ -201,6 +201,25 @@ public class ChecklistRequestConfig : IEntityTypeConfiguration<ChecklistRequest>
     }
 }
 
+public class ChecklistRequestLogConfig : IEntityTypeConfiguration<ChecklistRequestLog>
+{
+    public void Configure(EntityTypeBuilder<ChecklistRequestLog> b)
+    {
+        b.ToTable("ChecklistRequestLogs");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Departments).HasMaxLength(1000);
+        b.Property(x => x.Remark).HasMaxLength(1000);
+        b.Property(x => x.UserId).HasMaxLength(450);
+        b.Property(x => x.UserName).HasMaxLength(256);
+        b.HasIndex(x => new { x.ChecklistRequestId, x.At });
+        b.HasIndex(x => new { x.UserId, x.Action });
+        b.HasOne(x => x.ChecklistRequest)
+            .WithMany(r => r.Logs)
+            .HasForeignKey(x => x.ChecklistRequestId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
 public class ChecklistTaskConfig : IEntityTypeConfiguration<ChecklistTask>
 {
     public void Configure(EntityTypeBuilder<ChecklistTask> b)

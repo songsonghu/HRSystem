@@ -26,24 +26,33 @@ public interface IChecklistService
     /// <summary>Submit the linked account request and, for a departure, dispatch the department tasks.</summary>
     Task<Result> SubmitAsync(int requestId, CancellationToken ct = default);
 
-    /// <summary>
-    /// Close a request whose required tasks are approved and whose accounts are done. Departure marks the employee resigned.
-    /// A departure with a final approver can only be finalized (approved) by that approver; otherwise HR finalizes.
-    /// </summary>
+    /// <summary>HR closes an onboarding request once its accounts are open. Departures complete through their approvals instead.</summary>
     Task<Result> FinalizeAsync(int requestId, CancellationToken ct = default);
 
-    /// <summary>Departures waiting for the current user's final approval.</summary>
+    /// <summary>Departures waiting for the current user's approval as the leaver's department head.</summary>
     Task<IReadOnlyList<ChecklistRequestDto>> GetMyFinalReviewsAsync(CancellationToken ct = default);
 
-    /// <summary>The current user's other final reviews (approved, cancelled, or back with departments).</summary>
+    /// <summary>Departures waiting for HR / management approval, for holders of departures.approve (their own departure excluded).</summary>
+    Task<IReadOnlyList<ChecklistRequestDto>> GetMyManagementApprovalsAsync(CancellationToken ct = default);
+
+    /// <summary>Departures the current user heads or decided on as HR / management that are not waiting for them now.</summary>
     Task<IReadOnlyList<ChecklistRequestDto>> GetMyFinalReviewHistoryAsync(ChecklistTaskHistoryQuery query, CancellationToken ct = default);
 
-    /// <summary>A departure with all task details, for its final approver only.</summary>
+    /// <summary>A departure with all task details and its log, for its department head and HR / management approvers.</summary>
     Task<ChecklistRequestDto?> GetFinalReviewAsync(int requestId, CancellationToken ct = default);
 
+    /// <summary>The department head approves with a remark; the departure goes to HR / management.</summary>
+    Task<Result> ApproveByHeadAsync(int requestId, string remark, CancellationToken ct = default);
+
+    /// <summary>HR / management approve with a remark: the departure is completed and the employee marked resigned.</summary>
+    Task<Result> ApproveByManagementAsync(int requestId, string remark, CancellationToken ct = default);
+
+    /// <summary>HR / management send the departure back to the department head with a reason.</summary>
+    Task<Result> ReturnToHeadAsync(int requestId, string reason, CancellationToken ct = default);
+
     /// <summary>
-    /// The final approver sends the departure back: the chosen departments redo their tasks, which their
-    /// approvers then approve again, before the request returns for final review.
+    /// The department head (or HR / management when the leaver heads their own department) sends the
+    /// departure back: the chosen departments redo their tasks, which their approvers approve again.
     /// </summary>
     Task<Result> ReturnTasksAsync(int requestId, IReadOnlyCollection<int> taskIds, string reason, CancellationToken ct = default);
 
@@ -65,8 +74,8 @@ public interface IChecklistService
     /// <summary>Approved tasks, and tasks of closed requests, in the departments the current user approves.</summary>
     Task<IReadOnlyList<ChecklistTaskDto>> GetMyApprovalHistoryAsync(ChecklistTaskHistoryQuery query, CancellationToken ct = default);
 
-    /// <summary>The department approver accepts a completed task.</summary>
-    Task<Result> ApproveTaskAsync(int taskId, CancellationToken ct = default);
+    /// <summary>The department approver accepts a completed task, with an optional remark.</summary>
+    Task<Result> ApproveTaskAsync(int taskId, string? remark = null, CancellationToken ct = default);
 
     /// <summary>The department approver sends a completed task back to the handlers with a reason.</summary>
     Task<Result> ReturnTaskToHandlersAsync(int taskId, string reason, CancellationToken ct = default);

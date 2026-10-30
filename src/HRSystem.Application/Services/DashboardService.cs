@@ -63,7 +63,12 @@ public class DashboardService : IDashboardService
                     && (t.Status == ChecklistTaskStatus.Completed || t.Status == ChecklistTaskStatus.NotApplicable), ct)
                 + await _db.ChecklistRequests.CountAsync(r =>
                     r.Kind == ChecklistKind.Departure && r.FinalApproverUserId == userId
-                    && r.Status == ChecklistStatus.PendingFinalReview, ct),
+                    && r.Status == ChecklistStatus.PendingFinalReview, ct)
+                + (_currentUser.HasPermission(Permissions.DeparturesApprove)
+                    ? await _db.ChecklistRequests.CountAsync(r =>
+                        r.Kind == ChecklistKind.Departure && r.Status == ChecklistStatus.PendingManagementApproval
+                        && (r.Employee!.UserId == null || r.Employee.UserId != userId), ct)
+                    : 0),
             MyOpenRequests = await _db.AccountRequests.CountAsync(r =>
                 OpenRequestStatuses.Contains(r.Status)
                 && (r.CreatedBy == userId || r.EmployeeId == employeeId), ct)

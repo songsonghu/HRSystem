@@ -492,6 +492,48 @@ namespace HRSystem.Infrastructure.Migrations
                     b.ToTable("ChecklistRequests", (string)null);
                 });
 
+            modelBuilder.Entity("HRSystem.Domain.Entities.ChecklistRequestLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Action")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("At")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ChecklistRequestId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Departments")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Remark")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("UserName")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChecklistRequestId", "At");
+
+                    b.HasIndex("UserId", "Action");
+
+                    b.ToTable("ChecklistRequestLogs", (string)null);
+                });
+
             modelBuilder.Entity("HRSystem.Domain.Entities.ChecklistTask", b =>
                 {
                     b.Property<int>("Id")
@@ -1307,6 +1349,17 @@ namespace HRSystem.Infrastructure.Migrations
                     b.Navigation("Employee");
                 });
 
+            modelBuilder.Entity("HRSystem.Domain.Entities.ChecklistRequestLog", b =>
+                {
+                    b.HasOne("HRSystem.Domain.Entities.ChecklistRequest", "ChecklistRequest")
+                        .WithMany("Logs")
+                        .HasForeignKey("ChecklistRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ChecklistRequest");
+                });
+
             modelBuilder.Entity("HRSystem.Domain.Entities.ChecklistTask", b =>
                 {
                     b.HasOne("HRSystem.Domain.Entities.ChecklistRequest", "ChecklistRequest")
@@ -1481,6 +1534,8 @@ namespace HRSystem.Infrastructure.Migrations
 
             modelBuilder.Entity("HRSystem.Domain.Entities.ChecklistRequest", b =>
                 {
+                    b.Navigation("Logs");
+
                     b.Navigation("Tasks");
                 });
 

@@ -2,34 +2,42 @@
 @{
     ViewData["Title"] = "Departure Approval";
     var finalReviews = (IReadOnlyList<ChecklistRequestDto>)ViewBag.FinalReviews;
+    var managementApprovals = (IReadOnlyList<ChecklistRequestDto>)ViewBag.ManagementApprovals;
+    var requestDecisions = finalReviews.Select(r => (Request: r, Step: "Department Head"))
+        .Concat(managementApprovals.Select(r => (Request: r, Step: "HR / Management")))
+        .ToList();
     var waiting = Model.Where(t => t.CanApprove).ToList();
     var inProgress = Model.Where(t => !t.CanApprove).ToList();
 }
 
 <h2>Departure Approval</h2>
-<p class="page-subtitle">Departure checklists of the departments you approve, and departures waiting for your final review.</p>
+<p class="page-subtitle">Departure checklists of the departments you approve, and departures waiting for your approval as department head or HR / management.</p>
 
 <ul class="nav nav-tabs mb-3">
-    <li class="nav-item"><a class="nav-link active" asp-action="Index">Pending (@(waiting.Count + finalReviews.Count))</a></li>
+    <li class="nav-item"><a class="nav-link active" asp-action="Index">Pending (@(waiting.Count + requestDecisions.Count))</a></li>
     <li class="nav-item"><a class="nav-link" asp-action="History">History</a></li>
 </ul>
 
-@if (Model.Count == 0 && finalReviews.Count == 0)
+@if (Model.Count == 0 && requestDecisions.Count == 0)
 {
     <div class="alert alert-info">Nothing to approve.</div>
 }
 
-@foreach (var r in finalReviews)
+@foreach (var (r, step) in requestDecisions)
 {
     <div class="card mb-3 border-warning">
         <div class="card-header d-flex justify-content-between">
-            <span><span class="badge bg-warning text-dark">Final Review</span> <b>Departure</b> · @r.EmployeeName (@r.EmployeeNo)</span>
+            <span><span class="badge bg-warning text-dark">@step Approval</span> <b>Departure</b> · @r.EmployeeName (@r.EmployeeNo)</span>
             <partial name="_ChecklistStatusBadge" model="r.Status" />
         </div>
         <div class="card-body">
             <p class="mb-2">
                 Request: @r.RequestNo · Last working date: @r.LastWorkingDate?.ToString("yyyy-MM-dd")
                 · Departments approved: @r.Tasks.Count(t => t.IsApproved) / @r.Tasks.Count
+                @if (step == "HR / Management" && !r.SkipsHeadApproval)
+                {
+                    <span>· Department head: @r.FinalApproverName</span>
+                }
             </p>
             <a asp-action="Review" asp-route-id="@r.Id" class="btn btn-primary btn-sm">Review &amp; Approve</a>
         </div>

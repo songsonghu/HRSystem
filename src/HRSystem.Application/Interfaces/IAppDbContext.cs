@@ -20,6 +20,7 @@ public interface IAppDbContext
     DbSet<AuditLog> AuditLogs { get; }
     DbSet<ChecklistRequest> ChecklistRequests { get; }
     DbSet<ChecklistTask> ChecklistTasks { get; }
+    DbSet<ChecklistRequestLog> ChecklistRequestLogs { get; }
     DbSet<ChecklistTaskItem> ChecklistTaskItems { get; }
     DbSet<ChecklistTemplate> ChecklistTemplates { get; }
     DbSet<ChecklistTemplateItem> ChecklistTemplateItems { get; }

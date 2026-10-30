@@ -26,6 +26,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<ChecklistRequest> ChecklistRequests => Set<ChecklistRequest>();
     public DbSet<ChecklistTask> ChecklistTasks => Set<ChecklistTask>();
+    public DbSet<ChecklistRequestLog> ChecklistRequestLogs => Set<ChecklistRequestLog>();
     public DbSet<ChecklistTaskItem> ChecklistTaskItems => Set<ChecklistTaskItem>();
     public DbSet<ChecklistTemplate> ChecklistTemplates => Set<ChecklistTemplate>();
     public DbSet<ChecklistTemplateItem> ChecklistTemplateItems => Set<ChecklistTemplateItem>();

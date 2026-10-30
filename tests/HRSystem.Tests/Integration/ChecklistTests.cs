@@ -2,6 +2,7 @@ using HRSystem.Application.DTOs;
 using HRSystem.Application.Interfaces;
 using HRSystem.Application.Security;
 using HRSystem.Domain.Enums;
+using HRSystem.Infrastructure.Identity;
 using HRSystem.Infrastructure.Persistence;
 using HRSystem.Tests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
@@ -78,6 +79,20 @@ public class ChecklistTests : IntegrationTest
     private Task<ChecklistStatus> StatusOfAsync(int requestId)
         => Data.ReadAsync(db => db.ChecklistRequests.Where(r => r.Id == requestId).Select(r => r.Status).SingleAsync());
 
+    private async Task HeadApprovesAsync(string headUserId, int requestId, string remark = "Handover checked")
+    {
+        using var head = Data.As(headUserId);
+        var approved = await head.Get<IChecklistService>().ApproveByHeadAsync(requestId, remark);
+        Assert.True(approved.Succeeded, approved.Error);
+    }
+
+    /// <summary>HR / management: anyone holding departures.approve.</summary>
+    private Acting AsManagement(string userId) => Data.As(userId, Permissions.DeparturesApprove);
+
+    private Task<List<ChecklistLogAction>> LogActionsAsync(int requestId)
+        => Data.ReadAsync(db => db.ChecklistRequestLogs.Where(l => l.ChecklistRequestId == requestId)
+            .OrderBy(l => l.At).ThenBy(l => l.Id).Select(l => l.Action).ToListAsync());
+
     [SkippableFact]
     public async Task Departure_disables_held_accounts_before_it_can_be_finalized()
     {
@@ -102,10 +117,27 @@ public class ChecklistTests : IntegrationTest
         Assert.Equal(RequestType.Offboard, accountRequest.RequestType);
         Assert.Equal(RequestStatus.Submitted, accountRequest.Status);
 
+        // The details page shows the leaver's record and the accounts they still hold.
+        using (var page = Data.As(hr.UserId, Permissions.DeparturesManage))
+        {
+            var details = await page.Get<IChecklistService>().GetAsync(requestId);
+            Assert.NotNull(details!.DepartmentName);
+            Assert.NotNull(details.JoinDate);
+            Assert.NotNull(details.SubmittedByName);
+            Assert.Equal(0, details.DaysToLastWorkingDate);
+            Assert.Equal("leaver-pc", Assert.Single(details.ActiveAccounts).AccountValue);
+        }
+        var hrClient = await SignedInClientAsync((await Data.PersonAsync(null, Roles.HR)).Email, TestData.Password);
+        var html = await hrClient.GetStringAsync($"/Departures/Details/{requestId}");
+        Assert.Contains("Accounts Still Active", html);
+        Assert.Contains("leaver-pc", html);
+
         await CompleteAndApproveAllTasksAsync(checklistManager.UserId, requestId);
 
-        using (var headScope = Data.As(head.UserId))
-            Assert.Contains("not completed", (await headScope.Get<IChecklistService>().FinalizeAsync(requestId)).Error);
+        // The head may approve while the accounts are still being disabled; HR / management may not.
+        await HeadApprovesAsync(head.UserId, requestId);
+        using (var management = AsManagement(hr.UserId))
+            Assert.Contains("not completed", (await management.Get<IChecklistService>().ApproveByManagementAsync(requestId, "OK")).Error);
 
         var itemId = await Data.ReadAsync(db => db.AccountRequestItems.Where(i => i.RequestId == accountRequest.Id).Select(i => i.Id).SingleAsync());
         using (var handler = Data.As(itManager.UserId))
@@ -115,18 +147,28 @@ public class ChecklistTests : IntegrationTest
             Assert.True((await service.ApproveItemAsync(itemId)).Succeeded);
         }
 
-        // The final approval belongs to the leaver's department head, not HR.
+        // departures.manage alone neither finalizes nor approves a departure: that takes departures.approve.
         using (var hrScope = Data.As(hr.UserId, Permissions.DeparturesManage))
-            Assert.Contains("approved by", (await hrScope.Get<IChecklistService>().FinalizeAsync(requestId)).Error);
-
-        using (var headScope = Data.As(head.UserId))
         {
-            var finalized = await headScope.Get<IChecklistService>().FinalizeAsync(requestId);
+            var service = hrScope.Get<IChecklistService>();
+            Assert.Contains("Departure Approval", (await service.FinalizeAsync(requestId)).Error);
+            Assert.False((await service.ApproveByManagementAsync(requestId, "OK")).Succeeded);
+        }
+
+        using (var management = AsManagement(hr.UserId))
+        {
+            var finalized = await management.Get<IChecklistService>().ApproveByManagementAsync(requestId, "All accounts disabled");
             Assert.True(finalized.Succeeded, finalized.Error);
         }
 
         Assert.Equal(EmployeeStatus.Resigned, await Data.ReadAsync(db => db.Employees.Where(e => e.Id == leaver).Select(e => e.Status).SingleAsync()));
         Assert.Equal(AccountStatus.Disabled, await Data.ReadAsync(db => db.EmployeeAccounts.Where(a => a.EmployeeId == leaver).Select(a => a.Status).SingleAsync()));
+        using (var page = Data.As(hr.UserId, Permissions.DeparturesManage))
+        {
+            var details = await page.Get<IChecklistService>().GetAsync(requestId);
+            Assert.Empty(details!.ActiveAccounts);
+            Assert.Null(details.DaysToLastWorkingDate);
+        }
     }
 
     [SkippableFact]
@@ -419,11 +461,16 @@ public class ChecklistTests : IntegrationTest
         await CompleteAndApproveAllTasksAsync(checklistManager.UserId, requestId);
         Assert.Contains(App.Emails.Sent, m => m.To.Contains(head.Email) && m.Subject.Contains("final review"));
 
-        // Nobody but the head sees the final review, administrators included.
+        // HR without departures.approve cannot open the review; HR / management (admins included) can, but only the head decides now.
         using (var hrScope = Data.As(hr.UserId, Permissions.DeparturesManage))
             Assert.Null(await hrScope.Get<IChecklistService>().GetFinalReviewAsync(requestId));
         using (var adminScope = Data.AsAdmin(admin.UserId))
-            Assert.Null(await adminScope.Get<IChecklistService>().GetFinalReviewAsync(requestId));
+        {
+            var seen = (await adminScope.Get<IChecklistService>().GetFinalReviewAsync(requestId))!;
+            Assert.False(seen.CanHeadDecide);
+            Assert.False(seen.CanManagementDecide);
+            Assert.False((await adminScope.Get<IChecklistService>().ApproveByManagementAsync(requestId, "Too early")).Succeeded);
+        }
 
         int returnedTaskId;
         using (var headScope = Data.As(head.UserId))
@@ -453,12 +500,93 @@ public class ChecklistTests : IntegrationTest
 
         using (var headScope = Data.As(head.UserId))
         {
-            var approved = await headScope.Get<IChecklistService>().FinalizeAsync(requestId);
+            var service = headScope.Get<IChecklistService>();
+            Assert.Contains("remark", (await service.ApproveByHeadAsync(requestId, " ")).Error);
+            Assert.True((await service.ApproveByHeadAsync(requestId, "Handover complete")).Succeeded);
+            Assert.False((await service.ApproveByManagementAsync(requestId, "Not mine")).Succeeded); // the head is not HR / management
+        }
+        Assert.Equal(ChecklistStatus.PendingManagementApproval, await StatusOfAsync(requestId));
+        Assert.Equal(EmployeeStatus.Active, await Data.ReadAsync(db => db.Employees.Where(e => e.Id == leaver).Select(e => e.Status).SingleAsync()));
+
+        using (var management = AsManagement(hr.UserId))
+        {
+            var service = management.Get<IChecklistService>();
+            Assert.Contains(await service.GetMyManagementApprovalsAsync(), r => r.Id == requestId);
+            Assert.True((await service.GetFinalReviewAsync(requestId))!.CanManagementDecide);
+            Assert.Contains("remark", (await service.ApproveByManagementAsync(requestId, "")).Error);
+            var approved = await service.ApproveByManagementAsync(requestId, "Approved by HR");
             Assert.True(approved.Succeeded, approved.Error);
+            Assert.Contains(await service.GetMyFinalReviewHistoryAsync(new ChecklistTaskHistoryQuery()), r => r.Id == requestId);
+        }
+        using (var headScope = Data.As(head.UserId))
+        {
             var history = await headScope.Get<IChecklistService>().GetMyFinalReviewHistoryAsync(new ChecklistTaskHistoryQuery());
             Assert.Contains(history, r => r.Id == requestId && r.Status == ChecklistStatus.Completed);
         }
         Assert.Equal(EmployeeStatus.Resigned, await Data.ReadAsync(db => db.Employees.Where(e => e.Id == leaver).Select(e => e.Status).SingleAsync()));
+        Assert.Contains(App.Emails.Sent, m => m.To.Contains(head.Email) && m.Subject.StartsWith("[Completed]"));
+    }
+
+    [SkippableFact]
+    public async Task Management_returns_to_the_head_who_returns_to_departments_and_every_step_is_logged()
+    {
+        RequireDatabase();
+        var hr = await Data.PersonAsync(null);
+        var checklistManager = await Data.PersonAsync(null);
+        await Data.SetTemplateManagersAsync(ChecklistKind.Departure, checklistManager.EmployeeId);
+        var (leaver, head) = await LeaverAsync();
+        var requestId = await StartDepartureAsync(hr.UserId, leaver);
+        await CompleteAndApproveAllTasksAsync(checklistManager.UserId, requestId);
+        await HeadApprovesAsync(head.UserId, requestId, "Looks complete");
+
+        int taskId;
+        using (var management = AsManagement(hr.UserId))
+        {
+            var service = management.Get<IChecklistService>();
+            taskId = (await service.GetFinalReviewAsync(requestId))!.Tasks.First().Id;
+            // HR / management go back to the head, not straight to departments, when there is a head.
+            Assert.False((await service.ReturnTasksAsync(requestId, new[] { taskId }, "Redo")).Succeeded);
+            Assert.Contains("reason", (await service.ReturnToHeadAsync(requestId, " ")).Error);
+            Assert.True((await service.ReturnToHeadAsync(requestId, "Final pay not confirmed")).Succeeded);
+            Assert.DoesNotContain(await service.GetMyManagementApprovalsAsync(), r => r.Id == requestId);
+        }
+        Assert.Equal(ChecklistStatus.PendingFinalReview, await StatusOfAsync(requestId));
+        Assert.Contains(App.Emails.Sent, m => m.To.Contains(head.Email) && m.Subject.StartsWith("[Returned]"));
+
+        using (var headScope = Data.As(head.UserId))
+        {
+            var service = headScope.Get<IChecklistService>();
+            Assert.True((await service.GetFinalReviewAsync(requestId))!.CanHeadDecide);
+            Assert.True((await service.ReturnTasksAsync(requestId, new[] { taskId }, "Confirm final pay with Finance")).Succeeded);
+        }
+        Assert.Equal(ChecklistStatus.InProgress, await StatusOfAsync(requestId));
+
+        await CompleteAllTasksAsync(checklistManager.UserId, requestId);
+        using (var approver = Data.As(checklistManager.UserId))
+            Assert.True((await approver.Get<IChecklistService>().ApproveTaskAsync(taskId, "Final pay confirmed")).Succeeded);
+        await HeadApprovesAsync(head.UserId, requestId, "Fixed");
+        using (var management = AsManagement(hr.UserId))
+            Assert.True((await management.Get<IChecklistService>().ApproveByManagementAsync(requestId, "Approved")).Succeeded);
+
+        var actions = await LogActionsAsync(requestId);
+        Assert.Equal(ChecklistLogAction.Submitted, actions.First());
+        Assert.Equal(ChecklistLogAction.ManagementApproved, actions.Last());
+        var decisions = actions.Where(a => a is ChecklistLogAction.HeadApproved or ChecklistLogAction.HeadReturned
+                                                or ChecklistLogAction.ManagementApproved or ChecklistLogAction.ManagementReturned).ToList();
+        Assert.Equal(new[]
+        {
+            ChecklistLogAction.HeadApproved, ChecklistLogAction.ManagementReturned, ChecklistLogAction.HeadReturned,
+            ChecklistLogAction.HeadApproved, ChecklistLogAction.ManagementApproved
+        }, decisions);
+        Assert.Contains(ChecklistLogAction.TaskCompleted, actions);
+
+        // The page shows the log with each remark and the departments a return went to.
+        using var hrPage = Data.As(hr.UserId, Permissions.DeparturesManage);
+        var logs = (await hrPage.Get<IChecklistService>().GetAsync(requestId))!.Logs;
+        Assert.Contains(logs, l => l.Action == ChecklistLogAction.ManagementReturned && l.Remark == "Final pay not confirmed");
+        Assert.Contains(logs, l => l.Action == ChecklistLogAction.HeadReturned && l.Remark == "Confirm final pay with Finance" && l.Departments != null);
+        Assert.Contains(logs, l => l.Action == ChecklistLogAction.TaskApproved && l.Remark == "Final pay confirmed");
+        Assert.All(logs, l => Assert.False(string.IsNullOrEmpty(l.UserName)));
     }
 
     [SkippableFact]
@@ -514,7 +642,7 @@ public class ChecklistTests : IntegrationTest
     }
 
     [SkippableFact]
-    public async Task HR_finalizes_the_departure_of_a_department_head()
+    public async Task Departure_of_a_department_head_skips_the_head_step()
     {
         RequireDatabase();
         var hr = await Data.PersonAsync(null);
@@ -525,12 +653,36 @@ public class ChecklistTests : IntegrationTest
 
         Assert.Null(await Data.ReadAsync(db => db.ChecklistRequests.Where(r => r.Id == requestId).Select(r => r.FinalApproverUserId).SingleAsync()));
         await CompleteAndApproveAllTasksAsync(checklistManager.UserId, requestId);
+        Assert.Equal(ChecklistStatus.PendingManagementApproval, await StatusOfAsync(requestId));
 
-        using (var headScope = Data.As(head.UserId))
-            Assert.Empty(await headScope.Get<IChecklistService>().GetMyFinalReviewsAsync());
-        using var hrScope = Data.As(hr.UserId, Permissions.DeparturesManage);
-        var finalized = await hrScope.Get<IChecklistService>().FinalizeAsync(requestId);
-        Assert.True(finalized.Succeeded, finalized.Error);
+        // The leaver cannot approve their own departure, even holding departures.approve.
+        using (var leaverScope = AsManagement(head.UserId))
+        {
+            var service = leaverScope.Get<IChecklistService>();
+            Assert.Empty(await service.GetMyFinalReviewsAsync());
+            Assert.DoesNotContain(await service.GetMyManagementApprovalsAsync(), r => r.Id == requestId);
+            Assert.Contains("own departure", (await service.ApproveByManagementAsync(requestId, "Me")).Error);
+        }
+
+        int taskId;
+        using (var management = AsManagement(hr.UserId))
+        {
+            var service = management.Get<IChecklistService>();
+            Assert.Contains("own department", (await service.ReturnToHeadAsync(requestId, "No head")).Error);
+            // With no head step, HR / management return to departments themselves.
+            taskId = (await service.GetFinalReviewAsync(requestId))!.Tasks.First().Id;
+            Assert.True((await service.ReturnTasksAsync(requestId, new[] { taskId }, "Redo the handover")).Succeeded);
+        }
+        Assert.Equal(ChecklistStatus.InProgress, await StatusOfAsync(requestId));
+
+        await CompleteAndApproveAllTasksAsync(checklistManager.UserId, requestId);
+        Assert.Equal(ChecklistStatus.PendingManagementApproval, await StatusOfAsync(requestId));
+        using (var management = AsManagement(hr.UserId))
+        {
+            var finalized = await management.Get<IChecklistService>().ApproveByManagementAsync(requestId, "Approved");
+            Assert.True(finalized.Succeeded, finalized.Error);
+        }
+        Assert.Contains(ChecklistLogAction.ManagementReturned, await LogActionsAsync(requestId));
     }
 
     [SkippableFact]

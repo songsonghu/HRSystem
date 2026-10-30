@@ -18,6 +18,7 @@ public static class Permissions
     public const string OnboardingManage = "onboarding.manage";
     public const string AccountRequestsManage = "account-requests.manage";
     public const string DeparturesManage = "departures.manage";
+    public const string DeparturesApprove = "departures.approve";
     public const string OffboardingExport = "offboarding.export";
     public const string SystemJobs = "system.jobs";
     public const string ChecklistApproversManage = "checklist-approvers.manage";
@@ -32,7 +33,8 @@ public static class Permissions
         new PermissionDefinition(DepartmentsManage, "HR", "Manage departments and department managers"),
         new PermissionDefinition(AccountRequestsManage, "HR", "Create, submit and track account requests"),
         new PermissionDefinition(OnboardingManage, "HR", "Create, submit and finalize onboarding requests; manage onboarding checklists"),
-        new PermissionDefinition(DeparturesManage, "HR", "Create, submit and finalize departure requests; manage departure checklists"),
+        new PermissionDefinition(DeparturesManage, "HR", "Create, submit and cancel departure requests; manage departure checklists"),
+        new PermissionDefinition(DeparturesApprove, "HR", "Give departures the last approval (HR / management) after the department head, or return them"),
         new PermissionDefinition(OffboardingExport, "HR", "View and export an employee's accounts for offboarding"),
     };
 

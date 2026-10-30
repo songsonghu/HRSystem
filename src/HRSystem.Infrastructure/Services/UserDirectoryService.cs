@@ -1,5 +1,7 @@
 using HRSystem.Application.Interfaces;
+using HRSystem.Application.Security;
 using HRSystem.Infrastructure.Identity;
+using HRSystem.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,8 +10,13 @@ namespace HRSystem.Infrastructure.Services;
 public class UserDirectoryService : IUserDirectoryService
 {
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly AppDbContext _db;
 
-    public UserDirectoryService(UserManager<ApplicationUser> userManager) => _userManager = userManager;
+    public UserDirectoryService(UserManager<ApplicationUser> userManager, AppDbContext db)
+    {
+        _userManager = userManager;
+        _db = db;
+    }
 
     public async Task<UserDirectoryEntry?> GetByIdAsync(string userId, CancellationToken ct = default)
     {
@@ -31,6 +38,17 @@ public class UserDirectoryService : IUserDirectoryService
         var now = DateTimeOffset.UtcNow;
         var users = await _userManager.Users.AsNoTracking()
             .Where(u => u.LockoutEnd == null || u.LockoutEnd <= now)
+            .ToListAsync(ct);
+        return users.Select(ToEntry).OrderBy(u => u.Display).ToList();
+    }
+
+    public async Task<IReadOnlyList<UserDirectoryEntry>> GetUsersWithPermissionAsync(string permission, CancellationToken ct = default)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var roleIds = _db.RoleClaims.Where(c => c.ClaimType == Permissions.ClaimType && c.ClaimValue == permission).Select(c => c.RoleId);
+        var userIds = _db.UserRoles.Where(ur => roleIds.Contains(ur.RoleId)).Select(ur => ur.UserId);
+        var users = await _db.Users.AsNoTracking()
+            .Where(u => userIds.Contains(u.Id) && (u.LockoutEnd == null || u.LockoutEnd <= now))
             .ToListAsync(ct);
         return users.Select(ToEntry).OrderBy(u => u.Display).ToList();
     }
