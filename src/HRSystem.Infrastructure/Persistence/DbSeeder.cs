@@ -208,6 +208,8 @@ public static class DbSeeder
             "Check if there is Commission Rebate / Deficit held up by the Company",
             "Others"
         }),
+        // Finance & Accounts (AE Code): the leaver's AE codes, with handlers and approvers of its own.
+        new("Finance & Accounts", Array.Empty<string>(), TaskType: ChecklistTaskType.AeCode),
         new("Credit Control", new[]
         {
             "Delete login of Ayers / Sharp Point / 2Go",
@@ -293,6 +295,7 @@ public static class DbSeeder
                 SortOrder = i + 1,
                 IsActive = true,
                 IsRequired = true,
+                TaskType = seed.TaskType,
                 CreatedBy = "system"
             };
             for (int j = 0; j < seed.Items.Length; j++)
@@ -311,5 +314,6 @@ public static class DbSeeder
         await db.SaveChangesAsync();
     }
 
-    private sealed record TemplateSeed(string DepartmentName, string[] Items, bool OptionalOthers = false);
+    private sealed record TemplateSeed(string DepartmentName, string[] Items, bool OptionalOthers = false,
+        ChecklistTaskType TaskType = ChecklistTaskType.Checklist);
 }

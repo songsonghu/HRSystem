@@ -74,6 +74,16 @@ public class ChecklistTaskEditViewModel
     /// <summary>Set by the "Complete Task" button; "Save Progress" leaves it false.</summary>
     public bool MarkAsCompleted { get; set; }
     public List<ChecklistTaskItemEditViewModel> Items { get; set; } = new();
+
+    /// <summary>An AE Code task also records the leaver's AE codes.</summary>
+    public ChecklistTaskType TaskType { get; set; }
+    public bool IsAeCodeTask => TaskType == ChecklistTaskType.AeCode;
+
+    /// <summary>AE Code task: the rows on the form, numbered from 1; blank rows are ignored when saving.</summary>
+    public List<ChecklistAeCodeDto> AeCodes { get; set; } = new();
+
+    /// <summary>The leaver's AE codes once the AE Code task is approved, shown on every department's task.</summary>
+    public List<ChecklistAeCodeDto> ApprovedAeCodes { get; set; } = new();
 }
 
 public class ChecklistTaskItemEditViewModel
@@ -169,6 +179,10 @@ public static class ChecklistViewModelMapper
         IsApprover = dto.IsApprover,
         ApprovedByName = dto.ApprovedByName,
         ApprovedAt = dto.ApprovedAt,
+        TaskType = dto.TaskType,
+        // The form starts with one row; more are added on the page.
+        AeCodes = dto.AeCodes.Count > 0 ? dto.AeCodes : new List<ChecklistAeCodeDto> { new() { LineNo = 1 } },
+        ApprovedAeCodes = dto.ApprovedAeCodes,
         TaskRemark = dto.TaskRemark,
         Items = dto.Items.Select(i => new ChecklistTaskItemEditViewModel
         {
@@ -191,7 +205,8 @@ public static class ChecklistViewModelMapper
         {
             TaskId = vm.TaskId,
             TaskRemark = vm.TaskRemark,
-            MarkAsCompleted = vm.MarkAsCompleted
+            MarkAsCompleted = vm.MarkAsCompleted,
+            AeCodes = vm.AeCodes.Select((r, index) => new ChecklistAeCodeDto { LineNo = index + 1, AeCode = r.AeCode, AeName = r.AeName }).ToList()
         };
         foreach (var i in vm.Items)
         {

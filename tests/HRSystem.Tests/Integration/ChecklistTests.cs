@@ -13,11 +13,15 @@ public class ChecklistTests : IntegrationTest
 {
     public ChecklistTests(TestApp app) : base(app) { }
 
+    /// <summary>Every item done; an AE Code task also gets one AE code.</summary>
     private static ChecklistTaskUpdateDto CompleteAll(ChecklistTaskDto task) => new()
     {
         TaskId = task.Id,
         MarkAsCompleted = true,
-        Items = task.Items.Select(i => new ChecklistTaskItemUpdateDto { Id = i.Id, IsCompleted = true }).ToList()
+        Items = task.Items.Select(i => new ChecklistTaskItemUpdateDto { Id = i.Id, IsCompleted = true }).ToList(),
+        AeCodes = task.IsAeCodeTask
+            ? new List<ChecklistAeCodeDto> { new() { LineNo = 1, AeCode = "AE001", AeName = "Test AE" } }
+            : new List<ChecklistAeCodeDto>()
     };
 
     private async Task<int> StartDepartureAsync(string hrUserId, int employeeId, params int[] accountTypeIds)
@@ -289,10 +293,11 @@ public class ChecklistTests : IntegrationTest
 
             await SetAsync(handler1.UserId, handler2.UserId);
             var requestId = await StartDepartureAsync(hr.UserId, (await LeaverAsync()).Leaver);
-            var expected = await Data.ReadAsync(db => db.ChecklistTasks.CountAsync(t => t.ChecklistRequestId == requestId));
+            // The AE Code task has its own handlers and approvers, so it stays with the manager.
+            var expected = await Data.ReadAsync(db => db.ChecklistTasks.CountAsync(t => t.ChecklistRequestId == requestId && t.TaskType == ChecklistTaskType.Checklist));
             Assert.Equal(expected, (await TasksOfAsync(handler1.UserId, requestId)).Count);
             Assert.Equal(expected, (await TasksOfAsync(handler2.UserId, requestId)).Count);
-            Assert.Empty(await TasksOfAsync(manager.UserId, requestId));
+            Assert.All(await TasksOfAsync(manager.UserId, requestId), t => Assert.True(t.IsAeCodeTask));
             Assert.Empty(await TasksOfAsync(approver.UserId, requestId));
 
             // One handler completes a task; the handlers cannot approve it, the approver can.
@@ -319,6 +324,95 @@ public class ChecklistTests : IntegrationTest
             await SetAsync(successor.UserId);
             Assert.Equal(expected - 1, (await TasksOfAsync(successor.UserId, requestId)).Count);
             Assert.Empty(await TasksOfAsync(handler1.UserId, requestId));
+        }
+        finally
+        {
+            await Data.SetTemplateManagersAsync(ChecklistKind.Departure, manager.EmployeeId);
+        }
+    }
+
+    [SkippableFact]
+    public async Task Ae_code_task_has_its_own_people_and_its_approved_codes_show_on_every_task()
+    {
+        RequireDatabase();
+        var hr = await Data.PersonAsync(null);
+        var manager = await Data.PersonAsync(null);
+        var aeHandler = await Data.PersonAsync(null);
+        var aeApprover = await Data.PersonAsync(null);
+        await Data.SetTemplateManagersAsync(ChecklistKind.Departure, manager.EmployeeId);
+        var aeDepartmentId = await Data.ReadAsync(db => db.ChecklistTemplates
+            .Where(t => t.Kind == ChecklistKind.Departure && t.TaskType == ChecklistTaskType.AeCode && !t.IsDeleted)
+            .Select(t => t.DepartmentId).SingleAsync());
+        try
+        {
+            await Data.SetAssigneesAsync(aeDepartmentId, WorkArea.DepartureAeCode, new[] { aeHandler.UserId }, new[] { aeApprover.UserId });
+            var requestId = await StartDepartureAsync(hr.UserId, (await LeaverAsync()).Leaver);
+
+            // Only the AE Code people get the AE Code task; the department's checklist stays with its manager.
+            var aeTask = Assert.Single(await TasksOfAsync(aeHandler.UserId, requestId));
+            Assert.True(aeTask.IsAeCodeTask);
+            Assert.EndsWith("(AE Code)", aeTask.DepartmentName);
+            var otherTasks = await TasksOfAsync(manager.UserId, requestId);
+            Assert.NotEmpty(otherTasks);
+            Assert.DoesNotContain(otherTasks, t => t.IsAeCodeTask);
+
+            ChecklistTaskUpdateDto Codes(bool complete, params (string? Code, string? Name)[] rows) => new()
+            {
+                TaskId = aeTask.Id,
+                MarkAsCompleted = complete,
+                AeCodes = rows.Select((r, i) => new ChecklistAeCodeDto { LineNo = i + 1, AeCode = r.Code, AeName = r.Name }).ToList()
+            };
+
+            using (var h = Data.As(aeHandler.UserId))
+            {
+                var service = h.Get<IChecklistService>();
+                Assert.Contains("at least one AE Code", (await service.UpdateTaskAsync(Codes(true, ("", " ")))).Error);
+                Assert.Contains("line 2", (await service.UpdateTaskAsync(Codes(true, ("A1", "Alice"), ("A2", "")))).Error);
+                Assert.Contains("more than once", (await service.UpdateTaskAsync(Codes(false, ("A1", "Alice"), ("a1", "Bob")))).Error);
+
+                // Saving progress keeps the filled lines, numbered from 1 with blank lines dropped.
+                Assert.True((await service.UpdateTaskAsync(Codes(false, ("A1", "Alice"), ("", ""), ("A2", "")))).Succeeded);
+                var saved = (await service.GetTaskAsync(aeTask.Id))!.AeCodes;
+                Assert.Equal(new[] { 1, 2 }, saved.Select(a => a.LineNo));
+                Assert.Equal(ChecklistTaskStatus.InProgress, (await service.GetTaskAsync(aeTask.Id))!.Status);
+
+                var completed = await service.UpdateTaskAsync(Codes(true, (" A1 ", "Alice"), ("A2", "Alice Chan")));
+                Assert.True(completed.Succeeded, completed.Error);
+                Assert.False((await service.ApproveTaskAsync(aeTask.Id)).Succeeded);
+            }
+            Assert.Contains(App.Emails.Sent, m => m.To.Contains(aeApprover.Email) && m.Subject.Contains("(AE Code)"));
+
+            // Not approved yet: the other departments do not see the codes.
+            using (var m = Data.As(manager.UserId))
+            {
+                Assert.Empty((await m.Get<IChecklistService>().GetTaskAsync(otherTasks[0].Id))!.ApprovedAeCodes);
+                Assert.False((await m.Get<IChecklistService>().ApproveTaskAsync(aeTask.Id)).Succeeded);
+            }
+
+            using (var a = Data.As(aeApprover.UserId))
+            {
+                var service = a.Get<IChecklistService>();
+                Assert.True(Assert.Single((await service.GetMyApprovalTasksAsync()).Where(t => t.ChecklistRequestId == requestId)).CanApprove);
+                var approved = await service.ApproveTaskAsync(aeTask.Id);
+                Assert.True(approved.Succeeded, approved.Error);
+            }
+
+            using (var m = Data.As(manager.UserId))
+            {
+                var shown = (await m.Get<IChecklistService>().GetTaskAsync(otherTasks[0].Id))!.ApprovedAeCodes;
+                Assert.Equal(new[] { (1, "A1", "Alice"), (2, "A2", "Alice Chan") },
+                    shown.Select(c => (c.LineNo, c.AeCode!, c.AeName!)));
+            }
+            using (var hrScope = Data.As(hr.UserId, Permissions.DeparturesManage))
+                Assert.Equal(2, (await hrScope.Get<IChecklistService>().GetAsync(requestId))!.ApprovedAeCodes.Count);
+
+            // The pages: the AE Code task lists its lines; another department's task shows the approved codes.
+            var aePage = await (await SignedInClientAsync(aeHandler.Email, TestData.Password)).GetStringAsync($"/ChecklistTasks/Task/{aeTask.Id}");
+            Assert.Contains("id=\"aeCodes\"", aePage);
+            Assert.Contains("value=\"Alice Chan\"", aePage);
+            var otherPage = await (await SignedInClientAsync(manager.Email, TestData.Password)).GetStringAsync($"/ChecklistTasks/Task/{otherTasks[0].Id}");
+            Assert.Contains("AE Codes of", otherPage);
+            Assert.Contains("Alice Chan", otherPage);
         }
         finally
         {

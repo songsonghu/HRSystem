@@ -9,8 +9,11 @@ public class ChecklistTask : BaseEntity
     public int ChecklistRequestId { get; set; }
     public int? AssignedDepartmentId { get; set; }
 
-    /// <summary>Department name snapshot at submit time.</summary>
+    /// <summary>Task name snapshot at submit time: the department name, plus " (AE Code)" for an AE Code task.</summary>
     public string DepartmentName { get; set; } = string.Empty;
+
+    /// <summary>Copied from the template. An AE Code task records the leaver's AE codes.</summary>
+    public ChecklistTaskType TaskType { get; set; } = ChecklistTaskType.Checklist;
     public ChecklistTaskStatus Status { get; set; } = ChecklistTaskStatus.NotStarted;
     public string? TaskRemark { get; set; }
     public bool IsRequired { get; set; } = true;
@@ -34,4 +37,7 @@ public class ChecklistTask : BaseEntity
 
     public ChecklistRequest? ChecklistRequest { get; set; }
     public ICollection<ChecklistTaskItem> Items { get; set; } = new List<ChecklistTaskItem>();
+
+    /// <summary>AE Code task: the leaver's AE codes, numbered from 1.</summary>
+    public ICollection<ChecklistTaskAeCode> AeCodes { get; set; } = new List<ChecklistTaskAeCode>();
 }

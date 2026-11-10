@@ -14,6 +14,12 @@ public class ChecklistTemplate : BaseEntity
     public bool IsRequired { get; set; } = true;
     public int SortOrder { get; set; }
 
+    /// <summary>
+    /// AE Code: the task records the leaver's AE codes, and its handlers and approvers are set apart
+    /// (<see cref="WorkArea.DepartureAeCode"/>), so a department can have one template of each type.
+    /// </summary>
+    public ChecklistTaskType TaskType { get; set; } = ChecklistTaskType.Checklist;
+
     public Department? Department { get; set; }
     public ICollection<ChecklistTemplateItem> Items { get; set; } = new List<ChecklistTemplateItem>();
 }

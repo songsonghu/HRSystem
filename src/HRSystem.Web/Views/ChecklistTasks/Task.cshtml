@@ -8,6 +8,9 @@
     // Approvers come from (and go back to) Departure Approval; handlers use Departure Checklist.
     var backController = Model.IsApprover && !Model.IsHandler ? "DepartureApprovals" : "ChecklistTasks";
     var backAction = readOnly && !Model.CanApprove ? "History" : "Index";
+    var aeRows = readOnly
+        ? Model.AeCodes.Where(r => !string.IsNullOrWhiteSpace(r.AeCode) || !string.IsNullOrWhiteSpace(r.AeName)).ToList()
+        : Model.AeCodes;
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -25,6 +28,24 @@
     </span>
 </div>
 <p class="text-muted">Request @Model.RequestNo · @Model.EmployeeName (@Model.EmployeeNo)</p>
+
+@if (!Model.IsAeCodeTask && Model.ApprovedAeCodes.Count > 0)
+{
+    <div class="card mb-3 border-info-subtle">
+        <div class="card-header"><b>AE Codes of @Model.EmployeeName</b> <span class="text-muted small">(from the approved AE Code task)</span></div>
+        <div class="card-body p-0">
+            <table class="table table-sm mb-0 align-middle">
+                <thead class="table-light"><tr><th style="width:70px">No.</th><th>AE Code</th><th>AE Name</th></tr></thead>
+                <tbody>
+                @foreach (var ae in Model.ApprovedAeCodes)
+                {
+                    <tr><td>@ae.LineNo</td><td>@ae.AeCode</td><td>@ae.AeName</td></tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
 
 @if (!string.IsNullOrWhiteSpace(Model.ReturnReason) && (!readOnly || Model.CanApprove))
 {
@@ -67,6 +88,56 @@
     <div asp-validation-summary="ModelOnly" class="text-danger"></div>
 
     <fieldset disabled="@readOnly">
+        @if (Model.IsAeCodeTask)
+        {
+            <h5>AE Codes</h5>
+            @if (readOnly && aeRows.Count == 0)
+            {
+                <p class="text-muted">No AE codes entered.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-bordered align-middle" id="aeCodes">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width:70px">No.</th>
+                                <th>AE Code <span class="text-danger">*</span></th>
+                                <th>AE Name <span class="text-danger">*</span></th>
+                                @if (!readOnly)
+                                {
+                                    <th style="width:60px"></th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @for (int i = 0; i < aeRows.Count; i++)
+                        {
+                            <tr class="ae-row">
+                                <td class="ae-line">@(i + 1)</td>
+                                <td><input name="AeCodes[@i].AeCode" value="@aeRows[i].AeCode" class="form-control ae-code" maxlength="@HRSystem.Domain.Entities.ChecklistTaskAeCode.MaxCodeLength" aria-label="AE Code" /></td>
+                                <td><input name="AeCodes[@i].AeName" value="@aeRows[i].AeName" class="form-control ae-name" maxlength="@HRSystem.Domain.Entities.ChecklistTaskAeCode.MaxNameLength" aria-label="AE Name" /></td>
+                                @if (!readOnly)
+                                {
+                                    <td class="text-center">
+                                        <button type="button" class="btn btn-sm btn-outline-danger ae-remove" title="Remove this line"><i class="bi bi-trash"></i></button>
+                                    </td>
+                                }
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+                @if (!readOnly)
+                {
+                    <button type="button" class="btn btn-sm btn-outline-primary mb-3" id="aeAdd"><i class="bi bi-plus-lg"></i> Add Line</button>
+                    <p class="text-muted small">One line per AE code the employee holds. Once approved, these AE codes are shown on every department's task of this departure.</p>
+                }
+            }
+        }
+
+        @if (Model.Items.Count > 0)
+        {
         <div class="table-responsive">
             <table class="table table-striped align-middle">
                 <thead>
@@ -136,6 +207,7 @@
                 </tbody>
             </table>
         </div>
+        }
 
         <div class="mb-3">
             <label asp-for="TaskRemark" class="form-label"></label>
@@ -218,9 +290,48 @@
                 }));
             });
 
+            // AE codes: one line to start with; lines are numbered from 1 and renumbered after a removal.
+            const aeBody = document.querySelector('#aeCodes tbody');
+            const renumberAe = () => aeBody.querySelectorAll('.ae-row').forEach((row, i) => {
+                row.querySelector('.ae-line').textContent = i + 1;
+                row.querySelector('.ae-code').name = `AeCodes[${i}].AeCode`;
+                row.querySelector('.ae-name').name = `AeCodes[${i}].AeName`;
+            });
+            document.getElementById('aeAdd')?.addEventListener('click', () => {
+                const row = aeBody.querySelector('.ae-row').cloneNode(true);
+                row.querySelectorAll('input').forEach(input => input.value = '');
+                aeBody.appendChild(row);
+                renumberAe();
+                row.querySelector('.ae-code').focus();
+            });
+            aeBody?.addEventListener('click', e => {
+                const remove = e.target.closest('.ae-remove');
+                if (!remove) return;
+                const row = remove.closest('.ae-row');
+                // Keep at least one line: removing the last one just clears it.
+                if (aeBody.querySelectorAll('.ae-row').length === 1) row.querySelectorAll('input').forEach(input => input.value = '');
+                else row.remove();
+                renumberAe();
+            });
+
             const complete = document.getElementById('completeTask');
             if (!complete) return;
             complete.addEventListener('click', e => {
+                if (aeBody) {
+                    const rows = [...aeBody.querySelectorAll('.ae-row')]
+                        .map(row => ({ code: row.querySelector('.ae-code'), name: row.querySelector('.ae-name') }));
+                    const filled = rows.filter(r => r.code.value.trim() || r.name.value.trim());
+                    const half = filled.find(r => !r.code.value.trim() || !r.name.value.trim());
+                    if (filled.length === 0 || half) {
+                        e.preventDefault();
+                        alert(filled.length === 0
+                            ? 'Enter at least one AE Code and AE Name before completing the task.'
+                            : 'Enter both the AE Code and the AE Name on every line.');
+                        const target = half ?? rows[0];
+                        (target.code.value.trim() ? target.name : target.code).focus();
+                        return;
+                    }
+                }
                 const everyItemNeedsChoice = @Json.Serialize(everyItemNeedsChoice);
                 const missing = [...document.querySelectorAll('.checklist-item')]
                     .filter(row => ![...row.querySelectorAll('.item-choice')].some(box => box.checked));

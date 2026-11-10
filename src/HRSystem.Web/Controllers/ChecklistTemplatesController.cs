@@ -38,13 +38,14 @@ public class ChecklistTemplatesController : Controller
         if (!CanView(kind)) return Forbid();
         ViewBag.Kind = kind;
         ViewBag.CanEditTemplates = CanEditTemplates;
+        ViewBag.HasAeCodeTemplate = await _service.HasAeCodeTemplateAsync(kind);
         return View(await _service.GetListAsync(kind));
     }
 
-    public async Task<IActionResult> Create(ChecklistKind kind = ChecklistKind.Departure)
+    public async Task<IActionResult> Create(ChecklistKind kind = ChecklistKind.Departure, ChecklistTaskType taskType = ChecklistTaskType.Checklist)
     {
-        if (!CanView(kind) || !CanEditTemplates) return Forbid();
-        return await EditViewAsync(new ChecklistTemplateEditDto { Kind = kind }, new DepartmentAssignmentDto());
+        if (!CanView(kind) || !CanEditTemplates || !Enum.IsDefined(taskType)) return Forbid();
+        return await EditViewAsync(new ChecklistTemplateEditDto { Kind = kind, TaskType = taskType }, new DepartmentAssignmentDto());
     }
 
     [HttpPost]
@@ -62,7 +63,7 @@ public class ChecklistTemplatesController : Controller
             return await EditViewAsync(dto, picked);
         }
 
-        var people = await SavePeopleAsync(picked);
+        var people = await SavePeopleAsync(dto.TaskType, picked);
         if (people is not null)
         {
             TempData["Error"] = $"Checklist template created, but the handlers and approvers were not saved: {people}";
@@ -76,7 +77,7 @@ public class ChecklistTemplatesController : Controller
     {
         var dto = await _service.GetAsync(id);
         if (dto is null || !CanView(dto.Kind)) return NotFound();
-        var assignees = await _assignments.GetDepartmentAsync(dto.DepartmentId!.Value, WorkArea.Departure);
+        var assignees = await _assignments.GetDepartmentAsync(dto.DepartmentId!.Value, dto.TaskType.ToWorkArea());
         return assignees is null ? NotFound() : await EditViewAsync(dto, assignees);
     }
 
@@ -88,6 +89,7 @@ public class ChecklistTemplatesController : Controller
         var current = await _service.GetAsync(dto.Id);
         if (current is null || !CanView(current.Kind)) return NotFound();
         if (!CanEditTemplates) dto = current;
+        dto.TaskType = current.TaskType;
         var picked = Picked(dto.DepartmentId ?? current.DepartmentId, handlerUserIds, approverUserIds);
 
         if (CanEditTemplates)
@@ -100,7 +102,7 @@ public class ChecklistTemplatesController : Controller
             }
         }
 
-        var people = await SavePeopleAsync(picked);
+        var people = await SavePeopleAsync(dto.TaskType, picked);
         if (people is not null)
         {
             ModelState.AddModelError(string.Empty, CanEditTemplates ? $"Checklist template saved, but: {people}" : people);
@@ -132,10 +134,10 @@ public class ChecklistTemplatesController : Controller
     };
 
     /// <summary>Saves the picked handlers and approvers when the user may; returns an error message or null.</summary>
-    private async Task<string?> SavePeopleAsync(DepartmentAssignmentDto picked)
+    private async Task<string?> SavePeopleAsync(ChecklistTaskType taskType, DepartmentAssignmentDto picked)
     {
         if (!CanEditPeople || picked.DepartmentId == 0) return null;
-        var result = await _assignments.SaveSettingsAsync(WorkArea.Departure, new[] { picked });
+        var result = await _assignments.SaveSettingsAsync(taskType.ToWorkArea(), new[] { picked });
         return result.Succeeded ? null : result.Error;
     }
 
@@ -152,7 +154,7 @@ public class ChecklistTemplatesController : Controller
         dto.Items = items;
 
         // Show the picked people with the department's manager as the fallback.
-        if (picked.DepartmentId != 0 && await _assignments.GetDepartmentAsync(picked.DepartmentId, WorkArea.Departure) is { } department)
+        if (picked.DepartmentId != 0 && await _assignments.GetDepartmentAsync(picked.DepartmentId, dto.TaskType.ToWorkArea()) is { } department)
         {
             picked.DepartmentName = department.DepartmentName;
             picked.ManagerUserName = department.ManagerUserName;
@@ -165,7 +167,7 @@ public class ChecklistTemplatesController : Controller
 
         ViewBag.CanEditTemplates = CanEditTemplates;
         ViewBag.Assignees = await AssigneesEditorViewModel.CreateAsync(picked, CanEditPeople, _users);
-        ViewBag.Departments = (await _service.GetDepartmentOptionsAsync(dto.Kind, dto.DepartmentId))
+        ViewBag.Departments = (await _service.GetDepartmentOptionsAsync(dto.Kind, dto.TaskType, dto.DepartmentId))
             .Select(d => new SelectListItem(d.Name, d.Id.ToString()))
             .ToList();
         return View("Edit", dto);

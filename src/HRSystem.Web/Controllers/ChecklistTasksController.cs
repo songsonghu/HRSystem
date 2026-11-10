@@ -86,6 +86,8 @@ public class ChecklistTasksController : Controller
             // Keep what the user entered; only the read-only parts come from the database.
             var redisplay = task.ToTaskEdit();
             redisplay.TaskRemark = vm.TaskRemark;
+            if (redisplay.IsAeCodeTask && vm.AeCodes.Count > 0)
+                redisplay.AeCodes = vm.AeCodes.Select((r, index) => new ChecklistAeCodeDto { LineNo = index + 1, AeCode = r.AeCode, AeName = r.AeName }).ToList();
             foreach (var item in redisplay.Items)
             {
                 var posted = vm.Items.FirstOrDefault(i => i.Id == item.Id);

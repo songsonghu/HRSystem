@@ -37,6 +37,8 @@ public class DashboardService : IDashboardService
         var accountApproves = await _assignments.GetDepartmentIdsAsync(userId, WorkArea.Account, AssignmentRole.Approver, ct);
         var departureHandles = await _assignments.GetDepartmentIdsAsync(userId, WorkArea.Departure, AssignmentRole.Handler, ct);
         var departureApproves = await _assignments.GetDepartmentIdsAsync(userId, WorkArea.Departure, AssignmentRole.Approver, ct);
+        var aeCodeHandles = await _assignments.GetDepartmentIdsAsync(userId, WorkArea.DepartureAeCode, AssignmentRole.Handler, ct);
+        var aeCodeApproves = await _assignments.GetDepartmentIdsAsync(userId, WorkArea.DepartureAeCode, AssignmentRole.Approver, ct);
 
         var openItems = _db.AccountRequestItems.Where(i =>
             i.Request!.Status == RequestStatus.Submitted || i.Request.Status == RequestStatus.InProgress);
@@ -56,10 +58,10 @@ public class DashboardService : IDashboardService
                     && (i.Status == ItemStatus.Completed || i.Status == ItemStatus.Rejected), ct)
                 + await _db.AccountRequests.CountAsync(r => r.Status == RequestStatus.PendingApproval && r.ApproverUserId == userId, ct),
             DepartureChecklist = await openTasks.CountAsync(t =>
-                departureHandles.Contains(t.AssignedDepartmentId!.Value)
+                (t.TaskType == ChecklistTaskType.AeCode ? aeCodeHandles.Contains(t.AssignedDepartmentId!.Value) : departureHandles.Contains(t.AssignedDepartmentId!.Value))
                 && t.Status != ChecklistTaskStatus.Completed && t.Status != ChecklistTaskStatus.NotApplicable, ct),
             DepartureApproval = await openTasks.CountAsync(t =>
-                    departureApproves.Contains(t.AssignedDepartmentId!.Value) && t.ApprovedAt == null
+                    (t.TaskType == ChecklistTaskType.AeCode ? aeCodeApproves.Contains(t.AssignedDepartmentId!.Value) : departureApproves.Contains(t.AssignedDepartmentId!.Value)) && t.ApprovedAt == null
                     && (t.Status == ChecklistTaskStatus.Completed || t.Status == ChecklistTaskStatus.NotApplicable), ct)
                 + await _db.ChecklistRequests.CountAsync(r =>
                     r.Kind == ChecklistKind.Departure && r.FinalApproverUserId == userId

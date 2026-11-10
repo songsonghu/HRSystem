@@ -99,6 +99,7 @@ public class ChecklistService : IChecklistService
             .Include(r => r.AccountRequest)
             .Include(r => r.Tasks.OrderBy(t => t.SortOrder))
             .ThenInclude(t => t.Items.OrderBy(i => i.SortOrder))
+            .Include(r => r.Tasks).ThenInclude(t => t.AeCodes)
             .Include(r => r.Logs)
             .FirstOrDefaultAsync(r => r.Id == requestId, ct);
         if (request is null || !CanManage(request.Kind)) return null;
@@ -290,6 +291,7 @@ public class ChecklistService : IChecklistService
             .Select(t => new
             {
                 t.DepartmentId,
+                t.TaskType,
                 Dto = new ChecklistTemplatePreviewDto
                 {
                     DepartmentName = t.Department!.Name,
@@ -298,13 +300,18 @@ public class ChecklistService : IChecklistService
             })
             .ToListAsync(ct);
 
-        var departmentIds = templates.Select(t => t.DepartmentId).ToList();
-        var handlers = await _assignments.GetAssigneesAsync(departmentIds, WorkArea.Departure, AssignmentRole.Handler, ct);
-        var approvers = await _assignments.GetAssigneesAsync(departmentIds, WorkArea.Departure, AssignmentRole.Approver, ct);
-        foreach (var t in templates)
+        // An AE Code task has its own handlers and approvers, apart from the department's checklist.
+        foreach (var group in templates.GroupBy(t => t.TaskType))
         {
-            t.Dto.HandlerNames = AssignmentService.Names(handlers[t.DepartmentId]);
-            t.Dto.ApproverNames = AssignmentService.Names(approvers[t.DepartmentId]);
+            var departmentIds = group.Select(t => t.DepartmentId).ToList();
+            var handlers = await _assignments.GetAssigneesAsync(departmentIds, group.Key.ToWorkArea(), AssignmentRole.Handler, ct);
+            var approvers = await _assignments.GetAssigneesAsync(departmentIds, group.Key.ToWorkArea(), AssignmentRole.Approver, ct);
+            foreach (var t in group)
+            {
+                t.Dto.DepartmentName = t.TaskType.TaskName(t.Dto.DepartmentName);
+                t.Dto.HandlerNames = AssignmentService.Names(handlers[t.DepartmentId]);
+                t.Dto.ApproverNames = AssignmentService.Names(approvers[t.DepartmentId]);
+            }
         }
         return templates.Select(t => t.Dto).ToList();
     }
@@ -334,8 +341,12 @@ public class ChecklistService : IChecklistService
             if (templates.Count == 0) return Result.Fail("No active departure checklist templates found.");
 
             // Check every department can receive and approve its task before anything is dispatched.
-            var coverageError = await _assignments.CheckCoverageAsync(templates.Select(t => t.DepartmentId), WorkArea.Departure, ct);
-            if (coverageError is not null) return Result.Fail(coverageError);
+            foreach (var group in templates.GroupBy(t => t.TaskType))
+            {
+                var coverageError = await _assignments.CheckCoverageAsync(group.Select(t => t.DepartmentId), group.Key.ToWorkArea(), ct);
+                if (coverageError is not null)
+                    return Result.Fail(group.Key == ChecklistTaskType.AeCode ? $"AE Code task: {coverageError}" : coverageError);
+            }
 
             var resolved = await ResolveFinalApproverAsync(snapshot.EmployeeId, ct);
             if (resolved.Error is not null) return Result.Fail(resolved.Error);
@@ -356,7 +367,8 @@ public class ChecklistService : IChecklistService
             {
                 ChecklistRequestId = request.Id,
                 AssignedDepartmentId = template.DepartmentId,
-                DepartmentName = template.Department!.Name,
+                DepartmentName = Trunc(template.TaskType.TaskName(template.Department!.Name), 100),
+                TaskType = template.TaskType,
                 Status = ChecklistTaskStatus.NotStarted,
                 IsRequired = template.IsRequired,
                 SortOrder = template.SortOrder,
@@ -533,6 +545,7 @@ public class ChecklistService : IChecklistService
             .Include(r => r.AccountRequest)
             .Include(r => r.Tasks.OrderBy(t => t.SortOrder))
             .ThenInclude(t => t.Items.OrderBy(i => i.SortOrder))
+            .Include(r => r.Tasks).ThenInclude(t => t.AeCodes)
             .Include(r => r.Logs)
             .FirstOrDefaultAsync(r => r.Id == requestId, ct);
         if (request is null || request.Status == ChecklistStatus.Draft) return null;
@@ -736,11 +749,26 @@ public class ChecklistService : IChecklistService
 
     // ------------------------------------------------------------------ tasks
 
-    /// <summary>The departments whose departure tasks the current user handles and approves.</summary>
-    private sealed record TaskRoles(IReadOnlyList<int> Handles, IReadOnlyList<int> Approves)
+    /// <summary>
+    /// The departments whose departure tasks the current user handles and approves: checklist tasks and,
+    /// set apart, AE Code tasks.
+    /// </summary>
+    private sealed record TaskRoles(
+        IReadOnlyList<int> Handles, IReadOnlyList<int> Approves,
+        IReadOnlyList<int> AeCodeHandles, IReadOnlyList<int> AeCodeApproves)
     {
-        public bool IsHandler(ChecklistTask task) => task.AssignedDepartmentId is int d && Handles.Contains(d);
-        public bool IsApprover(ChecklistTask task) => task.AssignedDepartmentId is int d && Approves.Contains(d);
+        public IReadOnlyList<int> Of(AssignmentRole role, ChecklistTaskType type) => (role, type) switch
+        {
+            (AssignmentRole.Handler, ChecklistTaskType.AeCode) => AeCodeHandles,
+            (AssignmentRole.Approver, ChecklistTaskType.AeCode) => AeCodeApproves,
+            (AssignmentRole.Handler, _) => Handles,
+            _ => Approves
+        };
+
+        public bool IsHandler(ChecklistTask task)
+            => task.AssignedDepartmentId is int d && Of(AssignmentRole.Handler, task.TaskType).Contains(d);
+        public bool IsApprover(ChecklistTask task)
+            => task.AssignedDepartmentId is int d && Of(AssignmentRole.Approver, task.TaskType).Contains(d);
         public bool CanSee(ChecklistTask task) => IsHandler(task) || IsApprover(task);
     }
 
@@ -749,16 +777,27 @@ public class ChecklistService : IChecklistService
         var userId = _currentUser.UserId;
         return new TaskRoles(
             await _assignments.GetDepartmentIdsAsync(userId, WorkArea.Departure, AssignmentRole.Handler, ct),
-            await _assignments.GetDepartmentIdsAsync(userId, WorkArea.Departure, AssignmentRole.Approver, ct));
+            await _assignments.GetDepartmentIdsAsync(userId, WorkArea.Departure, AssignmentRole.Approver, ct),
+            await _assignments.GetDepartmentIdsAsync(userId, WorkArea.DepartureAeCode, AssignmentRole.Handler, ct),
+            await _assignments.GetDepartmentIdsAsync(userId, WorkArea.DepartureAeCode, AssignmentRole.Approver, ct));
     }
 
-    /// <summary>Dispatched tasks of the given departments. Administrators get no view of other departments' tasks.</summary>
-    private IQueryable<ChecklistTask> TasksOf(IReadOnlyList<int> departmentIds)
-        => _db.ChecklistTasks.AsNoTracking()
+    /// <summary>
+    /// Dispatched tasks the current user holds the role for. Administrators get no view of other departments' tasks.
+    /// </summary>
+    private IQueryable<ChecklistTask> TasksOf(TaskRoles roles, AssignmentRole role)
+    {
+        var checklist = roles.Of(role, ChecklistTaskType.Checklist);
+        var aeCode = roles.Of(role, ChecklistTaskType.AeCode);
+        return _db.ChecklistTasks.AsNoTracking()
             .Include(t => t.ChecklistRequest)!.ThenInclude(r => r!.Employee)
             .Include(t => t.Items)
-            .Where(t => t.AssignedDepartmentId != null && departmentIds.Contains(t.AssignedDepartmentId.Value)
+            .Include(t => t.AeCodes)
+            .Where(t => t.AssignedDepartmentId != null
+                        && ((t.TaskType == ChecklistTaskType.Checklist && checklist.Contains(t.AssignedDepartmentId.Value))
+                            || (t.TaskType == ChecklistTaskType.AeCode && aeCode.Contains(t.AssignedDepartmentId.Value)))
                         && t.ChecklistRequest!.Status != ChecklistStatus.Draft);
+    }
 
     private static IQueryable<ChecklistTask> OfOpenRequests(IQueryable<ChecklistTask> q)
         => q.Where(t => t.ChecklistRequest!.Status != ChecklistStatus.Completed && t.ChecklistRequest.Status != ChecklistStatus.Cancelled);
@@ -782,7 +821,7 @@ public class ChecklistService : IChecklistService
     public async Task<IReadOnlyList<ChecklistTaskDto>> GetMyPendingTasksAsync(CancellationToken ct = default)
     {
         var roles = await GetRolesAsync(ct);
-        var tasks = await OfOpenRequests(TasksOf(roles.Handles))
+        var tasks = await OfOpenRequests(TasksOf(roles, AssignmentRole.Handler))
             .Where(t => t.Status != ChecklistTaskStatus.Completed && t.Status != ChecklistTaskStatus.NotApplicable)
             .OrderBy(t => t.ChecklistRequestId).ThenBy(t => t.SortOrder)
             .ToListAsync(ct);
@@ -792,7 +831,7 @@ public class ChecklistService : IChecklistService
     public async Task<IReadOnlyList<ChecklistTaskDto>> GetMyTaskHistoryAsync(ChecklistTaskHistoryQuery query, CancellationToken ct = default)
     {
         var roles = await GetRolesAsync(ct);
-        var q = TasksOf(roles.Handles).Where(t => t.Status == ChecklistTaskStatus.Completed
+        var q = TasksOf(roles, AssignmentRole.Handler).Where(t => t.Status == ChecklistTaskStatus.Completed
                                                   || t.Status == ChecklistTaskStatus.NotApplicable
                                                   || t.ChecklistRequest!.Status == ChecklistStatus.Completed
                                                   || t.ChecklistRequest.Status == ChecklistStatus.Cancelled);
@@ -803,7 +842,7 @@ public class ChecklistService : IChecklistService
     public async Task<IReadOnlyList<ChecklistTaskDto>> GetMyApprovalTasksAsync(CancellationToken ct = default)
     {
         var roles = await GetRolesAsync(ct);
-        var tasks = await OfOpenRequests(TasksOf(roles.Approves))
+        var tasks = await OfOpenRequests(TasksOf(roles, AssignmentRole.Approver))
             .Where(t => t.ApprovedAt == null)
             .OrderBy(t => t.ChecklistRequestId).ThenBy(t => t.SortOrder)
             .ToListAsync(ct);
@@ -814,7 +853,7 @@ public class ChecklistService : IChecklistService
     public async Task<IReadOnlyList<ChecklistTaskDto>> GetMyApprovalHistoryAsync(ChecklistTaskHistoryQuery query, CancellationToken ct = default)
     {
         var roles = await GetRolesAsync(ct);
-        var q = TasksOf(roles.Approves).Where(t => t.ApprovedAt != null
+        var q = TasksOf(roles, AssignmentRole.Approver).Where(t => t.ApprovedAt != null
                                                    || t.ChecklistRequest!.Status == ChecklistStatus.Completed
                                                    || t.ChecklistRequest.Status == ChecklistStatus.Cancelled);
         var tasks = await Filter(q, query).ToListAsync(ct);
@@ -897,10 +936,72 @@ public class ChecklistService : IChecklistService
         var task = await _db.ChecklistTasks.AsNoTracking()
             .Include(t => t.ChecklistRequest)!.ThenInclude(r => r!.Employee)
             .Include(t => t.Items.OrderBy(i => i.SortOrder))
+            .Include(t => t.AeCodes)
             .FirstOrDefaultAsync(t => t.Id == taskId, ct);
         if (task is null || task.ChecklistRequest?.Status == ChecklistStatus.Draft) return null;
         var roles = await GetRolesAsync(ct);
-        return roles.CanSee(task) ? MapTask(task, roles) : null;
+        if (!roles.CanSee(task)) return null;
+
+        // Every department's task shows the leaver's AE codes once the AE Code task is approved.
+        var dto = MapTask(task, roles);
+        dto.ApprovedAeCodes = await _db.ChecklistTaskAeCodes.AsNoTracking()
+            .Where(a => a.ChecklistTask!.ChecklistRequestId == task.ChecklistRequestId
+                        && a.ChecklistTask.TaskType == ChecklistTaskType.AeCode
+                        && a.ChecklistTask.ApprovedAt != null)
+            .OrderBy(a => a.LineNo)
+            .Select(a => new ChecklistAeCodeDto { LineNo = a.LineNo, AeCode = a.AeCode, AeName = a.AeName })
+            .ToListAsync(ct);
+        return dto;
+    }
+
+    /// <summary>
+    /// The AE codes posted for an AE Code task, trimmed and without blank rows. Completing needs at least
+    /// one row and both fields on every row; saving progress keeps half-filled rows.
+    /// </summary>
+    private static (List<(string Code, string Name)>? Rows, string? Error) CleanAeCodes(IEnumerable<ChecklistAeCodeDto> posted, bool completing)
+    {
+        var rows = posted.OrderBy(r => r.LineNo)
+            .Select(r => (Code: r.AeCode?.Trim() ?? string.Empty, Name: r.AeName?.Trim() ?? string.Empty))
+            .Where(r => r.Code.Length > 0 || r.Name.Length > 0)
+            .ToList();
+        for (var i = 0; i < rows.Count; i++)
+        {
+            if (rows[i].Code.Length > ChecklistTaskAeCode.MaxCodeLength)
+                return (null, $"AE Code on line {i + 1} is longer than {ChecklistTaskAeCode.MaxCodeLength} characters.");
+            if (rows[i].Name.Length > ChecklistTaskAeCode.MaxNameLength)
+                return (null, $"AE Name on line {i + 1} is longer than {ChecklistTaskAeCode.MaxNameLength} characters.");
+            if (completing && (rows[i].Code.Length == 0 || rows[i].Name.Length == 0))
+                return (null, $"Enter both the AE Code and the AE Name on line {i + 1}.");
+        }
+        var duplicate = rows.Where(r => r.Code.Length > 0)
+            .GroupBy(r => r.Code, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(g => g.Count() > 1);
+        if (duplicate is not null) return (null, $"AE Code {duplicate.Key} is entered more than once.");
+        if (completing && rows.Count == 0) return (null, "Enter at least one AE Code and AE Name before completing the task.");
+        return (rows, null);
+    }
+
+    /// <summary>Replaces the task's AE codes with <paramref name="rows"/>, numbered from 1. The caller saves.</summary>
+    private void SyncAeCodes(ChecklistTask task, IReadOnlyList<(string Code, string Name)> rows)
+    {
+        var existing = task.AeCodes.OrderBy(a => a.LineNo).ToList();
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var line = i < existing.Count ? existing[i] : null;
+            if (line is null)
+            {
+                line = new ChecklistTaskAeCode();
+                task.AeCodes.Add(line);
+            }
+            line.LineNo = i + 1;
+            line.AeCode = rows[i].Code;
+            line.AeName = rows[i].Name;
+        }
+        foreach (var removed in existing.Skip(rows.Count))
+        {
+            task.AeCodes.Remove(removed);
+            _db.ChecklistTaskAeCodes.Remove(removed);
+        }
     }
 
     public Task<Result> UpdateTaskAsync(ChecklistTaskUpdateDto dto, CancellationToken ct = default)
@@ -911,6 +1012,7 @@ public class ChecklistService : IChecklistService
         var task = await _db.ChecklistTasks
             .Include(t => t.ChecklistRequest)
             .Include(t => t.Items)
+            .Include(t => t.AeCodes)
             .FirstOrDefaultAsync(t => t.Id == dto.TaskId, ct);
         if (task is null) return Result.Fail("Task not found.");
         if (!(await GetRolesAsync(ct)).CanSee(task)) return Result.Fail("You are not allowed to update this task.");
@@ -921,6 +1023,14 @@ public class ChecklistService : IChecklistService
 
         if (dto.Items.Any(i => i.IsCompleted && i.IsNotApplicable))
             return Result.Fail("A checklist item can be either Done or N/A, not both.");
+
+        List<(string Code, string Name)>? aeCodes = null;
+        if (task.TaskType == ChecklistTaskType.AeCode)
+        {
+            var (rows, aeError) = CleanAeCodes(dto.AeCodes, dto.MarkAsCompleted);
+            if (aeError is not null) return Result.Fail(aeError);
+            aeCodes = rows;
+        }
 
         // Validate every upload before changing anything.
         var uploads = new Dictionary<int, (ChecklistAttachmentUpload File, string ContentType)>();
@@ -982,9 +1092,11 @@ public class ChecklistService : IChecklistService
 
         task.TaskRemark = dto.TaskRemark;
         task.HandledBy = _currentUser.UserId;
+        if (aeCodes is not null) SyncAeCodes(task, aeCodes);
 
-        var hasProgress = task.Items.Any(i => i.IsCompleted || i.IsNotApplicable || !string.IsNullOrWhiteSpace(i.Remark)
-                                              || i.AttachmentFileName is not null);
+        var hasProgress = task.AeCodes.Count > 0
+                          || task.Items.Any(i => i.IsCompleted || i.IsNotApplicable || !string.IsNullOrWhiteSpace(i.Remark)
+                                                 || i.AttachmentFileName is not null);
         var allRequiredDone = task.Items.Where(i => i.IsRequired).All(i => i.IsCompleted || i.IsNotApplicable);
 
         if (dto.MarkAsCompleted)
@@ -995,7 +1107,8 @@ public class ChecklistService : IChecklistService
                 return Result.Fail("Complete all required checklist items before submitting the department task.");
 
             var requiredItems = task.Items.Where(i => i.IsRequired).ToList();
-            task.Status = requiredItems.Count > 0 && requiredItems.All(i => i.IsNotApplicable)
+            // An AE Code task always records AE codes, so it is never N/A as a whole.
+            task.Status = task.TaskType == ChecklistTaskType.Checklist && requiredItems.Count > 0 && requiredItems.All(i => i.IsNotApplicable)
                 ? ChecklistTaskStatus.NotApplicable
                 : ChecklistTaskStatus.Completed;
             // The return note stays until the approver approves, so they can check what was fixed.
@@ -1076,6 +1189,8 @@ public class ChecklistService : IChecklistService
             : new ChecklistAttachmentFile(item.AttachmentFileName!, item.AttachmentContentType ?? "application/octet-stream", content);
     }
 
+    private static string Trunc(string value, int maxLength) => value.Length <= maxLength ? value : value[..maxLength];
+
     private static string TrimFileName(string fileName)
     {
         var name = Path.GetFileName(fileName.Replace('\\', '/')).Trim();
@@ -1086,16 +1201,20 @@ public class ChecklistService : IChecklistService
 
     // ---------------------------------------------------------- notifications
 
-    private async Task<IReadOnlyList<string>> EmailsOfAsync(IEnumerable<int?> departmentIds, AssignmentRole role, CancellationToken ct)
+    /// <summary>Emails of the tasks' handlers or approvers; an AE Code task has its own, apart from its department's checklist.</summary>
+    private async Task<IReadOnlyList<string>> EmailsOfAsync(IEnumerable<ChecklistTask> tasks, AssignmentRole role, CancellationToken ct)
     {
-        var assignees = await _assignments.GetAssigneesAsync(
-            departmentIds.Where(d => d is not null).Select(d => d!.Value), WorkArea.Departure, role, ct);
-        return assignees.Values.SelectMany(u => u)
-            .Select(u => u.Email)
-            .Where(e => !string.IsNullOrWhiteSpace(e))
-            .Select(e => e!)
-            .Distinct()
-            .ToList();
+        var emails = new List<string>();
+        foreach (var group in tasks.Where(t => t.AssignedDepartmentId is not null).GroupBy(t => t.TaskType))
+        {
+            var assignees = await _assignments.GetAssigneesAsync(
+                group.Select(t => t.AssignedDepartmentId!.Value), group.Key.ToWorkArea(), role, ct);
+            emails.AddRange(assignees.Values.SelectMany(u => u)
+                .Select(u => u.Email)
+                .Where(e => !string.IsNullOrWhiteSpace(e))
+                .Select(e => e!));
+        }
+        return emails.Distinct().ToList();
     }
 
     private async Task NotifyFinalReviewDueAsync(ChecklistRequest request, CancellationToken ct)
@@ -1155,7 +1274,7 @@ public class ChecklistService : IChecklistService
     /// <summary>Tell the department's approvers that a task is waiting for their approval.</summary>
     private async Task NotifyApproversAsync(ChecklistTask task, CancellationToken ct)
     {
-        var emails = await EmailsOfAsync(new[] { task.AssignedDepartmentId }, AssignmentRole.Approver, ct);
+        var emails = await EmailsOfAsync(new[] { task }, AssignmentRole.Approver, ct);
         if (emails.Count == 0) return;
 
         var employee = await _db.Employees.AsNoTracking().Where(e => e.Id == task.ChecklistRequest!.EmployeeId)
@@ -1169,7 +1288,7 @@ public class ChecklistService : IChecklistService
 
     private async Task NotifyReturnAsync(ChecklistTask task, string returnedBy, CancellationToken ct)
     {
-        var emails = await EmailsOfAsync(new[] { task.AssignedDepartmentId }, AssignmentRole.Handler, ct);
+        var emails = await EmailsOfAsync(new[] { task }, AssignmentRole.Handler, ct);
         if (emails.Count == 0) return;
 
         var request = task.ChecklistRequest!;
@@ -1204,9 +1323,9 @@ public class ChecklistService : IChecklistService
     private async Task NotifyCancellationAsync(ChecklistRequest request, CancellationToken ct)
     {
         var label = Label(request.Kind);
-        var openDepartments = request.Tasks.Where(t => t.ApprovedAt is null).Select(t => t.AssignedDepartmentId).ToList();
-        var emails = (await EmailsOfAsync(openDepartments, AssignmentRole.Handler, ct))
-            .Concat(await EmailsOfAsync(openDepartments, AssignmentRole.Approver, ct))
+        var openTasks = request.Tasks.Where(t => t.ApprovedAt is null).ToList();
+        var emails = (await EmailsOfAsync(openTasks, AssignmentRole.Handler, ct))
+            .Concat(await EmailsOfAsync(openTasks, AssignmentRole.Approver, ct))
             .Distinct()
             .ToList();
         if (emails.Count == 0) return;
@@ -1223,7 +1342,7 @@ public class ChecklistService : IChecklistService
     {
         foreach (var task in tasks)
         {
-            var emails = await EmailsOfAsync(new[] { task.AssignedDepartmentId }, AssignmentRole.Handler, ct);
+            var emails = await EmailsOfAsync(new[] { task }, AssignmentRole.Handler, ct);
             if (emails.Count == 0) continue;
             _email.Enqueue(new EmailMessage(
                 emails,
@@ -1264,7 +1383,10 @@ public class ChecklistService : IChecklistService
         AccountRequestNo = request.AccountRequest?.RequestNo,
         AccountRequestStatus = request.AccountRequest?.Status,
         Tasks = request.Tasks.OrderBy(t => t.SortOrder).Select(t => MapTask(t, null)).ToList(),
-        Logs = request.Logs.OrderBy(l => l.At).ThenBy(l => l.Id).Select(l => new ChecklistLogDto
+        // Shown once approved; returning the AE Code task hides them until it is approved again.
+        ApprovedAeCodes = request.Tasks.Where(t => t.TaskType == ChecklistTaskType.AeCode && t.ApprovedAt is not null)
+            .SelectMany(t => t.AeCodes).OrderBy(a => a.LineNo).Select(MapAeCode).ToList(),
+        Logs =request.Logs.OrderBy(l => l.At).ThenBy(l => l.Id).Select(l => new ChecklistLogDto
         {
             Action = l.Action,
             Departments = l.Departments,
@@ -1309,6 +1431,10 @@ public class ChecklistService : IChecklistService
             AllowAttachment = i.AllowAttachment,
             AttachmentFileName = i.AttachmentFileName,
             AttachmentSize = i.AttachmentSize
-        }).ToList()
+        }).ToList(),
+        TaskType = task.TaskType,
+        AeCodes = task.AeCodes.OrderBy(a => a.LineNo).Select(MapAeCode).ToList()
     };
+
+    private static ChecklistAeCodeDto MapAeCode(ChecklistTaskAeCode a) => new() { LineNo = a.LineNo, AeCode = a.AeCode, AeName = a.AeName };
 }

@@ -97,8 +97,11 @@ public interface IChecklistTemplateService
     Task<IReadOnlyList<ChecklistTemplateListItemDto>> GetListAsync(ChecklistKind kind, CancellationToken ct = default);
     Task<ChecklistTemplateEditDto?> GetAsync(int id, CancellationToken ct = default);
 
-    /// <summary>Active departments without a template of this kind, plus <paramref name="includeDepartmentId"/>.</summary>
-    Task<IReadOnlyList<DepartmentOptionDto>> GetDepartmentOptionsAsync(ChecklistKind kind, int? includeDepartmentId, CancellationToken ct = default);
+    /// <summary>Active departments without a template of this kind and task type, plus <paramref name="includeDepartmentId"/>.</summary>
+    Task<IReadOnlyList<DepartmentOptionDto>> GetDepartmentOptionsAsync(ChecklistKind kind, ChecklistTaskType taskType, int? includeDepartmentId, CancellationToken ct = default);
+
+    /// <summary>Whether the kind already has its (single) AE Code template.</summary>
+    Task<bool> HasAeCodeTemplateAsync(ChecklistKind kind, CancellationToken ct = default);
 
     Task<Result<int>> CreateAsync(ChecklistTemplateEditDto dto, CancellationToken ct = default);
     Task<Result> UpdateAsync(ChecklistTemplateEditDto dto, CancellationToken ct = default);

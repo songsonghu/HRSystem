@@ -112,7 +112,7 @@ public sealed class TestData
             department.ManagerEmployeeId = employeeId;
         // The manager handles and approves the tasks only while nobody else is set.
         db.DepartmentAssignees.RemoveRange(await db.DepartmentAssignees
-            .Where(a => a.Area == WorkArea.Departure && departmentIds.Contains(a.DepartmentId)).ToListAsync());
+            .Where(a => (a.Area == WorkArea.Departure || a.Area == WorkArea.DepartureAeCode) && departmentIds.Contains(a.DepartmentId)).ToListAsync());
         await db.SaveChangesAsync();
     }
 

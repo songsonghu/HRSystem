@@ -35,7 +35,9 @@ public class StartupAndAccessTests : IntegrationTest
         Assert.Equal(1, admins);
 
         var templates = await Data.ReadAsync(db => db.ChecklistTemplates.Include(t => t.Items).ToListAsync());
-        Assert.Equal(5, templates.Count(t => t.Kind == ChecklistKind.Departure));
+        Assert.Equal(6, templates.Count(t => t.Kind == ChecklistKind.Departure));
+        var aeCode = Assert.Single(templates, t => t.Kind == ChecklistKind.Departure && t.TaskType == ChecklistTaskType.AeCode);
+        Assert.Empty(aeCode.Items);
         Assert.Equal(4, templates.Count(t => t.Kind == ChecklistKind.Onboarding));
         Assert.All(templates.Where(t => t.Kind == ChecklistKind.Onboarding).SelectMany(t => t.Items).Where(i => i.Description == "Others"),
             item => Assert.False(item.IsRequired));

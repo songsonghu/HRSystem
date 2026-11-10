@@ -2,9 +2,12 @@
 @{
     var isNew = Model.Id == 0;
     var isDeparture = Model.Kind == ChecklistKind.Departure;
+    var isAeCode = Model.TaskType == ChecklistTaskType.AeCode;
     var canEditTemplates = (bool)ViewBag.CanEditTemplates;
     var assignees = (AssigneesEditorViewModel)ViewBag.Assignees;
-    ViewData["Title"] = isNew ? "New Departure Template" : "Templates for Departure - " + assignees.Assignees.DepartmentName;
+    ViewData["Title"] = isNew
+        ? (isAeCode ? "New AE Code Template" : "New Departure Template")
+        : "Templates for Departure - " + Model.TaskType.TaskName(assignees.Assignees.DepartmentName ?? string.Empty);
     var assigneeView = new ViewDataDictionary(ViewData) { ["AreaLabel"] = "Departure" };
 }
 
@@ -15,6 +18,16 @@
     <div asp-validation-summary="All" class="text-danger"></div>
     <input type="hidden" asp-for="Id" />
     <input type="hidden" asp-for="Kind" />
+    <input type="hidden" asp-for="TaskType" />
+
+    @if (isAeCode)
+    {
+        <div class="alert alert-info">
+            <b>AE Code task.</b> On every departure, the AE Code handlers below enter the leaver's AE codes (AE Code and AE Name, one row per code),
+            then an AE Code approver approves them. Once approved, the AE codes are shown on every department's task.
+            These handlers and approvers are set apart from the department's own departure checklist. Checklist items are optional.
+        </div>
+    }
 
     <fieldset disabled="@(!canEditTemplates)">
     <div class="row g-3 mb-3">
@@ -23,7 +36,7 @@
             <select asp-for="DepartmentId" class="form-select" asp-items="ViewBag.Departments" required>
                 <option value="">-- select department --</option>
             </select>
-            <div class="form-text">This department gets a task on every departure; its handlers and approvers are set below.</div>
+            <div class="form-text">This department gets @(isAeCode ? "the AE Code task" : "a task") on every departure; its handlers and approvers are set below.</div>
         </div>
         <div class="col-md-2">
             <label asp-for="SortOrder" class="form-label">Order</label>
@@ -41,7 +54,7 @@
         </div>
     </div>
 
-    <h5>Checklist items</h5>
+    <h5>Checklist items @if (isAeCode) { <span class="text-muted small fw-normal">(optional)</span> }</h5>
     <p class="text-muted small">Items are listed by their order number. Clear an item's text to remove it; fill a blank row to add one.
         @if (isDeparture)
         {

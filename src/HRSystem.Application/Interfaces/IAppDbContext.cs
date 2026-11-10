@@ -22,6 +22,7 @@ public interface IAppDbContext
     DbSet<ChecklistTask> ChecklistTasks { get; }
     DbSet<ChecklistRequestLog> ChecklistRequestLogs { get; }
     DbSet<ChecklistTaskItem> ChecklistTaskItems { get; }
+    DbSet<ChecklistTaskAeCode> ChecklistTaskAeCodes { get; }
     DbSet<ChecklistTemplate> ChecklistTemplates { get; }
     DbSet<ChecklistTemplateItem> ChecklistTemplateItems { get; }
     DbSet<DepartmentAssignee> DepartmentAssignees { get; }

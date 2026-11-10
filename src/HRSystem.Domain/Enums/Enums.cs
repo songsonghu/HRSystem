@@ -139,7 +139,26 @@ public enum ChecklistTaskStatus
 public enum WorkArea
 {
     Account = 1,    // Account request items (open / disable accounts)
-    Departure = 2   // Departure checklist tasks
+    Departure = 2,      // Departure checklist tasks
+    DepartureAeCode = 3 // Departure AE Code tasks, e.g. "Finance & Accounts (AE Code)", set apart from the department's checklist
+}
+
+/// <summary>What a departure template's task asks of its department.</summary>
+public enum ChecklistTaskType
+{
+    Checklist = 0,  // Tick the checklist items
+    AeCode = 1      // Record the leaver's AE codes; once approved, every department's task shows them
+}
+
+public static class ChecklistTaskTypeExtensions
+{
+    /// <summary>The handlers and approvers of a task of this type are set for this area of its department.</summary>
+    public static WorkArea ToWorkArea(this ChecklistTaskType type)
+        => type == ChecklistTaskType.AeCode ? WorkArea.DepartureAeCode : WorkArea.Departure;
+
+    /// <summary>The task name shown everywhere, e.g. "Finance &amp; Accounts (AE Code)".</summary>
+    public static string TaskName(this ChecklistTaskType type, string departmentName)
+        => type == ChecklistTaskType.AeCode ? $"{departmentName} (AE Code)" : departmentName;
 }
 
 public enum AssignmentRole

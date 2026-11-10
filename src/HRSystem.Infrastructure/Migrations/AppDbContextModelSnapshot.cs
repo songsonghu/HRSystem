@@ -614,6 +614,9 @@ namespace HRSystem.Infrastructure.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
+                    b.Property<int>("TaskType")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AssignedDepartmentId", "Status");
@@ -621,6 +624,37 @@ namespace HRSystem.Infrastructure.Migrations
                     b.HasIndex("ChecklistRequestId", "SortOrder");
 
                     b.ToTable("ChecklistTasks", (string)null);
+                });
+
+            modelBuilder.Entity("HRSystem.Domain.Entities.ChecklistTaskAeCode", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AeCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("AeName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("ChecklistTaskId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("LineNo")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChecklistTaskId", "LineNo");
+
+                    b.ToTable("ChecklistTaskAeCodes", (string)null);
                 });
 
             modelBuilder.Entity("HRSystem.Domain.Entities.ChecklistTaskItem", b =>
@@ -751,11 +785,14 @@ namespace HRSystem.Infrastructure.Migrations
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
 
+                    b.Property<int>("TaskType")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.HasIndex("DepartmentId");
 
-                    b.HasIndex("Kind", "DepartmentId")
+                    b.HasIndex("Kind", "DepartmentId", "TaskType")
                         .IsUnique()
                         .HasFilter("[IsDeleted] = 0");
 
@@ -1371,6 +1408,17 @@ namespace HRSystem.Infrastructure.Migrations
                     b.Navigation("ChecklistRequest");
                 });
 
+            modelBuilder.Entity("HRSystem.Domain.Entities.ChecklistTaskAeCode", b =>
+                {
+                    b.HasOne("HRSystem.Domain.Entities.ChecklistTask", "ChecklistTask")
+                        .WithMany("AeCodes")
+                        .HasForeignKey("ChecklistTaskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ChecklistTask");
+                });
+
             modelBuilder.Entity("HRSystem.Domain.Entities.ChecklistTaskItem", b =>
                 {
                     b.HasOne("HRSystem.Domain.Entities.ChecklistTask", "ChecklistTask")
@@ -1541,6 +1589,8 @@ namespace HRSystem.Infrastructure.Migrations
 
             modelBuilder.Entity("HRSystem.Domain.Entities.ChecklistTask", b =>
                 {
+                    b.Navigation("AeCodes");
+
                     b.Navigation("Items");
                 });
 

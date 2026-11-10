@@ -39,13 +39,14 @@ public class ChecklistTemplateService : IChecklistTemplateService
 
         var templates = await _db.ChecklistTemplates.AsNoTracking()
             .Where(t => t.Kind == kind && !t.IsDeleted)
-            .OrderBy(t => t.SortOrder).ThenBy(t => t.Department!.Name)
+            .OrderBy(t => t.SortOrder).ThenBy(t => t.Department!.Name).ThenBy(t => t.TaskType)
             .Select(t => new ChecklistTemplateListItemDto
             {
                 Id = t.Id,
                 Kind = t.Kind,
                 DepartmentId = t.DepartmentId,
                 DepartmentName = t.Department!.Name,
+                TaskType = t.TaskType,
                 IsActive = t.IsActive,
                 IsRequired = t.IsRequired,
                 SortOrder = t.SortOrder,
@@ -53,16 +54,24 @@ public class ChecklistTemplateService : IChecklistTemplateService
             })
             .ToListAsync(ct);
 
-        var departmentIds = templates.Select(t => t.DepartmentId).ToList();
-        var handlers = await _assignments.GetAssigneesAsync(departmentIds, WorkArea.Departure, AssignmentRole.Handler, ct);
-        var approvers = await _assignments.GetAssigneesAsync(departmentIds, WorkArea.Departure, AssignmentRole.Approver, ct);
-        foreach (var t in templates)
+        // An AE Code template has its own handlers and approvers, apart from the department's checklist.
+        foreach (var group in templates.GroupBy(t => t.TaskType))
         {
-            t.HandlerNames = AssignmentService.Names(handlers[t.DepartmentId]);
-            t.ApproverNames = AssignmentService.Names(approvers[t.DepartmentId]);
+            var area = group.Key.ToWorkArea();
+            var departmentIds = group.Select(t => t.DepartmentId).ToList();
+            var handlers = await _assignments.GetAssigneesAsync(departmentIds, area, AssignmentRole.Handler, ct);
+            var approvers = await _assignments.GetAssigneesAsync(departmentIds, area, AssignmentRole.Approver, ct);
+            foreach (var t in group)
+            {
+                t.HandlerNames = AssignmentService.Names(handlers[t.DepartmentId]);
+                t.ApproverNames = AssignmentService.Names(approvers[t.DepartmentId]);
+            }
         }
         return templates;
     }
+
+    public async Task<bool> HasAeCodeTemplateAsync(ChecklistKind kind, CancellationToken ct = default)
+        => await _db.ChecklistTemplates.AnyAsync(t => t.Kind == kind && t.TaskType == ChecklistTaskType.AeCode && !t.IsDeleted, ct);
 
     public async Task<ChecklistTemplateEditDto?> GetAsync(int id, CancellationToken ct = default)
     {
@@ -76,6 +85,7 @@ public class ChecklistTemplateService : IChecklistTemplateService
             Id = t.Id,
             Kind = t.Kind,
             DepartmentId = t.DepartmentId,
+            TaskType = t.TaskType,
             IsActive = t.IsActive,
             IsRequired = t.IsRequired,
             SortOrder = t.SortOrder,
@@ -92,9 +102,9 @@ public class ChecklistTemplateService : IChecklistTemplateService
     }
 
     public async Task<IReadOnlyList<DepartmentOptionDto>> GetDepartmentOptionsAsync(
-        ChecklistKind kind, int? includeDepartmentId, CancellationToken ct = default)
+        ChecklistKind kind, ChecklistTaskType taskType, int? includeDepartmentId, CancellationToken ct = default)
     {
-        var used = _db.ChecklistTemplates.Where(t => t.Kind == kind && !t.IsDeleted).Select(t => t.DepartmentId);
+        var used = _db.ChecklistTemplates.Where(t => t.Kind == kind && t.TaskType == taskType && !t.IsDeleted).Select(t => t.DepartmentId);
         return await _db.Departments.AsNoTracking()
             .Where(d => d.Id == includeDepartmentId || (d.IsActive && !used.Contains(d.Id)))
             .OrderBy(d => d.Name)
@@ -111,6 +121,7 @@ public class ChecklistTemplateService : IChecklistTemplateService
         {
             Kind = dto.Kind,
             DepartmentId = dto.DepartmentId!.Value,
+            TaskType = dto.TaskType,
             IsActive = dto.IsActive,
             IsRequired = dto.IsRequired,
             SortOrder = dto.SortOrder,
@@ -120,7 +131,7 @@ public class ChecklistTemplateService : IChecklistTemplateService
         _db.ChecklistTemplates.Add(template);
         await _db.SaveChangesAsync(ct);
 
-        await _audit.LogAsync("CreateChecklistTemplate", nameof(ChecklistTemplate), template.Id.ToString(), $"{dto.Kind}", ct);
+        await _audit.LogAsync("CreateChecklistTemplate", nameof(ChecklistTemplate), template.Id.ToString(), $"{dto.Kind} {dto.TaskType}", ct);
         return Result<int>.Success(template.Id);
     }
 
@@ -131,7 +142,8 @@ public class ChecklistTemplateService : IChecklistTemplateService
             .FirstOrDefaultAsync(t => t.Id == dto.Id && !t.IsDeleted, ct);
         if (template is null || !CanManage(template.Kind)) return Result.Fail("Template not found.");
 
-        dto.Kind = template.Kind; // the kind of an existing template never changes
+        dto.Kind = template.Kind; // the kind and task type of an existing template never change
+        dto.TaskType = template.TaskType;
         var error = await ValidateAsync(dto, ct);
         if (error is not null) return Result.Fail(error);
 
@@ -165,10 +177,21 @@ public class ChecklistTemplateService : IChecklistTemplateService
         if (!Enum.IsDefined(dto.Kind) || !CanManage(dto.Kind)) return "You do not have permission to manage these templates.";
         if (dto.DepartmentId is null) return "Department is required.";
         if (!await _db.Departments.AnyAsync(d => d.Id == dto.DepartmentId, ct)) return "Selected department not found.";
-        if (await _db.ChecklistTemplates.AnyAsync(t => t.Kind == dto.Kind && t.DepartmentId == dto.DepartmentId
+        if (!Enum.IsDefined(dto.TaskType)) return "Choose a task type.";
+        if (dto.TaskType == ChecklistTaskType.AeCode)
+        {
+            if (dto.Kind != ChecklistKind.Departure) return "Only departures have an AE Code task.";
+            // Every department's task shows the approved AE codes, so they must come from one task.
+            if (await _db.ChecklistTemplates.AnyAsync(t => t.Kind == dto.Kind && t.TaskType == ChecklistTaskType.AeCode
+                                                            && t.Id != dto.Id && !t.IsDeleted, ct))
+                return "There is already an AE Code template.";
+        }
+        if (await _db.ChecklistTemplates.AnyAsync(t => t.Kind == dto.Kind && t.DepartmentId == dto.DepartmentId && t.TaskType == dto.TaskType
                                                         && t.Id != dto.Id && !t.IsDeleted, ct))
             return "This department already has a checklist of this kind.";
-        if (!dto.Items.Any(i => !string.IsNullOrWhiteSpace(i.Description))) return "Add at least one checklist item.";
+        // An AE Code task may have no checklist items: its handlers enter the AE codes.
+        if (dto.TaskType == ChecklistTaskType.Checklist && !dto.Items.Any(i => !string.IsNullOrWhiteSpace(i.Description)))
+            return "Add at least one checklist item.";
         return null;
     }
 

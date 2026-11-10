@@ -214,7 +214,6 @@ else
         <tbody>
         @foreach (var t in Model.Tasks.OrderBy(x => x.SortOrder))
         {
-            var done = t.Items.Count(i => i.IsCompleted || i.IsNotApplicable);
             <tr>
                 <td>@t.DepartmentName</td>
                 <td>@(t.IsRequired ? "Yes" : "No")</td>
@@ -225,7 +224,7 @@ else
                         <div class="small text-danger">Returned by @t.ReturnedByName: @t.ReturnReason</div>
                     }
                 </td>
-                <td>@done / @t.Items.Count</td>
+                <td>@t.Progress</td>
                 <td>@t.CompletedAt?.ToString("yyyy-MM-dd HH:mm")</td>
                 <td>@(t.IsApproved ? $"{t.ApprovedByName}, {t.ApprovedAt?.ToLocalTime():yyyy-MM-dd HH:mm}" : t.IsDone ? "waiting" : "")</td>
             </tr>
@@ -233,6 +232,7 @@ else
         </tbody>
     </table>
 }
+<partial name="_ApprovedAeCodes" model="Model" />
 }
 
 @if (!isOnboarding)

@@ -1,0 +1,27 @@
+@model ChecklistRequestDto
+@* The leaver's AE codes from the departure's AE Code task, once that task is approved. *@
+@{
+    var aeTask = Model.Tasks.FirstOrDefault(t => t.IsAeCodeTask);
+}
+@if (aeTask is not null)
+{
+    <h4>AE Codes</h4>
+    if (Model.ApprovedAeCodes.Count == 0)
+    {
+        <p class="text-muted">Shown once the @aeTask.DepartmentName task is approved.</p>
+    }
+    else
+    {
+        <table class="table table-bordered table-sm align-middle">
+            <thead class="table-light">
+                <tr><th style="width:70px">No.</th><th>AE Code</th><th>AE Name</th></tr>
+            </thead>
+            <tbody>
+            @foreach (var ae in Model.ApprovedAeCodes)
+            {
+                <tr><td>@ae.LineNo</td><td>@ae.AeCode</td><td>@ae.AeName</td></tr>
+            }
+            </tbody>
+        </table>
+    }
+}

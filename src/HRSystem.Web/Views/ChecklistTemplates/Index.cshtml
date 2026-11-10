@@ -3,6 +3,7 @@
     var kind = (ChecklistKind)ViewBag.Kind;
     ViewData["Title"] = "Templates for Departure";
     var canEditTemplates = (bool)ViewBag.CanEditTemplates;
+    var hasAeCodeTemplate = (bool)ViewBag.HasAeCodeTemplate;
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -11,6 +12,10 @@
         @if (canEditTemplates)
         {
             <a class="btn btn-success" asp-action="Create" asp-route-kind="@kind">+ New Template</a>
+            if (!hasAeCodeTemplate)
+            {
+                <a class="btn btn-outline-success" asp-action="Create" asp-route-kind="@kind" asp-route-taskType="@ChecklistTaskType.AeCode">+ New AE Code Template</a>
+            }
         }
     </div>
 </div>
@@ -19,6 +24,7 @@
     Each department below receives a checklist task when a departure is submitted: its handlers complete it under Departure Checklist,
     then any of its approvers approves it under Departure Approval. Click <b>Edit</b> to change a department's checklist, handlers and approvers.
     Checklist changes apply to requests submitted afterwards.
+    The <b>AE Code</b> task has its own handlers and approvers: they enter the leaver's AE codes, which every department's task shows once approved.
 </p>
 
 <table class="table table-striped table-hover align-middle">
@@ -30,7 +36,7 @@
     {
         <tr>
             <td>@t.SortOrder</td>
-            <td>@t.DepartmentName</td>
+            <td>@t.TaskName</td>
             <td><partial name="_AssigneeNames" model="t.HandlerNames ?? string.Empty" /></td>
             <td><partial name="_AssigneeNames" model="t.ApproverNames ?? string.Empty" /></td>
             <td>@t.ItemCount</td>

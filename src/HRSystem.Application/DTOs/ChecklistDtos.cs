@@ -67,6 +67,9 @@ public class ChecklistRequestDto
 
     public List<ChecklistTaskDto> Tasks { get; set; } = new();
 
+    /// <summary>The leaver's AE codes, once the AE Code task is approved; empty until then.</summary>
+    public List<ChecklistAeCodeDto> ApprovedAeCodes { get; set; } = new();
+
     /// <summary>Details page only: accounts the employee still holds, from the account ledger.</summary>
     public List<ChecklistHeldAccountDto> ActiveAccounts { get; set; } = new();
 
@@ -163,6 +166,21 @@ public class ChecklistTaskDto
     public ChecklistStatus RequestStatus { get; set; }
     public List<ChecklistTaskItemDto> Items { get; set; } = new();
 
+    /// <summary>An AE Code task records the leaver's AE codes in <see cref="AeCodes"/>.</summary>
+    public ChecklistTaskType TaskType { get; set; }
+    public bool IsAeCodeTask => TaskType == ChecklistTaskType.AeCode;
+
+    /// <summary>AE Code task: the codes entered so far, by line number.</summary>
+    public List<ChecklistAeCodeDto> AeCodes { get; set; } = new();
+
+    /// <summary>Task page only: the leaver's AE codes once the request's AE Code task is approved.</summary>
+    public List<ChecklistAeCodeDto> ApprovedAeCodes { get; set; } = new();
+
+    /// <summary>Progress for lists, e.g. "3 / 5", or "2 AE code(s)" for an AE Code task without checklist items.</summary>
+    public string Progress => IsAeCodeTask && Items.Count == 0
+        ? $"{AeCodes.Count} AE code(s)"
+        : $"{Items.Count(i => i.IsCompleted || i.IsNotApplicable)} / {Items.Count}";
+
     public bool IsDone => Status is ChecklistTaskStatus.Completed or ChecklistTaskStatus.NotApplicable;
     public bool IsApproved => ApprovedAt is not null;
     public bool IsRequestOpen => RequestStatus is not (ChecklistStatus.Draft or ChecklistStatus.Completed or ChecklistStatus.Cancelled);
@@ -209,6 +227,14 @@ public class ChecklistTaskItemDto
     public bool HasAttachment => AttachmentFileName is not null;
 }
 
+/// <summary>One AE code of the leaver.</summary>
+public class ChecklistAeCodeDto
+{
+    public int LineNo { get; set; }
+    public string? AeCode { get; set; }
+    public string? AeName { get; set; }
+}
+
 /// <summary>A file chosen for a checklist item; the content type is detected from the content.</summary>
 public record ChecklistAttachmentUpload(string FileName, byte[] Content);
 
@@ -221,6 +247,9 @@ public class ChecklistTaskUpdateDto
     public string? TaskRemark { get; set; }
     public bool MarkAsCompleted { get; set; }
     public List<ChecklistTaskItemUpdateDto> Items { get; set; } = new();
+
+    /// <summary>AE Code task: all its AE codes, replacing the saved ones. Blank rows are ignored; ignored for other tasks.</summary>
+    public List<ChecklistAeCodeDto> AeCodes { get; set; } = new();
 }
 
 public class ChecklistTaskItemUpdateDto
@@ -265,6 +294,7 @@ public class ChecklistCreatePageDto
 
 public class ChecklistTemplatePreviewDto
 {
+    /// <summary>The task name: the department, plus " (AE Code)" for an AE Code task.</summary>
     public string DepartmentName { get; set; } = string.Empty;
     public int ItemCount { get; set; }
 
@@ -286,6 +316,10 @@ public class ChecklistTemplateListItemDto
     public int SortOrder { get; set; }
     public int ItemCount { get; set; }
     public int DepartmentId { get; set; }
+    public ChecklistTaskType TaskType { get; set; }
+
+    /// <summary>The task name, e.g. "Finance &amp; Accounts (AE Code)".</summary>
+    public string TaskName => TaskType.TaskName(DepartmentName);
     public string? HandlerNames { get; set; }
     public string? ApproverNames { get; set; }
     public bool CanReceiveTasks => HandlerNames is not null && ApproverNames is not null;
@@ -296,6 +330,9 @@ public class ChecklistTemplateEditDto
     public int Id { get; set; }
     public ChecklistKind Kind { get; set; }
     public int? DepartmentId { get; set; }
+
+    /// <summary>Chosen when the template is created; it cannot change afterwards.</summary>
+    public ChecklistTaskType TaskType { get; set; }
     public bool IsActive { get; set; } = true;
     public bool IsRequired { get; set; } = true;
     public int SortOrder { get; set; }

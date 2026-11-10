@@ -243,6 +243,22 @@ public class ChecklistTaskConfig : IEntityTypeConfiguration<ChecklistTask>
     }
 }
 
+public class ChecklistTaskAeCodeConfig : IEntityTypeConfiguration<ChecklistTaskAeCode>
+{
+    public void Configure(EntityTypeBuilder<ChecklistTaskAeCode> b)
+    {
+        b.ToTable("ChecklistTaskAeCodes");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.AeCode).HasMaxLength(ChecklistTaskAeCode.MaxCodeLength).IsRequired();
+        b.Property(x => x.AeName).HasMaxLength(ChecklistTaskAeCode.MaxNameLength).IsRequired();
+        b.HasIndex(x => new { x.ChecklistTaskId, x.LineNo });
+        b.HasOne(x => x.ChecklistTask)
+            .WithMany(t => t.AeCodes)
+            .HasForeignKey(x => x.ChecklistTaskId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
 public class ChecklistTaskItemConfig : IEntityTypeConfiguration<ChecklistTaskItem>
 {
     public void Configure(EntityTypeBuilder<ChecklistTaskItem> b)
@@ -282,7 +298,8 @@ public class ChecklistTemplateConfig : IEntityTypeConfiguration<ChecklistTemplat
     {
         b.ToTable("ChecklistTemplates");
         b.HasKey(x => x.Id);
-        b.HasIndex(x => new { x.Kind, x.DepartmentId }).IsUnique().HasFilter("[IsDeleted] = 0");
+        // A department may have one template of each task type: its checklist and an AE Code task.
+        b.HasIndex(x => new { x.Kind, x.DepartmentId, x.TaskType }).IsUnique().HasFilter("[IsDeleted] = 0");
         b.HasOne(x => x.Department)
             .WithMany()
             .HasForeignKey(x => x.DepartmentId)
