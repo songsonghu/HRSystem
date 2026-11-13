@@ -37,6 +37,20 @@ public static class DependencyInjection
             .AddEntityFrameworkStores<AppDbContext>()
             .AddDefaultTokenProviders();
 
+        // Point the Identity cookie at the actual Razor Page routes under the
+        // "Identity" area (the default paths "/Account/Login" etc. do not
+        // exist and would otherwise result in a 404).
+        services.ConfigureApplicationCookie(options =>
+        {
+            options.LoginPath = "/Identity/Account/Login";
+            options.LogoutPath = "/Identity/Account/Logout";
+            options.AccessDeniedPath = "/Identity/Account/AccessDenied";
+        });
+
+        // Role/permission changes reach signed-in users when their cookie principal is
+        // re-validated; disabled users and password resets sign them out at the same point.
+        services.Configure<SecurityStampValidatorOptions>(o => o.ValidationInterval = TimeSpan.FromMinutes(1));
+
         // Bind options
         services.Configure<SmtpOptions>(config.GetSection("Smtp"));
         services.Configure<FileStorageOptions>(config.GetSection("FileStorage"));
@@ -58,6 +72,21 @@ public static class DependencyInjection
         services.AddScoped<IFileStorageService, LocalFileStorageService>();
         services.AddScoped<IReportService, ReportService>();
         services.AddScoped<IAuditService, AuditService>();
+        services.AddScoped<IUserDirectoryService, UserDirectoryService>();
+        services.AddScoped<IUserAdminService, UserAdminService>();
+        services.AddScoped<IRoleAdminService, RoleAdminService>();
+
+        // AE code search in the brokerage system (Client Account Services & Middle Office (AE Code) departure task).
+        services.Configure<AeCodeApiOptions>(config.GetSection("AeCodeApi"));
+        services.AddHttpClient<IAeCodeDirectory, AeCodeDirectory>((sp, http) =>
+        {
+            var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AeCodeApiOptions>>().Value;
+            if (Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out var baseUrl))
+                http.BaseAddress = baseUrl.AbsoluteUri.EndsWith('/') ? baseUrl : new Uri(baseUrl.AbsoluteUri + "/");
+            http.Timeout = TimeSpan.FromSeconds(Math.Max(1, options.TimeoutSeconds));
+        })
+        .ConfigurePrimaryHttpMessageHandler(sp => AeCodeDirectory.CreateHandler(
+            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AeCodeApiOptions>>().Value));
 
         return services;
     }

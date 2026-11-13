@@ -1,0 +1,21 @@
+@model IReadOnlyList<ChecklistAeCodeDto>
+@* Read-only AE codes: each AE code followed by the accounts linked to it (numbered 1.1, 1.2, ...). *@
+<table class="table table-sm table-bordered align-middle mb-0 ae-table">
+    <thead class="table-light"><tr><th style="width:80px">No.</th><th>AE Code</th><th>AE Name</th></tr></thead>
+    <tbody>
+    @foreach (var ae in Model)
+    {
+        <tr class="@(ae.IsLinked ? "ae-linked" : null)">
+            <td>@ae.DisplayNo</td>
+            <td>
+                @if (ae.IsLinked)
+                {
+                    <span class="text-muted ms-3 me-1" title="Linked to AE Code @ae.ParentAeCode">↳</span>
+                }
+                @ae.AeCode
+            </td>
+            <td>@ae.AeName</td>
+        </tr>
+    }
+    </tbody>
+</table>

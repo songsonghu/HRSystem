@@ -1,0 +1,42 @@
+@model IReadOnlyList<ChecklistTaskDto>
+@{
+    ViewData["Title"] = "Departure Approval - History";
+    var q = (ChecklistTaskHistoryQuery)ViewBag.Query;
+    var finalReviews = (IReadOnlyList<ChecklistRequestDto>)ViewBag.FinalReviews;
+}
+
+<h2>Departure Approval</h2>
+<p class="page-subtitle">Department tasks you or your fellow approvers approved, and departures you reviewed as department head or HR / management.</p>
+
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item"><a class="nav-link" asp-action="Index">Pending</a></li>
+    <li class="nav-item"><a class="nav-link active" asp-action="History">History</a></li>
+</ul>
+
+<partial name="_TaskHistoryFilter" model="q" />
+
+@if (finalReviews.Count > 0)
+{
+    <h4>Departure Approvals</h4>
+    <table class="table table-hover align-middle">
+        <thead>
+            <tr><th>Request</th><th>Employee</th><th>Submitted</th><th>Completed At</th><th>Request Status</th><th></th></tr>
+        </thead>
+        <tbody>
+        @foreach (var r in finalReviews)
+        {
+            <tr>
+                <td>@r.RequestNo</td>
+                <td>@r.EmployeeName (@r.EmployeeNo)</td>
+                <td>@r.SubmittedAt?.ToLocalTime().ToString("yyyy-MM-dd")</td>
+                <td>@r.CompletedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                <td><partial name="_ChecklistStatusBadge" model="r.Status" /></td>
+                <td class="text-end"><a class="btn btn-sm btn-outline-primary" asp-action="Review" asp-route-id="@r.Id">View</a></td>
+            </tr>
+        }
+        </tbody>
+    </table>
+    <h4>Department Tasks</h4>
+}
+
+<partial name="_DepartureTaskTable" model="Model" />

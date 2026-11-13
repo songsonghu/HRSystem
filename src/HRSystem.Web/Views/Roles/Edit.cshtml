@@ -1,0 +1,59 @@
+@model RoleEditDto
+@{
+    ViewData["Title"] = Model.IsProtected ? "View Role" : "Edit Role";
+}
+
+<h2>@ViewData["Title"]</h2>
+<hr />
+
+@if (Model.IsProtected)
+{
+    <div class="alert alert-info">This is the built-in administrator role. It always has every permission and cannot be renamed or deleted.</div>
+}
+
+<form asp-action="Edit" method="post" class="col-md-8">
+    <div asp-validation-summary="All" class="text-danger"></div>
+    <input type="hidden" asp-for="Id" />
+    <partial name="_RoleFields" model="Model" />
+    @if (!Model.IsProtected)
+    {
+        <button type="submit" class="btn btn-primary">Save</button>
+    }
+    <a class="btn btn-secondary" asp-action="Index">Back</a>
+</form>
+
+<h4 id="members">Users with this role (@Model.Members.Count)</h4>
+<table class="table table-hover align-middle col-md-8">
+    <thead>
+        <tr><th>User</th><th>Status</th><th></th></tr>
+    </thead>
+    <tbody>
+    @foreach (var m in Model.Members)
+    {
+        <tr>
+            <td>
+                <div class="person">
+                    <partial name="_Avatar" model="@(m.FullName ?? m.Email)" />
+                    <div>
+                        <div>@(m.FullName ?? m.Email)</div>
+                        @if (m.FullName is not null) { <div class="small text-muted">@m.Email</div> }
+                    </div>
+                </div>
+            </td>
+            <td><span class="badge @(m.IsActive ? "bg-success" : "bg-secondary")">@(m.IsActive ? "Active" : "Disabled")</span></td>
+            <td class="text-end">
+                @if (User.HasPermission(Permissions.UsersManage))
+                {
+                    <a class="btn btn-sm btn-outline-primary" asp-controller="Users" asp-action="Edit" asp-route-id="@m.UserId">Edit user</a>
+                }
+            </td>
+        </tr>
+    }
+    @if (Model.Members.Count == 0)
+    {
+        <tr><td colspan="3" class="text-muted">No users have this role.</td></tr>
+    }
+    </tbody>
+</table>
+
+@section Scripts { <partial name="_ValidationScriptsPartial" /> }

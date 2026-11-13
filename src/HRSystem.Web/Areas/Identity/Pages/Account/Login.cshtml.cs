@@ -42,7 +42,10 @@ public class LoginModel : PageModel
 
         if (result.Succeeded) return LocalRedirect(returnUrl);
 
-        ModelState.AddModelError(string.Empty, "Invalid login attempt.");
+        // Lockout is only used to disable accounts (lockoutOnFailure is off).
+        ModelState.AddModelError(string.Empty, result.IsLockedOut
+            ? "This account is disabled. Please contact your administrator."
+            : "Invalid login attempt.");
         return Page();
     }
 }

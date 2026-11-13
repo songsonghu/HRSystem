@@ -1,0 +1,17 @@
+<script>
+    document.querySelectorAll('.user-picker').forEach(picker => {
+        const summary = picker.querySelector('.picker-summary');
+        const boxes = [...picker.querySelectorAll('input[type=checkbox]')];
+        const refresh = () => {
+            const names = boxes.filter(b => b.checked).map(b => b.nextElementSibling.textContent.trim());
+            summary.textContent = names.length ? names.join(', ') : picker.dataset.empty;
+            summary.classList.toggle('text-muted', names.length === 0);
+        };
+        boxes.forEach(b => b.addEventListener('change', refresh));
+        picker.querySelector('.picker-filter').addEventListener('input', e => {
+            const term = e.target.value.toLowerCase();
+            picker.querySelectorAll('.picker-option').forEach(o =>
+                o.classList.toggle('d-none', !o.textContent.toLowerCase().includes(term)));
+        });
+    });
+</script>

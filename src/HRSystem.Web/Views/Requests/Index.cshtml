@@ -1,23 +1,33 @@
 @model IReadOnlyList<RequestDto>
 @{
     ViewData["Title"] = "Account Requests";
-}
-
-@functions {
-    string StatusBadge(RequestStatus s) => s switch
-    {
-        RequestStatus.Draft => "bg-secondary",
-        RequestStatus.Submitted => "bg-info",
-        RequestStatus.InProgress => "bg-warning text-dark",
-        RequestStatus.Completed => "bg-success",
-        _ => "bg-dark"
-    };
+    var pending = (IReadOnlyList<RequestDto>)ViewBag.PendingApprovals;
+    var canCreate = (bool)ViewBag.CanCreate;
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h2>Account Requests</h2>
-    <a class="btn btn-success" asp-action="Create">+ New Request</a>
+    @if (canCreate)
+    {
+        <a class="btn btn-success" asp-action="Create">+ New Request</a>
+    }
 </div>
+
+@if (pending.Count > 0)
+{
+    <div class="card border-warning mb-4">
+        <div class="card-header bg-warning-subtle"><b>Waiting for your approval (@pending.Count)</b></div>
+        <div class="list-group list-group-flush">
+            @foreach (var r in pending)
+            {
+                <a class="list-group-item list-group-item-action d-flex justify-content-between" asp-action="Details" asp-route-id="@r.Id">
+                    <span>@r.RequestNo · @r.EmployeeName (@r.EmployeeNo) · @r.RequestType: @string.Join(", ", r.Items.Select(i => i.AccountTypeName))</span>
+                    <small class="text-muted">@r.AppliedAt?.ToString("yyyy-MM-dd HH:mm")</small>
+                </a>
+            }
+        </div>
+    </div>
+}
 
 <table class="table table-striped table-hover align-middle">
     <thead>
@@ -32,13 +42,17 @@
         var done = r.Items.Count(i => i.Status == ItemStatus.Completed || i.Status == ItemStatus.Rejected);
         <tr>
             <td>@r.RequestNo</td>
-            <td>@r.EmployeeName <small class="text-muted">(@r.EmployeeNo)</small></td>
+            <td><span class="person"><partial name="_Avatar" model="r.EmployeeName" /><span>@r.EmployeeName <small class="text-muted">(@r.EmployeeNo)</small></span></span></td>
             <td>@r.RequestType</td>
             <td>@done / @r.Items.Count</td>
-            <td><span class="badge @StatusBadge(r.Status)">@r.Status</span></td>
+            <td><partial name="_RequestStatusBadge" model="r.Status" /></td>
             <td>@(r.AppliedAt?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>
             <td><a class="btn btn-sm btn-outline-primary" asp-action="Details" asp-route-id="@r.Id">View</a></td>
         </tr>
+    }
+    @if (Model.Count == 0)
+    {
+        <tr><td colspan="7" class="text-muted">No requests yet.</td></tr>
     }
     </tbody>
 </table>

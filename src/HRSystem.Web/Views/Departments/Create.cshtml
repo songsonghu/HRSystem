@@ -1,0 +1,16 @@
+@model DepartmentEditDto
+@{
+    ViewData["Title"] = "New Department";
+}
+
+<h2>New Department</h2>
+<hr />
+
+<form asp-action="Create" method="post" class="col-md-6">
+    <div asp-validation-summary="All" class="text-danger"></div>
+    <partial name="_DepartmentFields" model="Model" />
+    <button type="submit" class="btn btn-primary">Create</button>
+    <a class="btn btn-secondary" asp-action="Index">Cancel</a>
+</form>
+
+@section Scripts { <partial name="_ValidationScriptsPartial" /> }

@@ -1,0 +1,45 @@
+@model IReadOnlyList<AccountTemplateListItemDto>
+@{
+    ViewData["Title"] = "Templates for Accounts";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>@ViewData["Title"]</h2>
+</div>
+
+<p class="text-muted">
+    The account types each department opens for new joiners and in-service requests, and disables on departure.
+    A request for an account type goes to its department: any handler processes it under Account Checklist, then any approver approves it under
+    Account Approval. Click <b>Edit</b> to change a department's account types, handlers and approvers.
+</p>
+
+<table class="table table-striped table-hover align-middle">
+    <thead>
+        <tr><th>Department</th><th>Account Types</th><th>Handlers</th><th>Approvers</th><th></th></tr>
+    </thead>
+    <tbody>
+    @foreach (var d in Model)
+    {
+        var owns = d.ActiveCount + d.InactiveCount > 0;
+        <tr>
+            <td>
+                @d.DepartmentName
+                @if (!d.DepartmentIsActive) { <span class="badge bg-secondary ms-1">inactive</span> }
+            </td>
+            <td>
+                @d.ActiveCount active
+                @if (d.InactiveCount > 0) { <span class="text-muted small">· @d.InactiveCount retired</span> }
+            </td>
+            <td>@if (owns) { <partial name="_AssigneeNames" model="d.HandlerNames ?? string.Empty" /> }</td>
+            <td>@if (owns) { <partial name="_AssigneeNames" model="d.ApproverNames ?? string.Empty" /> }</td>
+            <td class="text-nowrap">
+                <a class="btn btn-sm btn-outline-primary" asp-action="Edit" asp-route-id="@d.DepartmentId">Edit</a>
+            </td>
+        </tr>
+    }
+    @if (Model.Count == 0)
+    {
+        <tr><td colspan="5" class="text-muted">No departments yet. Add them under Departments.</td></tr>
+    }
+    </tbody>
+</table>
