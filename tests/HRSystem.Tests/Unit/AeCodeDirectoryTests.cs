@@ -61,6 +61,22 @@ public class AeCodeDirectoryTests
         Assert.Empty(AeCodeDirectory.Parse(json.RootElement).Value!);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void The_api_is_called_through_the_proxy_only_when_configured(bool useProxy)
+    {
+        using var handler = AeCodeDirectory.CreateHandler(new AeCodeApiOptions { UseProxy = useProxy });
+
+        Assert.Equal(useProxy, Assert.IsType<SocketsHttpHandler>(handler).UseProxy);
+    }
+
+    [Fact]
+    public void The_proxy_is_used_unless_turned_off()
+    {
+        Assert.True(new AeCodeApiOptions().UseProxy);
+    }
+
     [Fact]
     public void Linked_accounts_are_numbered_under_their_ae_code()
     {

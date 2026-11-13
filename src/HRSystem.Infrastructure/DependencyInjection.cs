@@ -84,7 +84,9 @@ public static class DependencyInjection
             if (Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out var baseUrl))
                 http.BaseAddress = baseUrl.AbsoluteUri.EndsWith('/') ? baseUrl : new Uri(baseUrl.AbsoluteUri + "/");
             http.Timeout = TimeSpan.FromSeconds(Math.Max(1, options.TimeoutSeconds));
-        });
+        })
+        .ConfigurePrimaryHttpMessageHandler(sp => AeCodeDirectory.CreateHandler(
+            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AeCodeApiOptions>>().Value));
 
         return services;
     }

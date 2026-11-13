@@ -11,6 +11,12 @@ public class AeCodeApiOptions
     /// <summary>The API host, e.g. "http://uhks0134:8066/".</summary>
     public string BaseUrl { get; set; } = string.Empty;
     public int TimeoutSeconds { get; set; } = 15;
+
+    /// <summary>
+    /// Whether to go through the machine's proxy (system settings or HTTP_PROXY). False calls the API directly, for an
+    /// intranet API that the proxy cannot reach or answers with 503.
+    /// </summary>
+    public bool UseProxy { get; set; } = true;
 }
 
 /// <summary>
@@ -20,6 +26,14 @@ public class AeCodeApiOptions
 public class AeCodeDirectory : IAeCodeDirectory
 {
     private const string SearchPath = "api/Internal/AeCodeListSearch";
+
+    /// <summary>The handler the API is called through: direct, without a proxy, when <see cref="AeCodeApiOptions.UseProxy"/> is false.</summary>
+    public static HttpMessageHandler CreateHandler(AeCodeApiOptions options) => new SocketsHttpHandler
+    {
+        UseProxy = options.UseProxy,
+        PooledConnectionLifetime = TimeSpan.FromMinutes(5)
+    };
+
     private const string Unavailable = "The AE code search is not available right now. Try again later, or enter the AE codes by hand.";
 
     private readonly HttpClient _http;
