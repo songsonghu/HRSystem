@@ -47,3 +47,13 @@ public class EmployeeEditDto
     public EmployeeCategory Category { get; set; } = EmployeeCategory.Staff;
     public IReadOnlyList<EmployeeAttachmentDto> Attachments { get; set; } = Array.Empty<EmployeeAttachmentDto>();
 }
+
+/// <summary>Employees page: the search fields and the page shown.</summary>
+public class EmployeeListQuery
+{
+    public string? Name { get; set; }
+    public string? StaffNo { get; set; }
+    public int? DepartmentId { get; set; }
+    public int? Page { get; set; }
+    public int? PageSize { get; set; }
+}

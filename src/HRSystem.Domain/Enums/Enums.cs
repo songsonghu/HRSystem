@@ -140,7 +140,7 @@ public enum WorkArea
 {
     Account = 1,    // Account request items (open / disable accounts)
     Departure = 2,      // Departure checklist tasks
-    DepartureAeCode = 3 // Departure AE Code tasks, e.g. "Finance & Accounts (AE Code)", set apart from the department's checklist
+    DepartureAeCode = 3 // Departure AE Code tasks, e.g. "Client Account Services & Middle Office (AE Code)", set apart from the department's checklist
 }
 
 /// <summary>What a departure template's task asks of its department.</summary>
@@ -156,7 +156,7 @@ public static class ChecklistTaskTypeExtensions
     public static WorkArea ToWorkArea(this ChecklistTaskType type)
         => type == ChecklistTaskType.AeCode ? WorkArea.DepartureAeCode : WorkArea.Departure;
 
-    /// <summary>The task name shown everywhere, e.g. "Finance &amp; Accounts (AE Code)".</summary>
+    /// <summary>The task name shown everywhere, e.g. "Client Account Services &amp; Middle Office (AE Code)".</summary>
     public static string TaskName(this ChecklistTaskType type, string departmentName)
         => type == ChecklistTaskType.AeCode ? $"{departmentName} (AE Code)" : departmentName;
 }

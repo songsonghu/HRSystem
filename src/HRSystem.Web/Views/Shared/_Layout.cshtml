@@ -23,8 +23,11 @@
     }
 
     var canSetApprovers = User.HasPermission(Permissions.ChecklistApproversManage);
+    // Menus not in use for now; set to true to show them again.
+    var showOnboarding = false;
+    var showBackgroundJobs = false;
     var settingsMenu = User.HasPermission(Permissions.UsersManage) || User.HasPermission(Permissions.RolesManage)
-                       || User.HasPermission(Permissions.SystemJobs) || canSetApprovers
+                       || (showBackgroundJobs && User.HasPermission(Permissions.SystemJobs)) || canSetApprovers
                        || User.HasPermission(Permissions.AccountRequestsManage) || User.HasPermission(Permissions.DeparturesManage);
     var userName = User.Identity?.Name ?? string.Empty;
 }
@@ -71,7 +74,7 @@ else
                         <a class="nav-link @Active("Departments")" asp-controller="Departments" asp-action="Index"><i class="bi bi-diagram-3"></i>Departments</a>
                     }
                     <a class="nav-link @Active("Requests")" asp-controller="Requests" asp-action="Index"><i class="bi bi-person-badge"></i>Account Request</a>
-                    @if (User.HasPermission(Permissions.OnboardingManage))
+                    @if (showOnboarding && User.HasPermission(Permissions.OnboardingManage))
                     {
                         <a class="nav-link @Active("Onboarding")" asp-controller="Onboarding" asp-action="Index"><i class="bi bi-person-plus"></i>Onboarding</a>
                     }
@@ -99,7 +102,7 @@ else
                         {
                             <a class="nav-link @Active("ChecklistTemplates")" asp-controller="ChecklistTemplates" asp-action="Index" asp-route-kind="Departure"><i class="bi bi-card-checklist"></i>Templates Departure</a>
                         }
-                        @if (User.HasPermission(Permissions.SystemJobs))
+                        @if (showBackgroundJobs && User.HasPermission(Permissions.SystemJobs))
                         {
                             <a class="nav-link" href="~/hangfire"><i class="bi bi-clock-history"></i>Background Jobs</a>
                         }

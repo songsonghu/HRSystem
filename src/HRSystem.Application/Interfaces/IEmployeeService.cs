@@ -10,6 +10,9 @@ public record EmployeeAttachmentFile(Stream Content, string FileName, string? Co
 public interface IEmployeeService
 {
     Task<IReadOnlyList<EmployeeDto>> GetListAsync(string? keyword = null, CancellationToken ct = default);
+
+    /// <summary>Employees page: filtered by name, staff no. and department, newest first.</summary>
+    Task<PagedResult<EmployeeDto>> GetPageAsync(EmployeeListQuery query, CancellationToken ct = default);
     Task<EmployeeDto?> GetAsync(int id, CancellationToken ct = default);
     Task<Result<int>> CreateAsync(EmployeeEditDto dto, CancellationToken ct = default);
     Task<Result> UpdateAsync(EmployeeEditDto dto, CancellationToken ct = default);

@@ -319,3 +319,9 @@ a.stat-card:hover { text-decoration: none; background: #fbfcfe; }
 .sidebar-user .btn-link:hover { color: var(--hr-accent); }
 .mobile-topbar { background: var(--hr-surface); border-bottom: 1px solid var(--hr-border); }
 .app-footer { color: var(--hr-subtle); font-size: .8rem; }
+
+/* AE code lists on the departure pages: lighter lines than the default table borders. */
+.ae-table,
+.ae-table > thead {
+    --bs-table-border-color: #eceef1;
+}

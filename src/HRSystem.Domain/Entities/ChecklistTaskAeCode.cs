@@ -14,5 +14,11 @@ public class ChecklistTaskAeCode
     public string AeCode { get; set; } = string.Empty;
     public string AeName { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Set on a linked (second-level) account: the AE code of the first-level line it belongs to, e.g. the
+    /// account "LSQ CAPITAL LIMITED (2205)" under AE code 2205. Empty on a first-level line.
+    /// </summary>
+    public string? ParentAeCode { get; set; }
+
     public ChecklistTask? ChecklistTask { get; set; }
 }

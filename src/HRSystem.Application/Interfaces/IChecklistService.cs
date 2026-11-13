@@ -11,11 +11,12 @@ namespace HRSystem.Application.Interfaces;
 /// </summary>
 public interface IChecklistService
 {
-    Task<IReadOnlyList<ChecklistRequestDto>> GetListAsync(ChecklistKind kind, CancellationToken ct = default);
+    /// <summary>
+    /// One page of the requests of this kind, newest first, matching the search: the employee's name and
+    /// staff no. (contains), their department, and the request status.
+    /// </summary>
+    Task<PagedResult<ChecklistRequestDto>> GetPageAsync(ChecklistKind kind, ChecklistRequestQuery query, CancellationToken ct = default);
     Task<int?> GetOpenRequestIdAsync(ChecklistKind kind, int employeeId, CancellationToken ct = default);
-
-    /// <summary>Active employees who can start a request of this kind.</summary>
-    Task<IReadOnlyList<EmployeeOptionDto>> GetEligibleEmployeesAsync(ChecklistKind kind, CancellationToken ct = default);
 
     Task<Result<ChecklistCreatePageDto>> GetCreatePageAsync(ChecklistKind kind, int employeeId, CancellationToken ct = default);
     Task<Result<int>> CreateDraftAsync(CreateChecklistRequestDto dto, CancellationToken ct = default);

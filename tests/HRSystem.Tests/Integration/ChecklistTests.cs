@@ -1,3 +1,5 @@
+using System.Net;
+using System.Text.Json;
 using HRSystem.Application.DTOs;
 using HRSystem.Application.Interfaces;
 using HRSystem.Application.Security;
@@ -351,33 +353,72 @@ public class ChecklistTests : IntegrationTest
             // Only the AE Code people get the AE Code task; the department's checklist stays with its manager.
             var aeTask = Assert.Single(await TasksOfAsync(aeHandler.UserId, requestId));
             Assert.True(aeTask.IsAeCodeTask);
-            Assert.EndsWith("(AE Code)", aeTask.DepartmentName);
+            Assert.Equal("Client Account Services & Middle Office (AE Code)", aeTask.DepartmentName);
             var otherTasks = await TasksOfAsync(manager.UserId, requestId);
             Assert.NotEmpty(otherTasks);
             Assert.DoesNotContain(otherTasks, t => t.IsAeCodeTask);
 
-            ChecklistTaskUpdateDto Codes(bool complete, params (string? Code, string? Name)[] rows) => new()
+            ChecklistTaskUpdateDto Codes(bool complete, params (string? Code, string? Name)[] rows)
+                => Lines(complete, rows.Select(r => (r.Code, r.Name, (string?)null)).ToArray());
+            ChecklistTaskUpdateDto Lines(bool complete, params (string? Code, string? Name, string? Parent)[] rows) => new()
             {
                 TaskId = aeTask.Id,
                 MarkAsCompleted = complete,
-                AeCodes = rows.Select((r, i) => new ChecklistAeCodeDto { LineNo = i + 1, AeCode = r.Code, AeName = r.Name }).ToList()
+                AeCodes = rows.Select((r, i) => new ChecklistAeCodeDto { LineNo = i + 1, AeCode = r.Code, AeName = r.Name, ParentAeCode = r.Parent }).ToList()
             };
+
+            // The handlers search the AE accounts through the API; nobody else can.
+            App.AeCodes.Accounts.Clear();
+            App.AeCodes.Accounts.AddRange(new[]
+            {
+                new AeAccountDto("A1", "Alice", true),
+                new AeAccountDto("A2", "Alice Chan", false),
+                new AeAccountDto("L1", "LSQ CAPITAL LIMITED (A1)", true),
+                new AeAccountDto("B9", "Bob", true)
+            });
+            var handlerClient = await SignedInClientAsync(aeHandler.Email, TestData.Password);
+            using (var found = JsonDocument.Parse(await handlerClient.GetStringAsync($"/ChecklistTasks/AeSearch/{aeTask.Id}?aeCode=&aeName=alice")))
+                Assert.Equal(new[] { "A1", "A2" }, found.RootElement.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("aeCode").GetString()));
+            // Linked accounts: those whose name holds the AE code, without the AE code itself.
+            using (var linked = JsonDocument.Parse(await handlerClient.GetStringAsync($"/ChecklistTasks/AeSearch/{aeTask.Id}?linkedTo=A1")))
+            {
+                var item = Assert.Single(linked.RootElement.GetProperty("items").EnumerateArray());
+                Assert.Equal("L1", item.GetProperty("aeCode").GetString());
+                Assert.True(item.GetProperty("active").GetBoolean());
+            }
+            Assert.Contains(App.AeCodes.Searches, s => string.IsNullOrEmpty(s.AeCode) && s.AeName == "A1");
+            using (var none = JsonDocument.Parse(await handlerClient.GetStringAsync($"/ChecklistTasks/AeSearch/{aeTask.Id}")))
+                Assert.Contains("AE Code or an AE Name", none.RootElement.GetProperty("error").GetString());
+            var managerClient = await SignedInClientAsync(manager.Email, TestData.Password);
+            Assert.Equal(HttpStatusCode.NotFound, (await managerClient.GetAsync($"/ChecklistTasks/AeSearch/{aeTask.Id}?aeName=alice")).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await handlerClient.GetAsync($"/ChecklistTasks/AeSearch/{otherTasks[0].Id}?aeName=alice")).StatusCode);
 
             using (var h = Data.As(aeHandler.UserId))
             {
                 var service = h.Get<IChecklistService>();
                 Assert.Contains("at least one AE Code", (await service.UpdateTaskAsync(Codes(true, ("", " ")))).Error);
                 Assert.Contains("line 2", (await service.UpdateTaskAsync(Codes(true, ("A1", "Alice"), ("A2", "")))).Error);
+                Assert.Contains("line 1.1", (await service.UpdateTaskAsync(Lines(true, ("A1", "Alice", null), ("L1", "", "A1")))).Error);
                 Assert.Contains("more than once", (await service.UpdateTaskAsync(Codes(false, ("A1", "Alice"), ("a1", "Bob")))).Error);
+                Assert.Contains("not on the list", (await service.UpdateTaskAsync(Lines(false, ("A1", "Alice", null), ("L1", "LSQ", "ZZ")))).Error);
+                Assert.Contains("linked to AE Code A1 more than once",
+                    (await service.UpdateTaskAsync(Lines(false, ("A1", "Alice", null), ("L1", "LSQ", "A1"), ("l1", "LSQ", "A1")))).Error);
 
                 // Saving progress keeps the filled lines, numbered from 1 with blank lines dropped.
                 Assert.True((await service.UpdateTaskAsync(Codes(false, ("A1", "Alice"), ("", ""), ("A2", "")))).Succeeded);
                 var saved = (await service.GetTaskAsync(aeTask.Id))!.AeCodes;
                 Assert.Equal(new[] { 1, 2 }, saved.Select(a => a.LineNo));
                 Assert.Equal(ChecklistTaskStatus.InProgress, (await service.GetTaskAsync(aeTask.Id))!.Status);
+                var editPage = await handlerClient.GetStringAsync($"/ChecklistTasks/Task/{aeTask.Id}");
+                Assert.Contains("id=\"aeCodes\"", editPage);
+                Assert.Contains("id=\"aeModal\"", editPage);
+                Assert.Contains("value=\"Alice\"", editPage);
 
-                var completed = await service.UpdateTaskAsync(Codes(true, (" A1 ", "Alice"), ("A2", "Alice Chan")));
+                // A linked account follows its AE code, wherever it was entered.
+                var completed = await service.UpdateTaskAsync(Lines(true, (" A1 ", "Alice", null), ("A2", "Alice Chan", null), ("L1", "LSQ CAPITAL LIMITED (A1)", "a1")));
                 Assert.True(completed.Succeeded, completed.Error);
+                Assert.Equal(new[] { ("1", "A1", (string?)null), ("1.1", "L1", "a1"), ("2", "A2", null) },
+                    (await service.GetTaskAsync(aeTask.Id))!.AeCodes.Select(a => (a.DisplayNo, a.AeCode!, a.ParentAeCode)));
                 Assert.False((await service.ApproveTaskAsync(aeTask.Id)).Succeeded);
             }
             Assert.Contains(App.Emails.Sent, m => m.To.Contains(aeApprover.Email) && m.Subject.Contains("(AE Code)"));
@@ -400,17 +441,18 @@ public class ChecklistTests : IntegrationTest
             using (var m = Data.As(manager.UserId))
             {
                 var shown = (await m.Get<IChecklistService>().GetTaskAsync(otherTasks[0].Id))!.ApprovedAeCodes;
-                Assert.Equal(new[] { (1, "A1", "Alice"), (2, "A2", "Alice Chan") },
-                    shown.Select(c => (c.LineNo, c.AeCode!, c.AeName!)));
+                Assert.Equal(new[] { ("1", "A1", "Alice"), ("1.1", "L1", "LSQ CAPITAL LIMITED (A1)"), ("2", "A2", "Alice Chan") },
+                    shown.Select(c => (c.DisplayNo, c.AeCode!, c.AeName!)));
             }
             using (var hrScope = Data.As(hr.UserId, Permissions.DeparturesManage))
-                Assert.Equal(2, (await hrScope.Get<IChecklistService>().GetAsync(requestId))!.ApprovedAeCodes.Count);
+                Assert.Equal(3, (await hrScope.Get<IChecklistService>().GetAsync(requestId))!.ApprovedAeCodes.Count);
 
-            // The pages: the AE Code task lists its lines; another department's task shows the approved codes.
-            var aePage = await (await SignedInClientAsync(aeHandler.Email, TestData.Password)).GetStringAsync($"/ChecklistTasks/Task/{aeTask.Id}");
-            Assert.Contains("id=\"aeCodes\"", aePage);
-            Assert.Contains("value=\"Alice Chan\"", aePage);
-            var otherPage = await (await SignedInClientAsync(manager.Email, TestData.Password)).GetStringAsync($"/ChecklistTasks/Task/{otherTasks[0].Id}");
+            // The pages: the approved AE Code task lists its lines read-only; another department's task shows them too.
+            var aePage = await handlerClient.GetStringAsync($"/ChecklistTasks/Task/{aeTask.Id}");
+            Assert.DoesNotContain("id=\"aeModal\"", aePage);
+            Assert.Contains("LSQ CAPITAL LIMITED (A1)", aePage);
+            Assert.Contains("1.1", aePage);
+            var otherPage = await managerClient.GetStringAsync($"/ChecklistTasks/Task/{otherTasks[0].Id}");
             Assert.Contains("AE Codes of", otherPage);
             Assert.Contains("Alice Chan", otherPage);
         }

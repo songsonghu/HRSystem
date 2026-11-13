@@ -12,16 +12,6 @@
     }
     else
     {
-        <table class="table table-bordered table-sm align-middle">
-            <thead class="table-light">
-                <tr><th style="width:70px">No.</th><th>AE Code</th><th>AE Name</th></tr>
-            </thead>
-            <tbody>
-            @foreach (var ae in Model.ApprovedAeCodes)
-            {
-                <tr><td>@ae.LineNo</td><td>@ae.AeCode</td><td>@ae.AeName</td></tr>
-            }
-            </tbody>
-        </table>
+        <div class="mb-3"><partial name="_AeCodeTable" model="Model.ApprovedAeCodes" /></div>
     }
 }

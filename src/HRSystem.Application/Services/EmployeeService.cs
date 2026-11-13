@@ -42,6 +42,33 @@ public class EmployeeService : IEmployeeService
             .ToListAsync(ct);
     }
 
+    public async Task<PagedResult<EmployeeDto>> GetPageAsync(EmployeeListQuery query, CancellationToken ct = default)
+    {
+        var employees = _db.Employees.AsNoTracking().Include(e => e.Department).Where(e => !e.IsDeleted);
+        if (!string.IsNullOrWhiteSpace(query.Name))
+        {
+            var name = query.Name.Trim();
+            employees = employees.Where(e => e.Name.Contains(name));
+        }
+        if (!string.IsNullOrWhiteSpace(query.StaffNo))
+        {
+            var staffNo = query.StaffNo.Trim();
+            employees = employees.Where(e => e.EmployeeNo.Contains(staffNo));
+        }
+        if (query.DepartmentId is int departmentId)
+            employees = employees.Where(e => e.DepartmentId == departmentId);
+
+        var pageSize = Paging.Size(query.PageSize);
+        var total = await employees.CountAsync(ct);
+        var page = Paging.Clamp(query.Page, total, pageSize);
+        var items = await employees
+            .OrderByDescending(e => e.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(e => Map(e))
+            .ToListAsync(ct);
+        return new PagedResult<EmployeeDto> { Items = items, Page = page, PageSize = pageSize, TotalCount = total };
+    }
+
     public async Task<EmployeeDto?> GetAsync(int id, CancellationToken ct = default)
     {
         var e = await _db.Employees.AsNoTracking()

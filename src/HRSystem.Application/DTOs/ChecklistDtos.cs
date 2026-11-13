@@ -227,12 +227,32 @@ public class ChecklistTaskItemDto
     public bool HasAttachment => AttachmentFileName is not null;
 }
 
-/// <summary>One AE code of the leaver.</summary>
+/// <summary>One AE code of the leaver: a first-level AE code, or an account linked to one.</summary>
 public class ChecklistAeCodeDto
 {
     public int LineNo { get; set; }
     public string? AeCode { get; set; }
     public string? AeName { get; set; }
+
+    /// <summary>A linked (second-level) account: the AE code of its first-level line. Blank on a first-level line.</summary>
+    public string? ParentAeCode { get; set; }
+    public bool IsLinked => !string.IsNullOrWhiteSpace(ParentAeCode);
+
+    /// <summary>The number shown on the page: "1", "2" for first-level lines and "1.1", "1.2" for the accounts linked to line 1.</summary>
+    public string DisplayNo { get; set; } = string.Empty;
+
+    /// <summary>Sets <see cref="DisplayNo"/> on lines ordered with each first-level line followed by its linked accounts.</summary>
+    public static List<ChecklistAeCodeDto> Numbered(IEnumerable<ChecklistAeCodeDto> lines)
+    {
+        var list = lines.ToList();
+        int top = 0, sub = 0;
+        foreach (var line in list)
+        {
+            if (line.IsLinked && top > 0) line.DisplayNo = $"{top}.{++sub}";
+            else { line.DisplayNo = (++top).ToString(); sub = 0; }
+        }
+        return list;
+    }
 }
 
 /// <summary>A file chosen for a checklist item; the content type is detected from the content.</summary>
@@ -318,7 +338,7 @@ public class ChecklistTemplateListItemDto
     public int DepartmentId { get; set; }
     public ChecklistTaskType TaskType { get; set; }
 
-    /// <summary>The task name, e.g. "Finance &amp; Accounts (AE Code)".</summary>
+    /// <summary>The task name, e.g. "Client Account Services &amp; Middle Office (AE Code)".</summary>
     public string TaskName => TaskType.TaskName(DepartmentName);
     public string? HandlerNames { get; set; }
     public string? ApproverNames { get; set; }
@@ -352,3 +372,17 @@ public class ChecklistTemplateItemEditDto
     public bool AllowAttachment { get; set; }
 }
 
+
+/// <summary>Request list: the search (by the employee and the request status) and the page shown; blank fields match everyone.</summary>
+public class ChecklistRequestQuery
+{
+    public string? Name { get; set; }
+    public string? StaffNo { get; set; }
+    public int? DepartmentId { get; set; }
+    public ChecklistStatus? Status { get; set; }
+    public int? Page { get; set; }
+    public int? PageSize { get; set; }
+
+    public bool IsSearch => !string.IsNullOrWhiteSpace(Name) || !string.IsNullOrWhiteSpace(StaffNo)
+        || DepartmentId is not null || Status is not null;
+}

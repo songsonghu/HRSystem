@@ -34,10 +34,11 @@ public class StartupAndAccessTests : IntegrationTest
             (from ur in db.UserRoles join r in db.Roles on ur.RoleId equals r.Id where r.Name == Roles.Admin select ur.UserId).CountAsync());
         Assert.Equal(1, admins);
 
-        var templates = await Data.ReadAsync(db => db.ChecklistTemplates.Include(t => t.Items).ToListAsync());
+        var templates = await Data.ReadAsync(db => db.ChecklistTemplates.Include(t => t.Items).Include(t => t.Department).ToListAsync());
         Assert.Equal(6, templates.Count(t => t.Kind == ChecklistKind.Departure));
         var aeCode = Assert.Single(templates, t => t.Kind == ChecklistKind.Departure && t.TaskType == ChecklistTaskType.AeCode);
         Assert.Empty(aeCode.Items);
+        Assert.Equal("Client Account Services & Middle Office", aeCode.Department!.Name);
         Assert.Equal(4, templates.Count(t => t.Kind == ChecklistKind.Onboarding));
         Assert.All(templates.Where(t => t.Kind == ChecklistKind.Onboarding).SelectMany(t => t.Items).Where(i => i.Description == "Others"),
             item => Assert.False(item.IsRequired));

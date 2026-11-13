@@ -27,12 +27,12 @@ public class EmployeesController : Controller
         _departments = departments;
     }
 
-    // GET: /Employees?keyword=...
-    public async Task<IActionResult> Index(string? keyword)
+    // GET: /Employees?name=...&staffNo=...&departmentId=...&page=2&pageSize=20
+    public async Task<IActionResult> Index(EmployeeListQuery query)
     {
-        var list = await _service.GetListAsync(keyword);
-        ViewBag.Keyword = keyword;
-        return View(list);
+        ViewBag.Query = query;
+        await PopulateDepartmentsAsync(query.DepartmentId);
+        return View(await _service.GetPageAsync(query));
     }
 
     // GET: /Employees/Details/5

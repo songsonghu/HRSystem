@@ -181,7 +181,7 @@ public static class ChecklistViewModelMapper
         ApprovedAt = dto.ApprovedAt,
         TaskType = dto.TaskType,
         // The form starts with one row; more are added on the page.
-        AeCodes = dto.AeCodes.Count > 0 ? dto.AeCodes : new List<ChecklistAeCodeDto> { new() { LineNo = 1 } },
+        AeCodes = dto.AeCodes.Count > 0 ? dto.AeCodes : new List<ChecklistAeCodeDto> { new() { LineNo = 1, DisplayNo = "1" } },
         ApprovedAeCodes = dto.ApprovedAeCodes,
         TaskRemark = dto.TaskRemark,
         Items = dto.Items.Select(i => new ChecklistTaskItemEditViewModel
@@ -198,6 +198,16 @@ public static class ChecklistViewModelMapper
         }).ToList()
     };
 
+    /// <summary>The AE code rows as posted, numbered in page order.</summary>
+    public static List<ChecklistAeCodeDto> PostedAeCodes(this ChecklistTaskEditViewModel vm)
+        => ChecklistAeCodeDto.Numbered(vm.AeCodes.Select((r, index) => new ChecklistAeCodeDto
+        {
+            LineNo = index + 1,
+            AeCode = r.AeCode,
+            AeName = r.AeName,
+            ParentAeCode = string.IsNullOrWhiteSpace(r.ParentAeCode) ? null : r.ParentAeCode
+        }));
+
     /// <summary>Reads the chosen files; the caller has already rejected files over the size limit.</summary>
     public static async Task<ChecklistTaskUpdateDto> ToUpdateDtoAsync(this ChecklistTaskEditViewModel vm, CancellationToken ct = default)
     {
@@ -206,7 +216,7 @@ public static class ChecklistViewModelMapper
             TaskId = vm.TaskId,
             TaskRemark = vm.TaskRemark,
             MarkAsCompleted = vm.MarkAsCompleted,
-            AeCodes = vm.AeCodes.Select((r, index) => new ChecklistAeCodeDto { LineNo = index + 1, AeCode = r.AeCode, AeName = r.AeName }).ToList()
+            AeCodes = vm.PostedAeCodes()
         };
         foreach (var i in vm.Items)
         {
@@ -229,4 +239,29 @@ public static class ChecklistViewModelMapper
         }
         return dto;
     }
+}
+
+/// <summary>How a request status is shown: its badge and label, and the statuses a request of each kind can have.</summary>
+public static class ChecklistStatusDisplay
+{
+    public static (string Css, string Label) Of(ChecklistStatus status) => status switch
+    {
+        ChecklistStatus.Draft => ("bg-secondary", "Draft"),
+        ChecklistStatus.Submitted => ("bg-info text-dark", "Submitted"),
+        ChecklistStatus.InProgress => ("bg-primary", "In Progress"),
+        ChecklistStatus.PendingFinalReview => ("bg-warning text-dark", "Pending Dept Head Approval"),
+        ChecklistStatus.PendingManagementApproval => ("bg-warning text-dark", "Pending HR / Mgmt Approval"),
+        ChecklistStatus.Completed => ("bg-success", "Completed"),
+        ChecklistStatus.Cancelled => ("bg-dark", "Cancelled"),
+        _ => ("bg-dark", status.ToString())
+    };
+
+    /// <summary>The statuses in workflow order; the approval steps only apply to departures.</summary>
+    public static IReadOnlyList<ChecklistStatus> For(ChecklistKind kind) => kind == ChecklistKind.Departure
+        ? new[]
+        {
+            ChecklistStatus.Draft, ChecklistStatus.Submitted, ChecklistStatus.InProgress, ChecklistStatus.PendingFinalReview,
+            ChecklistStatus.PendingManagementApproval, ChecklistStatus.Completed, ChecklistStatus.Cancelled
+        }
+        : new[] { ChecklistStatus.Draft, ChecklistStatus.Submitted, ChecklistStatus.InProgress, ChecklistStatus.Completed, ChecklistStatus.Cancelled };
 }

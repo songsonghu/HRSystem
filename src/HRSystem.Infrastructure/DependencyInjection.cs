@@ -76,6 +76,16 @@ public static class DependencyInjection
         services.AddScoped<IUserAdminService, UserAdminService>();
         services.AddScoped<IRoleAdminService, RoleAdminService>();
 
+        // AE code search in the brokerage system (Client Account Services & Middle Office (AE Code) departure task).
+        services.Configure<AeCodeApiOptions>(config.GetSection("AeCodeApi"));
+        services.AddHttpClient<IAeCodeDirectory, AeCodeDirectory>((sp, http) =>
+        {
+            var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AeCodeApiOptions>>().Value;
+            if (Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out var baseUrl))
+                http.BaseAddress = baseUrl.AbsoluteUri.EndsWith('/') ? baseUrl : new Uri(baseUrl.AbsoluteUri + "/");
+            http.Timeout = TimeSpan.FromSeconds(Math.Max(1, options.TimeoutSeconds));
+        });
+
         return services;
     }
 }

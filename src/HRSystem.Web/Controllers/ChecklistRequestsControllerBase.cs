@@ -1,3 +1,4 @@
+using HRSystem.Application.DTOs;
 using HRSystem.Application.Interfaces;
 using HRSystem.Domain.Enums;
 using HRSystem.Web.ViewModels;
@@ -15,13 +16,18 @@ public abstract class ChecklistRequestsControllerBase : Controller
 
     protected abstract ChecklistKind Kind { get; }
 
-    public async Task<IActionResult> Index()
+    /// <summary>
+    /// The requests, a page at a time, searched by the employee's name, staff no. and department and by status.
+    /// Requests are started from the Employees page.
+    /// </summary>
+    public async Task<IActionResult> Index(ChecklistRequestQuery query, [FromServices] IDepartmentService departments)
     {
         ViewBag.Kind = Kind;
-        ViewBag.Employees = (await _service.GetEligibleEmployeesAsync(Kind))
-            .Select(e => new SelectListItem(e.Display, e.Id.ToString()))
+        ViewBag.Query = query;
+        ViewBag.Departments = (await departments.GetOptionsAsync(query.DepartmentId))
+            .Select(d => new SelectListItem(d.Name, d.Id.ToString(), d.Id == query.DepartmentId))
             .ToList();
-        return View("~/Views/Checklists/Index.cshtml", await _service.GetListAsync(Kind));
+        return View("~/Views/Checklists/Index.cshtml", await _service.GetPageAsync(Kind, query));
     }
 
     public async Task<IActionResult> Create(int employeeId)

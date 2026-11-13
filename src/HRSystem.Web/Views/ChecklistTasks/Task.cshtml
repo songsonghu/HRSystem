@@ -34,15 +34,7 @@
     <div class="card mb-3 border-info-subtle">
         <div class="card-header"><b>AE Codes of @Model.EmployeeName</b> <span class="text-muted small">(from the approved AE Code task)</span></div>
         <div class="card-body p-0">
-            <table class="table table-sm mb-0 align-middle">
-                <thead class="table-light"><tr><th style="width:70px">No.</th><th>AE Code</th><th>AE Name</th></tr></thead>
-                <tbody>
-                @foreach (var ae in Model.ApprovedAeCodes)
-                {
-                    <tr><td>@ae.LineNo</td><td>@ae.AeCode</td><td>@ae.AeName</td></tr>
-                }
-                </tbody>
-            </table>
+            <partial name="_AeCodeTable" model="Model.ApprovedAeCodes" />
         </div>
     </div>
 }
@@ -91,48 +83,62 @@
         @if (Model.IsAeCodeTask)
         {
             <h5>AE Codes</h5>
-            @if (readOnly && aeRows.Count == 0)
+            @if (readOnly)
             {
-                <p class="text-muted">No AE codes entered.</p>
+                @if (aeRows.Count == 0)
+                {
+                    <p class="text-muted">No AE codes entered.</p>
+                }
+                else
+                {
+                    <div class="mb-3"><partial name="_AeCodeTable" model="aeRows" /></div>
+                }
             }
             else
             {
+                <div class="card card-body bg-light mb-3" id="aeSearch">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-sm-4">
+                            <label class="form-label" for="aeSearchCode">AE Code</label>
+                            <input id="aeSearchCode" class="form-control" autocomplete="off" />
+                        </div>
+                        <div class="col-sm-5">
+                            <label class="form-label" for="aeSearchName">AE Name</label>
+                            <input id="aeSearchName" class="form-control" autocomplete="off" />
+                        </div>
+                        <div class="col-sm-auto">
+                            <button type="button" class="btn btn-primary" id="aeSearchButton"><i class="bi bi-search"></i> Search</button>
+                        </div>
+                    </div>
+                    <div class="form-text">
+                        Search the AE accounts, tick the ones of @Model.EmployeeName and click Confirm.
+                        Then use <i class="bi bi-diagram-3"></i> on a line to find the accounts linked to that AE code.
+                    </div>
+                </div>
                 <div class="table-responsive">
                     <table class="table table-bordered align-middle" id="aeCodes">
                         <thead class="table-light">
                             <tr>
-                                <th style="width:70px">No.</th>
+                                <th style="width:80px">No.</th>
                                 <th>AE Code <span class="text-danger">*</span></th>
                                 <th>AE Name <span class="text-danger">*</span></th>
-                                @if (!readOnly)
-                                {
-                                    <th style="width:60px"></th>
-                                }
+                                <th style="width:150px"></th>
                             </tr>
                         </thead>
                         <tbody>
                         @for (int i = 0; i < aeRows.Count; i++)
                         {
-                            <tr class="ae-row">
-                                <td class="ae-line">@(i + 1)</td>
-                                <td><input name="AeCodes[@i].AeCode" value="@aeRows[i].AeCode" class="form-control ae-code" maxlength="@HRSystem.Domain.Entities.ChecklistTaskAeCode.MaxCodeLength" aria-label="AE Code" /></td>
-                                <td><input name="AeCodes[@i].AeName" value="@aeRows[i].AeName" class="form-control ae-name" maxlength="@HRSystem.Domain.Entities.ChecklistTaskAeCode.MaxNameLength" aria-label="AE Name" /></td>
-                                @if (!readOnly)
-                                {
-                                    <td class="text-center">
-                                        <button type="button" class="btn btn-sm btn-outline-danger ae-remove" title="Remove this line"><i class="bi bi-trash"></i></button>
-                                    </td>
-                                }
-                            </tr>
+                            AeRow(i, aeRows[i]);
                         }
                         </tbody>
                     </table>
                 </div>
-                @if (!readOnly)
-                {
-                    <button type="button" class="btn btn-sm btn-outline-primary mb-3" id="aeAdd"><i class="bi bi-plus-lg"></i> Add Line</button>
-                    <p class="text-muted small">One line per AE code the employee holds. Once approved, these AE codes are shown on every department's task of this departure.</p>
-                }
+                <template id="aeRowTemplate">@{ AeRow(0, new ChecklistAeCodeDto()); }</template>
+                <button type="button" class="btn btn-sm btn-outline-primary mb-2" id="aeAdd"><i class="bi bi-plus-lg"></i> Add Line</button>
+                <p class="text-muted small">
+                    One line per AE code the employee holds, each followed by its linked accounts (1.1, 1.2, ...). Lines can also be added,
+                    changed or removed by hand. Once approved, these AE codes are shown on every department's task of this departure.
+                </p>
             }
         }
 
@@ -278,6 +284,71 @@
     </div>
 }
 
+@if (Model.IsAeCodeTask && !readOnly)
+{
+    @* AE account search results; the ticked accounts become lines on Confirm. *@
+    <div class="modal fade" id="aeModal" tabindex="-1" aria-labelledby="aeModalTitle" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="aeModalTitle">AE accounts</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="aeModalStatus" class="text-muted" role="status"></div>
+                    <table class="table table-sm table-hover align-middle mt-2" id="aeResults">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width:40px"><input type="checkbox" class="form-check-input" id="aeSelectAll" aria-label="Choose all" /></th>
+                                <th style="width:120px">AE Code</th>
+                                <th>AE Name</th>
+                                <th style="width:80px">Active</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div class="modal-footer">
+                    <span class="me-auto small text-muted">Tick the accounts of @Model.EmployeeName.</span>
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="aeConfirm" disabled>Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    #aeCodes .ae-row[data-level="1"] .ae-indent { display: none; }
+    #aeCodes .ae-row[data-level="2"] .ae-top-only { display: none; }
+    #aeCodes .ae-row[data-level="2"] td:first-child { padding-left: 1.5rem; }
+    #aeResults tbody tr { cursor: pointer; }
+</style>
+
+@functions {
+    // One editable AE code line; a linked account (second level) has ParentAeCode set.
+    void AeRow(int index, ChecklistAeCodeDto row)
+    {
+        var linked = row.IsLinked;
+        <tr class="ae-row" data-level="@(linked ? 2 : 1)">
+            <td class="ae-line">@row.DisplayNo</td>
+            <td>
+                <div class="d-flex align-items-center">
+                    <span class="ae-indent text-muted ms-2 me-2" title="Linked account">↳</span>
+                    <input name="AeCodes[@index].AeCode" value="@row.AeCode" class="form-control ae-code" maxlength="@HRSystem.Domain.Entities.ChecklistTaskAeCode.MaxCodeLength" aria-label="AE Code" />
+                </div>
+                <input type="hidden" name="AeCodes[@index].ParentAeCode" value="@row.ParentAeCode" class="ae-parent" />
+            </td>
+            <td><input name="AeCodes[@index].AeName" value="@row.AeName" class="form-control ae-name" maxlength="@HRSystem.Domain.Entities.ChecklistTaskAeCode.MaxNameLength" aria-label="AE Name" /></td>
+            <td class="text-nowrap text-center">
+                <button type="button" class="btn btn-sm btn-outline-primary ae-top-only ae-find-linked" title="Find the accounts linked to this AE code"><i class="bi bi-diagram-3"></i></button>
+                <button type="button" class="btn btn-sm btn-outline-secondary ae-top-only ae-add-linked" title="Add a linked account by hand"><i class="bi bi-plus-lg"></i></button>
+                <button type="button" class="btn btn-sm btn-outline-danger ae-remove" title="Remove this line"><i class="bi bi-trash"></i></button>
+            </td>
+        </tr>
+    }
+}
+
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
     <script>
@@ -290,45 +361,214 @@
                 }));
             });
 
-            // AE codes: one line to start with; lines are numbered from 1 and renumbered after a removal.
+            // AE codes: first-level lines (1, 2, ...), each followed by its linked accounts (1.1, 1.2, ...).
             const aeBody = document.querySelector('#aeCodes tbody');
-            const renumberAe = () => aeBody.querySelectorAll('.ae-row').forEach((row, i) => {
-                row.querySelector('.ae-line').textContent = i + 1;
-                row.querySelector('.ae-code').name = `AeCodes[${i}].AeCode`;
-                row.querySelector('.ae-name').name = `AeCodes[${i}].AeName`;
-            });
-            document.getElementById('aeAdd')?.addEventListener('click', () => {
-                const row = aeBody.querySelector('.ae-row').cloneNode(true);
-                row.querySelectorAll('input').forEach(input => input.value = '');
+            const aeTemplate = document.getElementById('aeRowTemplate');
+            const aeRowsOf = () => [...aeBody.querySelectorAll('.ae-row')];
+            const isLinked = row => row.dataset.level === '2';
+            const valueOf = (row, cls) => row.querySelector(cls).value.trim();
+            // The linked accounts directly after a first-level line.
+            const linkedRowsOf = row => {
+                const linked = [];
+                for (let next = row.nextElementSibling; next && isLinked(next); next = next.nextElementSibling) linked.push(next);
+                return linked;
+            };
+            const renumberAe = () => {
+                let top = 0, sub = 0, parentCode = '';
+                aeRowsOf().forEach((row, i) => {
+                    if (isLinked(row)) {
+                        row.querySelector('.ae-line').textContent = `${top}.${++sub}`;
+                    } else {
+                        top++; sub = 0;
+                        parentCode = valueOf(row, '.ae-code');
+                        row.querySelector('.ae-line').textContent = top;
+                    }
+                    row.querySelector('.ae-parent').value = isLinked(row) ? parentCode : '';
+                    row.querySelector('.ae-code').name = `AeCodes[${i}].AeCode`;
+                    row.querySelector('.ae-name').name = `AeCodes[${i}].AeName`;
+                    row.querySelector('.ae-parent').name = `AeCodes[${i}].ParentAeCode`;
+                });
+            };
+            const newRow = (linked, code = '', name = '') => {
+                const row = aeTemplate.content.querySelector('.ae-row').cloneNode(true);
+                row.dataset.level = linked ? '2' : '1';
+                row.querySelector('.ae-code').value = code;
+                row.querySelector('.ae-name').value = name;
+                return row;
+            };
+            const isBlank = row => !valueOf(row, '.ae-code') && !valueOf(row, '.ae-name');
+            const addTopRow = (code = '', name = '') => {
+                // A found account fills a blank first-level line (without linked accounts) before a line is added.
+                const blank = code && aeRowsOf().find(r => !isLinked(r) && isBlank(r) && linkedRowsOf(r).length === 0);
+                if (blank) {
+                    blank.querySelector('.ae-code').value = code;
+                    blank.querySelector('.ae-name').value = name;
+                    return blank;
+                }
+                const row = newRow(false, code, name);
                 aeBody.appendChild(row);
+                return row;
+            };
+            const addLinkedRow = (parent, code = '', name = '') => {
+                const row = newRow(true, code, name);
+                (linkedRowsOf(parent).at(-1) ?? parent).after(row);
+                return row;
+            };
+
+            // Search pop-up: the API's accounts; the ticked ones are added as lines on Confirm.
+            const modalElement = document.getElementById('aeModal');
+            const modal = modalElement ? bootstrap.Modal.getOrCreateInstance(modalElement) : null;
+            const resultsBody = document.querySelector('#aeResults tbody');
+            const status = document.getElementById('aeModalStatus');
+            const selectAll = document.getElementById('aeSelectAll');
+            const confirmButton = document.getElementById('aeConfirm');
+            let searchParent = null; // the first-level line a linked search is for
+            let searchId = 0;
+            const searchUrl = @Json.Serialize(Url.Action("AeSearch", new { id = Model.TaskId }));
+            const cell = text => { const td = document.createElement('td'); td.textContent = text; return td; };
+            const picks = () => [...resultsBody.querySelectorAll('.ae-pick:not(:disabled)')];
+            const updateConfirm = () => {
+                const chosen = picks().filter(box => box.checked).length;
+                confirmButton.disabled = chosen === 0;
+                confirmButton.textContent = chosen ? `Confirm (${chosen})` : 'Confirm';
+                selectAll.checked = picks().length > 0 && chosen === picks().length;
+            };
+            const showError = message => { status.className = 'text-danger'; status.textContent = message; };
+
+            const searchAe = async (query, title, parent) => {
+                searchParent = parent;
+                const id = ++searchId;
+                document.getElementById('aeModalTitle').textContent = title;
+                resultsBody.replaceChildren();
+                selectAll.checked = false;
+                updateConfirm();
+                status.className = 'text-muted';
+                status.textContent = 'Searching...';
+                modal.show();
+                // Lines already on the page (at the same level) are shown ticked and cannot be added again.
+                const existing = new Set((parent ? linkedRowsOf(parent) : aeRowsOf().filter(r => !isLinked(r)))
+                    .map(r => valueOf(r, '.ae-code').toUpperCase()).filter(Boolean));
+                try {
+                    const response = await fetch(`${searchUrl}?${new URLSearchParams(query)}`, { headers: { Accept: 'application/json' } });
+                    const data = response.ok ? await response.json() : { error: 'The search failed. Try again.' };
+                    if (id !== searchId) return; // a newer search has started
+                    if (data.error) { showError(data.error); return; }
+                    status.className = 'text-muted';
+                    status.textContent = data.items.length === 0 ? 'No accounts found.' : `${data.items.length} account(s) found.`;
+                    data.items.forEach(item => {
+                        const added = existing.has(item.aeCode.toUpperCase());
+                        const box = document.createElement('input');
+                        box.type = 'checkbox';
+                        box.className = 'form-check-input ae-pick';
+                        box.dataset.code = item.aeCode;
+                        box.dataset.name = item.aeName;
+                        box.checked = added;
+                        box.disabled = added;
+                        box.setAttribute('aria-label', `Choose ${item.aeCode}`);
+                        const pick = document.createElement('td');
+                        pick.appendChild(box);
+                        const name = cell(item.aeName);
+                        if (added) name.insertAdjacentHTML('beforeend', ' <span class="badge bg-secondary">added</span>');
+                        const active = cell(item.active ? 'Yes' : 'No');
+                        if (!item.active) active.classList.add('text-danger');
+                        const tr = document.createElement('tr');
+                        tr.append(pick, cell(item.aeCode), name, active);
+                        // A click anywhere on the row ticks it.
+                        tr.addEventListener('click', e => {
+                            if (e.target === box || box.disabled) return;
+                            box.checked = !box.checked;
+                            updateConfirm();
+                        });
+                        resultsBody.appendChild(tr);
+                    });
+                } catch {
+                    if (id === searchId) showError('The search failed. Try again.');
+                }
+            };
+            resultsBody?.addEventListener('change', updateConfirm);
+            selectAll?.addEventListener('change', () => { picks().forEach(box => box.checked = selectAll.checked); updateConfirm(); });
+            confirmButton?.addEventListener('click', () => {
+                const parent = searchParent && aeBody.contains(searchParent) ? searchParent : null;
+                picks().filter(box => box.checked).forEach(box => parent
+                    ? addLinkedRow(parent, box.dataset.code, box.dataset.name)
+                    : addTopRow(box.dataset.code, box.dataset.name));
+                renumberAe();
+                modal.hide();
+            });
+            const runSearch = () => {
+                const codeBox = document.getElementById('aeSearchCode');
+                const aeCode = codeBox.value.trim();
+                const aeName = document.getElementById('aeSearchName').value.trim();
+                if (!aeCode && !aeName) { alert('Enter an AE Code or an AE Name to search.'); codeBox.focus(); return; }
+                searchAe({ aeCode, aeName }, 'AE accounts', null);
+            };
+            document.getElementById('aeSearchButton')?.addEventListener('click', runSearch);
+            // Enter in a search box searches instead of submitting the task form.
+            document.querySelectorAll('#aeSearch input').forEach(input => input.addEventListener('keydown', e => {
+                if (e.key === 'Enter') { e.preventDefault(); runSearch(); }
+            }));
+
+            document.getElementById('aeAdd')?.addEventListener('click', () => {
+                const row = addTopRow();
                 renumberAe();
                 row.querySelector('.ae-code').focus();
             });
+            aeBody?.addEventListener('input', e => { if (e.target.classList.contains('ae-code')) renumberAe(); });
             aeBody?.addEventListener('click', e => {
-                const remove = e.target.closest('.ae-remove');
-                if (!remove) return;
-                const row = remove.closest('.ae-row');
-                // Keep at least one line: removing the last one just clears it.
-                if (aeBody.querySelectorAll('.ae-row').length === 1) row.querySelectorAll('input').forEach(input => input.value = '');
-                else row.remove();
-                renumberAe();
+                const button = e.target.closest('button');
+                if (!button) return;
+                const row = button.closest('.ae-row');
+                const needCode = () => {
+                    if (valueOf(row, '.ae-code')) return false;
+                    alert('Enter the AE Code of this line first.');
+                    row.querySelector('.ae-code').focus();
+                    return true;
+                };
+                if (button.classList.contains('ae-remove')) {
+                    const linked = isLinked(row) ? [] : linkedRowsOf(row);
+                    if (linked.length > 0 && !confirm(`Remove this AE code and its ${linked.length} linked account(s)?`)) return;
+                    linked.forEach(r => r.remove());
+                    // Keep at least one line: removing the last first-level line just clears it.
+                    if (!isLinked(row) && aeRowsOf().filter(r => !isLinked(r)).length === 1)
+                        row.querySelectorAll('input').forEach(input => input.value = '');
+                    else row.remove();
+                    renumberAe();
+                } else if (button.classList.contains('ae-add-linked')) {
+                    if (needCode()) return;
+                    const added = addLinkedRow(row);
+                    renumberAe();
+                    added.querySelector('.ae-code').focus();
+                } else if (button.classList.contains('ae-find-linked')) {
+                    if (needCode()) return;
+                    const code = valueOf(row, '.ae-code');
+                    searchAe({ linkedTo: code }, `Accounts linked to AE Code ${code}`, row);
+                }
             });
+            if (aeBody) renumberAe();
 
             const complete = document.getElementById('completeTask');
             if (!complete) return;
             complete.addEventListener('click', e => {
                 if (aeBody) {
-                    const rows = [...aeBody.querySelectorAll('.ae-row')]
-                        .map(row => ({ code: row.querySelector('.ae-code'), name: row.querySelector('.ae-name') }));
+                    renumberAe();
+                    const rows = aeRowsOf()
+                        .map(row => ({ row, code: row.querySelector('.ae-code'), name: row.querySelector('.ae-name') }));
                     const filled = rows.filter(r => r.code.value.trim() || r.name.value.trim());
                     const half = filled.find(r => !r.code.value.trim() || !r.name.value.trim());
                     if (filled.length === 0 || half) {
                         e.preventDefault();
                         alert(filled.length === 0
                             ? 'Enter at least one AE Code and AE Name before completing the task.'
-                            : 'Enter both the AE Code and the AE Name on every line.');
+                            : `Enter both the AE Code and the AE Name on line ${half.row.querySelector('.ae-line').textContent}.`);
                         const target = half ?? rows[0];
                         (target.code.value.trim() ? target.name : target.code).focus();
+                        return;
+                    }
+                    // A linked account needs the AE code of its first-level line.
+                    const orphan = filled.find(r => isLinked(r.row) && !r.row.querySelector('.ae-parent').value);
+                    if (orphan) {
+                        e.preventDefault();
+                        alert(`Line ${orphan.row.querySelector('.ae-line').textContent} is a linked account: enter the AE Code of the line above it first.`);
                         return;
                     }
                 }

@@ -19,8 +19,13 @@ public class ChecklistTasksController : Controller
     private const long MaxTaskPostBytes = 100 * 1024 * 1024;
 
     private readonly IChecklistService _service;
+    private readonly IAeCodeDirectory _aeCodes;
 
-    public ChecklistTasksController(IChecklistService service) => _service = service;
+    public ChecklistTasksController(IChecklistService service, IAeCodeDirectory aeCodes)
+    {
+        _service = service;
+        _aeCodes = aeCodes;
+    }
 
     public async Task<IActionResult> Index() => View(await _service.GetMyPendingTasksAsync());
 
@@ -87,7 +92,7 @@ public class ChecklistTasksController : Controller
             var redisplay = task.ToTaskEdit();
             redisplay.TaskRemark = vm.TaskRemark;
             if (redisplay.IsAeCodeTask && vm.AeCodes.Count > 0)
-                redisplay.AeCodes = vm.AeCodes.Select((r, index) => new ChecklistAeCodeDto { LineNo = index + 1, AeCode = r.AeCode, AeName = r.AeName }).ToList();
+                redisplay.AeCodes = vm.PostedAeCodes();
             foreach (var item in redisplay.Items)
             {
                 var posted = vm.Items.FirstOrDefault(i => i.Id == item.Id);
@@ -115,6 +120,37 @@ public class ChecklistTasksController : Controller
         }
         TempData["Success"] = "Department task completed and sent to the department approvers. It now appears under History.";
         return RedirectToAction(nameof(Index));
+    }
+
+    /// <summary>
+    /// AE Code task: searches the AE accounts for the handlers, as JSON. With <paramref name="linkedTo"/>, finds the
+    /// accounts linked to that AE code instead: those whose name contains it, e.g. "LSQ CAPITAL LIMITED (2205)".
+    /// </summary>
+    [HttpGet]
+    public async Task<IActionResult> AeSearch(int id, string? aeCode, string? aeName, string? linkedTo)
+    {
+        var task = await _service.GetTaskAsync(id);
+        if (task is null || !task.IsAeCodeTask || !task.CanEdit) return NotFound();
+
+        linkedTo = linkedTo?.Trim();
+        var linked = !string.IsNullOrEmpty(linkedTo);
+        if (!linked && string.IsNullOrWhiteSpace(aeCode) && string.IsNullOrWhiteSpace(aeName))
+            return Json(new { error = "Enter an AE Code or an AE Name to search." });
+
+        var result = linked
+            ? await _aeCodes.SearchAsync(null, linkedTo, HttpContext.RequestAborted)
+            : await _aeCodes.SearchAsync(aeCode, aeName, HttpContext.RequestAborted);
+        if (!result.Succeeded) return Json(new { error = result.Error });
+
+        var accounts = result.Value!.AsEnumerable();
+        if (linked)
+            accounts = accounts.Where(a => !string.Equals(a.AeCode, linkedTo, StringComparison.OrdinalIgnoreCase)
+                                           && a.AeName.Contains(linkedTo!, StringComparison.OrdinalIgnoreCase));
+        return Json(new
+        {
+            items = accounts.DistinctBy(a => a.AeCode, StringComparer.OrdinalIgnoreCase)
+                .Select(a => new { aeCode = a.AeCode, aeName = a.AeName, active = a.Active })
+        });
     }
 
     /// <summary>Shows a checklist item's attachment in the browser (images and PDFs only).</summary>

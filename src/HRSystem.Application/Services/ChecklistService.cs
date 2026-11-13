@@ -56,19 +56,43 @@ public class ChecklistService : IChecklistService
 
     // ------------------------------------------------------------------ read
 
-    public async Task<IReadOnlyList<ChecklistRequestDto>> GetListAsync(ChecklistKind kind, CancellationToken ct = default)
+    public async Task<PagedResult<ChecklistRequestDto>> GetPageAsync(ChecklistKind kind, ChecklistRequestQuery query, CancellationToken ct = default)
     {
-        if (!CanManage(kind)) return Array.Empty<ChecklistRequestDto>();
+        var size = Paging.Size(query.PageSize);
+        if (!CanManage(kind)) return new PagedResult<ChecklistRequestDto> { PageSize = size };
 
-        var requests = await _db.ChecklistRequests.AsNoTracking()
-            .Include(r => r.Employee)
+        var requests = _db.ChecklistRequests.AsNoTracking().Where(r => r.Kind == kind);
+        if (!string.IsNullOrWhiteSpace(query.Name))
+        {
+            var name = query.Name.Trim();
+            requests = requests.Where(r => r.Employee!.Name.Contains(name));
+        }
+        if (!string.IsNullOrWhiteSpace(query.StaffNo))
+        {
+            var staffNo = query.StaffNo.Trim();
+            requests = requests.Where(r => r.Employee!.EmployeeNo.Contains(staffNo));
+        }
+        if (query.DepartmentId is int departmentId)
+            requests = requests.Where(r => r.Employee!.DepartmentId == departmentId);
+        if (query.Status is ChecklistStatus status)
+            requests = requests.Where(r => r.Status == status);
+
+        var total = await requests.CountAsync(ct);
+        var current = Paging.Clamp(query.Page, total, size);
+        var items = await requests
+            .Include(r => r.Employee).ThenInclude(e => e!.Department)
             .Include(r => r.AccountRequest)
             .Include(r => r.Tasks).ThenInclude(t => t.Items)
-            .Where(r => r.Kind == kind)
             .OrderByDescending(r => r.Id)
+            .Skip((current - 1) * size).Take(size)
             .ToListAsync(ct);
-
-        return requests.Select(MapRequest).ToList();
+        return new PagedResult<ChecklistRequestDto>
+        {
+            Items = items.Select(MapRequest).ToList(),
+            Page = current,
+            PageSize = size,
+            TotalCount = total
+        };
     }
 
     public async Task<int?> GetOpenRequestIdAsync(ChecklistKind kind, int employeeId, CancellationToken ct = default)
@@ -78,18 +102,6 @@ public class ChecklistService : IChecklistService
             .OrderByDescending(r => r.Id)
             .Select(r => (int?)r.Id)
             .FirstOrDefaultAsync(ct);
-    }
-
-    public async Task<IReadOnlyList<EmployeeOptionDto>> GetEligibleEmployeesAsync(ChecklistKind kind, CancellationToken ct = default)
-    {
-        if (!CanManage(kind)) return Array.Empty<EmployeeOptionDto>();
-
-        var openEmployeeIds = Open(_db.ChecklistRequests).Where(r => r.Kind == kind).Select(r => r.EmployeeId);
-        return await _db.Employees.AsNoTracking()
-            .Where(e => e.Status == EmployeeStatus.Active && !openEmployeeIds.Contains(e.Id))
-            .OrderBy(e => e.Name)
-            .Select(e => new EmployeeOptionDto(e.Id, e.Name + " (" + e.EmployeeNo + ")"))
-            .ToListAsync(ct);
     }
 
     public async Task<ChecklistRequestDto?> GetAsync(int requestId, CancellationToken ct = default)
@@ -944,45 +956,75 @@ public class ChecklistService : IChecklistService
 
         // Every department's task shows the leaver's AE codes once the AE Code task is approved.
         var dto = MapTask(task, roles);
-        dto.ApprovedAeCodes = await _db.ChecklistTaskAeCodes.AsNoTracking()
+        dto.ApprovedAeCodes = ChecklistAeCodeDto.Numbered(await _db.ChecklistTaskAeCodes.AsNoTracking()
             .Where(a => a.ChecklistTask!.ChecklistRequestId == task.ChecklistRequestId
                         && a.ChecklistTask.TaskType == ChecklistTaskType.AeCode
                         && a.ChecklistTask.ApprovedAt != null)
             .OrderBy(a => a.LineNo)
-            .Select(a => new ChecklistAeCodeDto { LineNo = a.LineNo, AeCode = a.AeCode, AeName = a.AeName })
-            .ToListAsync(ct);
+            .Select(a => new ChecklistAeCodeDto { LineNo = a.LineNo, AeCode = a.AeCode, AeName = a.AeName, ParentAeCode = a.ParentAeCode })
+            .ToListAsync(ct));
         return dto;
     }
 
     /// <summary>
-    /// The AE codes posted for an AE Code task, trimmed and without blank rows. Completing needs at least
-    /// one row and both fields on every row; saving progress keeps half-filled rows.
+    /// The AE codes posted for an AE Code task, trimmed and without blank rows, each first-level line followed
+    /// by the accounts linked to it. Completing needs at least one line and both fields on every line; saving
+    /// progress keeps half-filled lines.
     /// </summary>
-    private static (List<(string Code, string Name)>? Rows, string? Error) CleanAeCodes(IEnumerable<ChecklistAeCodeDto> posted, bool completing)
+    private static (List<AeLine>? Rows, string? Error) CleanAeCodes(IEnumerable<ChecklistAeCodeDto> posted, bool completing)
     {
         var rows = posted.OrderBy(r => r.LineNo)
-            .Select(r => (Code: r.AeCode?.Trim() ?? string.Empty, Name: r.AeName?.Trim() ?? string.Empty))
+            .Select(r => new AeLine(r.AeCode?.Trim() ?? string.Empty, r.AeName?.Trim() ?? string.Empty,
+                string.IsNullOrWhiteSpace(r.ParentAeCode) ? null : r.ParentAeCode.Trim()))
             .Where(r => r.Code.Length > 0 || r.Name.Length > 0)
             .ToList();
-        for (var i = 0; i < rows.Count; i++)
+
+        // Each first-level line, then its linked accounts in the order entered.
+        var parents = rows.Where(r => r.Parent is null).ToList();
+        var orphan = rows.FirstOrDefault(r => r.Parent is not null
+            && !parents.Any(p => string.Equals(p.Code, r.Parent, StringComparison.OrdinalIgnoreCase)));
+        if (orphan is not null)
+            return (null, $"The linked account {(orphan.Code.Length > 0 ? orphan.Code : orphan.Name)} belongs to AE Code {orphan.Parent}, which is not on the list.");
+        var ordered = new List<AeLine>();
+        foreach (var parent in parents)
         {
-            if (rows[i].Code.Length > ChecklistTaskAeCode.MaxCodeLength)
-                return (null, $"AE Code on line {i + 1} is longer than {ChecklistTaskAeCode.MaxCodeLength} characters.");
-            if (rows[i].Name.Length > ChecklistTaskAeCode.MaxNameLength)
-                return (null, $"AE Name on line {i + 1} is longer than {ChecklistTaskAeCode.MaxNameLength} characters.");
-            if (completing && (rows[i].Code.Length == 0 || rows[i].Name.Length == 0))
-                return (null, $"Enter both the AE Code and the AE Name on line {i + 1}.");
+            ordered.Add(parent);
+            // A parent without a code has no linked accounts: theirs would be orphans, caught above.
+            if (parent.Code.Length > 0)
+                ordered.AddRange(rows.Where(r => string.Equals(r.Parent, parent.Code, StringComparison.OrdinalIgnoreCase)));
         }
-        var duplicate = rows.Where(r => r.Code.Length > 0)
-            .GroupBy(r => r.Code, StringComparer.OrdinalIgnoreCase)
+
+        var numbers = ChecklistAeCodeDto.Numbered(ordered.Select(r => new ChecklistAeCodeDto { ParentAeCode = r.Parent }))
+            .Select(d => d.DisplayNo).ToList();
+        for (var i = 0; i < ordered.Count; i++)
+        {
+            if (ordered[i].Code.Length > ChecklistTaskAeCode.MaxCodeLength)
+                return (null, $"AE Code on line {numbers[i]} is longer than {ChecklistTaskAeCode.MaxCodeLength} characters.");
+            if (ordered[i].Name.Length > ChecklistTaskAeCode.MaxNameLength)
+                return (null, $"AE Name on line {numbers[i]} is longer than {ChecklistTaskAeCode.MaxNameLength} characters.");
+            if (completing && (ordered[i].Code.Length == 0 || ordered[i].Name.Length == 0))
+                return (null, $"Enter both the AE Code and the AE Name on line {numbers[i]}.");
+        }
+        // First-level codes are unique, and so are the accounts linked to one AE code.
+        var duplicate = ordered.Where(r => r.Code.Length > 0)
+            .GroupBy(r => (r.Parent?.ToUpperInvariant(), r.Code.ToUpperInvariant()))
             .FirstOrDefault(g => g.Count() > 1);
-        if (duplicate is not null) return (null, $"AE Code {duplicate.Key} is entered more than once.");
-        if (completing && rows.Count == 0) return (null, "Enter at least one AE Code and AE Name before completing the task.");
-        return (rows, null);
+        if (duplicate is not null)
+        {
+            var first = duplicate.First();
+            return (null, first.Parent is null
+                ? $"AE Code {first.Code} is entered more than once."
+                : $"Account {first.Code} is linked to AE Code {first.Parent} more than once.");
+        }
+        if (completing && ordered.Count == 0) return (null, "Enter at least one AE Code and AE Name before completing the task.");
+        return (ordered, null);
     }
 
+    /// <summary>A cleaned AE code line; <see cref="Parent"/> is set on an account linked to a first-level AE code.</summary>
+    private sealed record AeLine(string Code, string Name, string? Parent);
+
     /// <summary>Replaces the task's AE codes with <paramref name="rows"/>, numbered from 1. The caller saves.</summary>
-    private void SyncAeCodes(ChecklistTask task, IReadOnlyList<(string Code, string Name)> rows)
+    private void SyncAeCodes(ChecklistTask task, IReadOnlyList<AeLine> rows)
     {
         var existing = task.AeCodes.OrderBy(a => a.LineNo).ToList();
         for (var i = 0; i < rows.Count; i++)
@@ -996,6 +1038,7 @@ public class ChecklistService : IChecklistService
             line.LineNo = i + 1;
             line.AeCode = rows[i].Code;
             line.AeName = rows[i].Name;
+            line.ParentAeCode = rows[i].Parent;
         }
         foreach (var removed in existing.Skip(rows.Count))
         {
@@ -1024,7 +1067,7 @@ public class ChecklistService : IChecklistService
         if (dto.Items.Any(i => i.IsCompleted && i.IsNotApplicable))
             return Result.Fail("A checklist item can be either Done or N/A, not both.");
 
-        List<(string Code, string Name)>? aeCodes = null;
+        List<AeLine>? aeCodes = null;
         if (task.TaskType == ChecklistTaskType.AeCode)
         {
             var (rows, aeError) = CleanAeCodes(dto.AeCodes, dto.MarkAsCompleted);
@@ -1384,8 +1427,8 @@ public class ChecklistService : IChecklistService
         AccountRequestStatus = request.AccountRequest?.Status,
         Tasks = request.Tasks.OrderBy(t => t.SortOrder).Select(t => MapTask(t, null)).ToList(),
         // Shown once approved; returning the AE Code task hides them until it is approved again.
-        ApprovedAeCodes = request.Tasks.Where(t => t.TaskType == ChecklistTaskType.AeCode && t.ApprovedAt is not null)
-            .SelectMany(t => t.AeCodes).OrderBy(a => a.LineNo).Select(MapAeCode).ToList(),
+        ApprovedAeCodes = ChecklistAeCodeDto.Numbered(request.Tasks.Where(t => t.TaskType == ChecklistTaskType.AeCode && t.ApprovedAt is not null)
+            .SelectMany(t => t.AeCodes).OrderBy(a => a.LineNo).Select(MapAeCode)),
         Logs =request.Logs.OrderBy(l => l.At).ThenBy(l => l.Id).Select(l => new ChecklistLogDto
         {
             Action = l.Action,
@@ -1433,8 +1476,8 @@ public class ChecklistService : IChecklistService
             AttachmentSize = i.AttachmentSize
         }).ToList(),
         TaskType = task.TaskType,
-        AeCodes = task.AeCodes.OrderBy(a => a.LineNo).Select(MapAeCode).ToList()
+        AeCodes = ChecklistAeCodeDto.Numbered(task.AeCodes.OrderBy(a => a.LineNo).Select(MapAeCode))
     };
 
-    private static ChecklistAeCodeDto MapAeCode(ChecklistTaskAeCode a) => new() { LineNo = a.LineNo, AeCode = a.AeCode, AeName = a.AeName };
+    private static ChecklistAeCodeDto MapAeCode(ChecklistTaskAeCode a) => new() { LineNo = a.LineNo, AeCode = a.AeCode, AeName = a.AeName, ParentAeCode = a.ParentAeCode };
 }

@@ -1,39 +1,66 @@
 @using Microsoft.AspNetCore.Mvc.Rendering
-@model IReadOnlyList<ChecklistRequestDto>
+@using HRSystem.Application.Common
+@model PagedResult<ChecklistRequestDto>
 @{
     var kind = (ChecklistKind)ViewBag.Kind;
     var isOnboarding = kind == ChecklistKind.Onboarding;
-    var employees = (List<SelectListItem>)ViewBag.Employees;
+    var query = (ChecklistRequestQuery)ViewBag.Query;
+    var departments = (List<SelectListItem>)ViewBag.Departments;
+    var statuses = ChecklistStatusDisplay.For(kind)
+        .Select(s => new SelectListItem(ChecklistStatusDisplay.Of(s).Label, ((int)s).ToString(), s == query.Status))
+        .ToList();
     ViewData["Title"] = isOnboarding ? "Onboarding" : "Departure Requests";
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2>@ViewData["Title"]</h2>
+    <div>
+        <h2 class="mb-0">@ViewData["Title"]</h2>
+        <div class="text-muted small">
+            @Model.TotalCount @(Model.TotalCount == 1 ? "request" : "requests")@(query.IsSearch ? " found" : null).
+            Start @(isOnboarding ? "an onboarding" : "a departure") from the employee's <i class="bi bi-three-dots"></i> menu on
+            <a asp-controller="Employees" asp-action="Index">Employees</a>.
+        </div>
+    </div>
     @if (!isOnboarding && User.HasPermission(Permissions.DeparturesManage))
     {
         <a class="btn btn-outline-secondary" asp-controller="ChecklistTemplates" asp-action="Index" asp-route-kind="@kind">Templates for Departure</a>
     }
 </div>
 
-<form method="get" asp-action="Create" class="row g-2 mb-4">
-    <div class="col-md-5">
-        <select name="employeeId" class="form-select" asp-items="employees" required>
-            <option value="">-- select employee --</option>
+<form method="get" asp-action="Index" class="row g-2 align-items-end mb-3" id="requestSearch">
+    <div class="col-sm-6 col-lg-2">
+        <label class="form-label small text-muted mb-1" for="name">Name</label>
+        <input type="text" id="name" name="name" value="@query.Name" class="form-control" placeholder="Employee name" />
+    </div>
+    <div class="col-sm-6 col-lg-2">
+        <label class="form-label small text-muted mb-1" for="staffNo">Staff No.</label>
+        <input type="text" id="staffNo" name="staffNo" value="@query.StaffNo" class="form-control" placeholder="Staff no." />
+    </div>
+    <div class="col-sm-6 col-lg-3">
+        <label class="form-label small text-muted mb-1" for="departmentId">Department</label>
+        <select id="departmentId" name="departmentId" class="form-select" asp-items="departments">
+            <option value="">All departments</option>
+        </select>
+    </div>
+    <div class="col-sm-6 col-lg-2">
+        <label class="form-label small text-muted mb-1" for="status">Status</label>
+        <select id="status" name="status" class="form-select" asp-items="statuses">
+            <option value="">All statuses</option>
         </select>
     </div>
     <div class="col-auto">
-        <button class="btn btn-success">@(isOnboarding ? "+ Start Onboarding" : "+ Start Departure")</button>
+        <button class="btn btn-primary"><i class="bi bi-search me-1"></i>Search</button>
+        @if (query.IsSearch)
+        {
+            <a class="btn btn-outline-secondary" asp-action="Index" asp-route-pageSize="@Model.PageSize">Clear</a>
+        }
     </div>
-    <div class="col-12 form-text">
-        @(isOnboarding
-            ? "Only active employees without an open onboarding are listed. Create the employee record first."
-            : "Only active employees without an open departure are listed.")
-    </div>
+    <div class="col-auto ms-lg-auto"><partial name="_PageSizeSelect" model="Model.PageSize" /></div>
 </form>
 
-@if (Model.Count == 0)
+@if (Model.TotalCount == 0)
 {
-    <div class="alert alert-info">No requests yet.</div>
+    <div class="alert alert-info">@(query.IsSearch ? "No requests match the search." : "No requests yet.")</div>
 }
 else
 {
@@ -42,6 +69,7 @@ else
             <tr>
                 <th>Request No.</th>
                 <th>Employee</th>
+                <th>Department</th>
                 <th>Status</th>
                 @if (isOnboarding)
                 {
@@ -59,12 +87,13 @@ else
             </tr>
         </thead>
         <tbody>
-        @foreach (var r in Model)
+        @foreach (var r in Model.Items)
         {
             var done = r.Tasks.Count(t => t.Status is ChecklistTaskStatus.Completed or ChecklistTaskStatus.NotApplicable);
             <tr>
                 <td>@r.RequestNo</td>
                 <td>@r.EmployeeName (@r.EmployeeNo)</td>
+                <td>@(r.DepartmentName ?? "—")</td>
                 <td><partial name="_ChecklistStatusBadge" model="r.Status" /></td>
                 @if (isOnboarding)
                 {
@@ -83,4 +112,5 @@ else
         }
         </tbody>
     </table>
+    <partial name="_Pager" model="Model" />
 }

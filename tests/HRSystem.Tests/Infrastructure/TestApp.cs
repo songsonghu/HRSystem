@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using HRSystem.Application.Common;
 using HRSystem.Application.Interfaces;
 using HRSystem.Web.Services;
 using Microsoft.AspNetCore.Hosting;
@@ -24,6 +25,9 @@ public sealed class TestApp : WebApplicationFactory<Program>, IAsyncLifetime
     public static bool IsConfigured => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(ConnectionVariable));
 
     public FakeEmailService Emails { get; } = new();
+
+    /// <summary>Stands in for the AeCodeListSearch API.</summary>
+    public FakeAeCodeDirectory AeCodes { get; } = new();
 
     public async Task InitializeAsync()
     {
@@ -57,6 +61,7 @@ public sealed class TestApp : WebApplicationFactory<Program>, IAsyncLifetime
             services.AddScoped<TestCurrentUser>();
             services.AddScoped<ICurrentUser>(sp => sp.GetRequiredService<TestCurrentUser>());
             services.AddSingleton<IEmailService>(Emails);
+            services.AddSingleton<IAeCodeDirectory>(AeCodes);
         });
     }
 
@@ -121,6 +126,23 @@ public sealed class FakeEmailService : IEmailService
     }
 
     public void Enqueue(EmailMessage message) => _sent.Enqueue(message);
+}
+
+/// <summary>Searches a fixed list of accounts: the code and the name match when they contain the search text.</summary>
+public sealed class FakeAeCodeDirectory : IAeCodeDirectory
+{
+    public List<AeAccountDto> Accounts { get; } = new();
+    public ConcurrentQueue<(string? AeCode, string? AeName)> Searches { get; } = new();
+
+    public Task<Result<IReadOnlyList<AeAccountDto>>> SearchAsync(string? aeCode, string? aeName, CancellationToken ct = default)
+    {
+        Searches.Enqueue((aeCode, aeName));
+        IReadOnlyList<AeAccountDto> found = Accounts
+            .Where(a => string.IsNullOrWhiteSpace(aeCode) || a.AeCode.Contains(aeCode.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Where(a => string.IsNullOrWhiteSpace(aeName) || a.AeName.Contains(aeName.Trim(), StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        return Task.FromResult(Result<IReadOnlyList<AeAccountDto>>.Success(found));
+    }
 }
 
 [CollectionDefinition(Name)]

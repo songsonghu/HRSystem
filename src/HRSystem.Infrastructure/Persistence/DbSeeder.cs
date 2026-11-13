@@ -208,8 +208,8 @@ public static class DbSeeder
             "Check if there is Commission Rebate / Deficit held up by the Company",
             "Others"
         }),
-        // Finance & Accounts (AE Code): the leaver's AE codes, with handlers and approvers of its own.
-        new("Finance & Accounts", Array.Empty<string>(), TaskType: ChecklistTaskType.AeCode),
+        // Client Account Services & Middle Office (AE Code): the leaver's AE codes, with handlers and approvers of its own.
+        new("Client Account Services & Middle Office", Array.Empty<string>(), TaskType: ChecklistTaskType.AeCode),
         new("Credit Control", new[]
         {
             "Delete login of Ayers / Sharp Point / 2Go",

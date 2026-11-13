@@ -650,6 +650,10 @@ namespace HRSystem.Infrastructure.Migrations
                     b.Property<int>("LineNo")
                         .HasColumnType("int");
 
+                    b.Property<string>("ParentAeCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ChecklistTaskId", "LineNo");

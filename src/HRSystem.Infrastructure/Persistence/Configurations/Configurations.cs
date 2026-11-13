@@ -251,6 +251,7 @@ public class ChecklistTaskAeCodeConfig : IEntityTypeConfiguration<ChecklistTaskA
         b.HasKey(x => x.Id);
         b.Property(x => x.AeCode).HasMaxLength(ChecklistTaskAeCode.MaxCodeLength).IsRequired();
         b.Property(x => x.AeName).HasMaxLength(ChecklistTaskAeCode.MaxNameLength).IsRequired();
+        b.Property(x => x.ParentAeCode).HasMaxLength(ChecklistTaskAeCode.MaxCodeLength);
         b.HasIndex(x => new { x.ChecklistTaskId, x.LineNo });
         b.HasOne(x => x.ChecklistTask)
             .WithMany(t => t.AeCodes)
