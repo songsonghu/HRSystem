@@ -111,10 +111,11 @@
                         </div>
                     </div>
                     <div class="form-text">
-                        Search the AE accounts, tick the ones of @Model.EmployeeName and click Confirm.
-                        Then use <i class="bi bi-diagram-3"></i> on a line to find the accounts linked to that AE code.
+                        Search the AE accounts, tick the ones of @Model.EmployeeName and click Confirm: the accounts linked to
+                        those AE codes are then searched for you. <i class="bi bi-diagram-3"></i> on a line searches its linked accounts again.
                     </div>
                 </div>
+                <div id="aeNotice" class="alert alert-light border small py-2 d-none" role="status"></div>
                 <div class="table-responsive">
                     <table class="table table-bordered align-middle" id="aeCodes">
                         <thead class="table-light">
@@ -134,7 +135,10 @@
                     </table>
                 </div>
                 <template id="aeRowTemplate">@{ AeRow(0, new ChecklistAeCodeDto()); }</template>
-                <button type="button" class="btn btn-sm btn-outline-primary mb-2" id="aeAdd"><i class="bi bi-plus-lg"></i> Add Line</button>
+                <div class="d-flex gap-2 mb-2">
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="aeAdd"><i class="bi bi-plus-lg"></i> Add Line</button>
+                    <button type="button" class="btn btn-sm btn-outline-danger" id="aeClear"><i class="bi bi-eraser"></i> Clear</button>
+                </div>
                 <p class="text-muted small">
                     One line per AE code the employee holds, each followed by its linked accounts (1.1, 1.2, ...). Lines can also be added,
                     changed or removed by hand. Once approved, these AE codes are shown on every department's task of this departure.
@@ -422,7 +426,9 @@
             const status = document.getElementById('aeModalStatus');
             const selectAll = document.getElementById('aeSelectAll');
             const confirmButton = document.getElementById('aeConfirm');
-            let searchParent = null; // the first-level line a linked search is for
+            const notice = document.getElementById('aeNotice');
+            // The groups shown in the pop-up: the first-level line each is for (null: a search for AE codes).
+            let searchGroups = [];
             let searchId = 0;
             const searchUrl = @Json.Serialize(Url.Action("AeSearch", new { id = Model.TaskId }));
             const cell = text => { const td = document.createElement('td'); td.textContent = text; return td; };
@@ -433,67 +439,124 @@
                 confirmButton.textContent = chosen ? `Confirm (${chosen})` : 'Confirm';
                 selectAll.checked = picks().length > 0 && chosen === picks().length;
             };
-            const showError = message => { status.className = 'text-danger'; status.textContent = message; };
-
-            const searchAe = async (query, title, parent) => {
-                searchParent = parent;
+            const showStatus = (message, error = false) => { status.className = error ? 'text-danger' : 'text-muted'; status.textContent = message; };
+            const showNotice = message => { notice.textContent = message; notice.classList.toggle('d-none', !message); };
+            const fetchAe = async query => {
+                try {
+                    const response = await fetch(`${searchUrl}?${new URLSearchParams(query)}`, { headers: { Accept: 'application/json' } });
+                    return response.ok ? await response.json() : { error: 'The search failed. Try again.' };
+                } catch {
+                    return { error: 'The search failed. Try again.' };
+                }
+            };
+            const openModal = (title, message) => {
                 const id = ++searchId;
+                searchGroups = [];
                 document.getElementById('aeModalTitle').textContent = title;
                 resultsBody.replaceChildren();
                 selectAll.checked = false;
                 updateConfirm();
-                status.className = 'text-muted';
-                status.textContent = 'Searching...';
+                showStatus(message);
+                showNotice('');
                 modal.show();
-                // Lines already on the page (at the same level) are shown ticked and cannot be added again.
+                return id;
+            };
+            const groupHeading = (text, error) => {
+                const td = document.createElement('td');
+                td.colSpan = 4;
+                td.className = `fw-semibold small ${error ? 'text-danger' : 'text-secondary'}`;
+                td.textContent = text;
+                const tr = document.createElement('tr');
+                tr.className = 'table-light ae-group';
+                tr.appendChild(td);
+                return tr;
+            };
+            // Adds one group of results. Lines already on the page (at the same level) are shown ticked and cannot be added again.
+            const renderGroup = (parent, items) => {
+                const group = searchGroups.push(parent) - 1;
                 const existing = new Set((parent ? linkedRowsOf(parent) : aeRowsOf().filter(r => !isLinked(r)))
                     .map(r => valueOf(r, '.ae-code').toUpperCase()).filter(Boolean));
-                try {
-                    const response = await fetch(`${searchUrl}?${new URLSearchParams(query)}`, { headers: { Accept: 'application/json' } });
-                    const data = response.ok ? await response.json() : { error: 'The search failed. Try again.' };
-                    if (id !== searchId) return; // a newer search has started
-                    if (data.error) { showError(data.error); return; }
-                    status.className = 'text-muted';
-                    status.textContent = data.items.length === 0 ? 'No accounts found.' : `${data.items.length} account(s) found.`;
-                    data.items.forEach(item => {
-                        const added = existing.has(item.aeCode.toUpperCase());
-                        const box = document.createElement('input');
-                        box.type = 'checkbox';
-                        box.className = 'form-check-input ae-pick';
-                        box.dataset.code = item.aeCode;
-                        box.dataset.name = item.aeName;
-                        box.checked = added;
-                        box.disabled = added;
-                        box.setAttribute('aria-label', `Choose ${item.aeCode}`);
-                        const pick = document.createElement('td');
-                        pick.appendChild(box);
-                        const name = cell(item.aeName);
-                        if (added) name.insertAdjacentHTML('beforeend', ' <span class="badge bg-secondary">added</span>');
-                        const active = cell(item.active ? 'Yes' : 'No');
-                        if (!item.active) active.classList.add('text-danger');
-                        const tr = document.createElement('tr');
-                        tr.append(pick, cell(item.aeCode), name, active);
-                        // A click anywhere on the row ticks it.
-                        tr.addEventListener('click', e => {
-                            if (e.target === box || box.disabled) return;
-                            box.checked = !box.checked;
-                            updateConfirm();
-                        });
-                        resultsBody.appendChild(tr);
+                items.forEach(item => {
+                    const added = existing.has(item.aeCode.toUpperCase());
+                    const box = document.createElement('input');
+                    box.type = 'checkbox';
+                    box.className = 'form-check-input ae-pick';
+                    box.dataset.code = item.aeCode;
+                    box.dataset.name = item.aeName;
+                    box.dataset.group = group;
+                    box.checked = added;
+                    box.disabled = added;
+                    box.setAttribute('aria-label', `Choose ${item.aeCode}`);
+                    const pick = document.createElement('td');
+                    pick.appendChild(box);
+                    const name = cell(item.aeName);
+                    if (added) name.insertAdjacentHTML('beforeend', ' <span class="badge bg-secondary">added</span>');
+                    const active = cell(item.active ? 'Yes' : 'No');
+                    if (!item.active) active.classList.add('text-danger');
+                    const tr = document.createElement('tr');
+                    tr.append(pick, cell(item.aeCode), name, active);
+                    // A click anywhere on the row ticks it.
+                    tr.addEventListener('click', e => {
+                        if (e.target === box || box.disabled) return;
+                        box.checked = !box.checked;
+                        updateConfirm();
                     });
-                } catch {
-                    if (id === searchId) showError('The search failed. Try again.');
-                }
+                    resultsBody.appendChild(tr);
+                });
             };
+
+            // A search for AE codes (parent null), or for the accounts linked to one first-level line.
+            const searchAe = async (query, title, parent) => {
+                const id = openModal(title, 'Searching...');
+                const data = await fetchAe(query);
+                if (id !== searchId) return; // a newer search has started
+                if (data.error) { showStatus(data.error, true); return; }
+                showStatus(data.items.length === 0 ? 'No accounts found.' : `${data.items.length} account(s) found.`);
+                renderGroup(parent, data.items);
+            };
+
+            // The accounts linked to several first-level lines at once, grouped under each AE code.
+            const searchLinked = async rows => {
+                const codes = rows.map(row => valueOf(row, '.ae-code'));
+                const id = openModal('Linked accounts', `Searching the accounts linked to AE Code ${codes.join(', ')}...`);
+                const results = await Promise.all(codes.map(code => fetchAe({ linkedTo: code })));
+                if (id !== searchId) return;
+                const found = results.reduce((sum, data) => sum + (data.items?.length ?? 0), 0);
+                const failed = results.filter(data => data.error);
+                if (found === 0 && failed.length === 0) {
+                    // Nothing to choose: close the pop-up and say so on the page.
+                    modal.hide();
+                    showNotice(`No linked accounts found for AE Code ${codes.join(', ')}.`);
+                    return;
+                }
+                showStatus(`${found} linked account(s) found. Tick the ones to add under each AE code.`);
+                rows.forEach((row, i) => {
+                    const data = results[i];
+                    const name = valueOf(row, '.ae-name');
+                    const label = `AE Code ${codes[i]}${name ? ` — ${name}` : ''}`;
+                    if (data.error) resultsBody.appendChild(groupHeading(`${label}: ${data.error}`, true));
+                    else if (data.items.length === 0) resultsBody.appendChild(groupHeading(`${label}: no linked accounts`, false));
+                    else {
+                        resultsBody.appendChild(groupHeading(label, false));
+                        renderGroup(row, data.items);
+                    }
+                });
+                updateConfirm();
+            };
+
             resultsBody?.addEventListener('change', updateConfirm);
             selectAll?.addEventListener('change', () => { picks().forEach(box => box.checked = selectAll.checked); updateConfirm(); });
             confirmButton?.addEventListener('click', () => {
-                const parent = searchParent && aeBody.contains(searchParent) ? searchParent : null;
-                picks().filter(box => box.checked).forEach(box => parent
-                    ? addLinkedRow(parent, box.dataset.code, box.dataset.name)
-                    : addTopRow(box.dataset.code, box.dataset.name));
+                const addedTop = [];
+                picks().filter(box => box.checked).forEach(box => {
+                    const parent = searchGroups[box.dataset.group];
+                    if (parent === null) addedTop.push(addTopRow(box.dataset.code, box.dataset.name));
+                    else if (parent && aeBody.contains(parent)) addLinkedRow(parent, box.dataset.code, box.dataset.name);
+                });
                 renumberAe();
-                modal.hide();
+                // New AE codes: search their linked accounts straight away (the pop-up stays open for them).
+                if (addedTop.length > 0) searchLinked(addedTop);
+                else modal.hide();
             });
             const runSearch = () => {
                 const codeBox = document.getElementById('aeSearchCode');
@@ -512,6 +575,16 @@
                 const row = addTopRow();
                 renumberAe();
                 row.querySelector('.ae-code').focus();
+            });
+            // Clear: all lines go, leaving one blank first-level line. Saved only with Save or Complete.
+            document.getElementById('aeClear')?.addEventListener('click', () => {
+                const rows = aeRowsOf();
+                if (rows.every(isBlank)) return;
+                if (!confirm(`Clear all ${rows.filter(r => !isBlank(r)).length} AE Code / AE Name line(s)?`)) return;
+                rows.forEach(r => r.remove());
+                aeBody.appendChild(newRow(false));
+                renumberAe();
+                showNotice('');
             });
             aeBody?.addEventListener('input', e => { if (e.target.classList.contains('ae-code')) renumberAe(); });
             aeBody?.addEventListener('click', e => {

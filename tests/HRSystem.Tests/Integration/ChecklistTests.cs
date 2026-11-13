@@ -412,6 +412,7 @@ public class ChecklistTests : IntegrationTest
                 var editPage = await handlerClient.GetStringAsync($"/ChecklistTasks/Task/{aeTask.Id}");
                 Assert.Contains("id=\"aeCodes\"", editPage);
                 Assert.Contains("id=\"aeModal\"", editPage);
+                Assert.Contains("id=\"aeClear\"", editPage);
                 Assert.Contains("value=\"Alice\"", editPage);
 
                 // A linked account follows its AE code, wherever it was entered.
@@ -450,6 +451,7 @@ public class ChecklistTests : IntegrationTest
             // The pages: the approved AE Code task lists its lines read-only; another department's task shows them too.
             var aePage = await handlerClient.GetStringAsync($"/ChecklistTasks/Task/{aeTask.Id}");
             Assert.DoesNotContain("id=\"aeModal\"", aePage);
+            Assert.DoesNotContain("id=\"aeClear\"", aePage);
             Assert.Contains("LSQ CAPITAL LIMITED (A1)", aePage);
             Assert.Contains("1.1", aePage);
             var otherPage = await managerClient.GetStringAsync($"/ChecklistTasks/Task/{otherTasks[0].Id}");
