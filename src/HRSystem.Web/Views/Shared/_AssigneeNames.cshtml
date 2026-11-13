@@ -1,0 +1,10 @@
+@model string
+@* Handler or approver names; "" means nobody is set. *@
+@if (Model == string.Empty)
+{
+    <span class="badge bg-warning text-dark" title="Set on this template page, or give the department a manager with a login.">nobody</span>
+}
+else
+{
+    @Model
+}

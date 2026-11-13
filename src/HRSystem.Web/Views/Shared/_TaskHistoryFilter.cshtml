@@ -1,0 +1,19 @@
+@model ChecklistTaskHistoryQuery
+<form asp-action="History" method="get" class="row g-2 align-items-end mb-3">
+    <div class="col-md-5">
+        <label class="form-label" for="Keyword">Employee / Request No.</label>
+        <input class="form-control" id="Keyword" name="Keyword" value="@Model.Keyword" placeholder="Name, employee no. or request no." />
+    </div>
+    <div class="col-md-2">
+        <label class="form-label" for="From">Submitted from</label>
+        <input class="form-control" type="date" id="From" name="From" value="@Model.From?.ToString("yyyy-MM-dd")" />
+    </div>
+    <div class="col-md-2">
+        <label class="form-label" for="To">to</label>
+        <input class="form-control" type="date" id="To" name="To" value="@Model.To?.ToString("yyyy-MM-dd")" />
+    </div>
+    <div class="col-md-3 d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Search</button>
+        <a asp-action="History" class="btn btn-outline-secondary">Reset</a>
+    </div>
+</form>

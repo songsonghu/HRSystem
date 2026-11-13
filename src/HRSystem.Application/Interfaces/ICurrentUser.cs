@@ -8,5 +8,9 @@ public interface ICurrentUser
 {
     string? UserId { get; }
     string? UserName { get; }
-    bool IsInRole(string role);
+
+    /// <summary>Member of the built-in Admin role, which implicitly holds every permission.</summary>
+    bool IsAdmin { get; }
+
+    bool HasPermission(string permission);
 }

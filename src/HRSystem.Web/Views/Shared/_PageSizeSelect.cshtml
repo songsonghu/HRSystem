@@ -1,0 +1,12 @@
+@model int
+@* Page size for a GET search form; changing it reloads the list from page 1. *@
+<div class="input-group input-group-sm" style="width:auto">
+    <label class="input-group-text" for="pageSize">Show</label>
+    <select class="form-select form-select-sm" id="pageSize" name="pageSize" onchange="this.form.submit()">
+        @foreach (var size in HRSystem.Application.Common.Paging.PageSizes)
+        {
+            <option value="@size" selected="@(size == Model)">@size</option>
+        }
+    </select>
+    <span class="input-group-text">per page</span>
+</div>

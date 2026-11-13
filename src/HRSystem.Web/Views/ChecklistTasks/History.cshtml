@@ -1,0 +1,16 @@
+@model IReadOnlyList<ChecklistTaskDto>
+@{
+    ViewData["Title"] = "Departure Checklist - History";
+    var q = (ChecklistTaskHistoryQuery)ViewBag.Query;
+}
+
+<h2>Departure Checklist</h2>
+<p class="page-subtitle">Departure checklists of the departments you handle. Completed tasks can be taken back until they are approved.</p>
+
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item"><a class="nav-link" asp-action="Index">Pending</a></li>
+    <li class="nav-item"><a class="nav-link active" asp-action="History">History</a></li>
+</ul>
+
+<partial name="_TaskHistoryFilter" model="q" />
+<partial name="_DepartureTaskTable" model="Model" />

@@ -1,0 +1,23 @@
+@model UserPickerViewModel
+@{
+    var chosen = Model.Users.Where(u => Model.Selected.Contains(u.Value)).Select(u => u.Text).ToList();
+    var empty = Model.Fallback is null ? "— nobody —" : $"Manager: {Model.Fallback}";
+}
+@* A dropdown of checkboxes; the button lists who is ticked. Needs _UserPickerScript on the page. *@
+<div class="dropdown user-picker" data-empty="@empty">
+    <button type="button" class="form-select text-start text-truncate" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+        <span class="picker-summary @(chosen.Count == 0 ? "text-muted" : "")">@(chosen.Count == 0 ? empty : string.Join(", ", chosen))</span>
+    </button>
+    <div class="dropdown-menu p-2 shadow-sm" style="max-height:320px;overflow-y:auto;min-width:100%">
+        <input type="search" class="form-control form-control-sm mb-2 picker-filter" placeholder="Search..." />
+        @foreach (var user in Model.Users)
+        {
+            var id = $"{Model.Name}_{user.Value}";
+            <div class="form-check picker-option">
+                <input class="form-check-input" type="checkbox" name="@Model.Name" value="@user.Value" id="@id"
+                       checked="@Model.Selected.Contains(user.Value)" />
+                <label class="form-check-label" for="@id">@user.Text</label>
+            </div>
+        }
+    </div>
+</div>

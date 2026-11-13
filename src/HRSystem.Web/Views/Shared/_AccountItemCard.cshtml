@@ -1,0 +1,91 @@
+@model RequestItemDto
+@{
+    // Shown on Account Checklist (handlers) and Account Approval (approvers).
+    var fromApproval = ViewData["FromApproval"] is true;
+    var progressStatuses = new[] { ItemStatus.NotStarted, ItemStatus.WIP, ItemStatus.KIV };
+    var removal = Model.RequestType is RequestType.Remove or RequestType.Offboard;
+    var returned = Model.ReturnReason is not null && !Model.IsSubmitted;
+}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between flex-wrap gap-2">
+        <span>
+            <b>@(removal ? "Disable" : "Open"): @Model.AccountTypeName</b>
+            · @Model.EmployeeName (@Model.EmployeeNo)
+            · <a asp-controller="Requests" asp-action="Details" asp-route-id="@Model.RequestId">@Model.RequestNo</a>
+            <span class="text-muted small">· @Model.AssignedDeptName</span>
+        </span>
+        <span>
+            <span class="badge @(Model.IsSubmitted ? "bg-success" : returned ? "bg-danger" : "bg-warning text-dark")">@(returned ? "Returned" : Model.Status.ToString())</span>
+            @if (Model.IsSubmitted && !Model.IsApproved)
+            {
+                <span class="badge bg-primary">Waiting for approval</span>
+            }
+        </span>
+    </div>
+    <div class="card-body">
+        @if (!string.IsNullOrWhiteSpace(Model.RequestDetail))
+        {
+            <p class="text-muted mb-2">Requested detail: <b>@Model.RequestDetail</b></p>
+        }
+        @if (returned)
+        {
+            <p class="text-danger small mb-2">Returned: @Model.ReturnReason</p>
+        }
+
+        <form asp-controller="MyTasks" asp-action="Update" method="post">
+            <input type="hidden" name="ItemId" value="@Model.Id" />
+            <input type="hidden" name="fromApproval" value="@(fromApproval ? "true" : "false")" />
+            <fieldset class="row g-2 align-items-end" disabled="@(!Model.CanEdit)">
+                <div class="col-md-3">
+                    <label class="form-label">Account Value</label>
+                    <input name="AccountValue" value="@Model.AccountValue" class="form-control" placeholder="login / id" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Progress</label>
+                    <select name="Status" class="form-select">
+                        @foreach (var s in progressStatuses)
+                        {
+                            <option value="@((int)s)" selected="@(s == Model.Status)">@s</option>
+                        }
+                        @if (Model.IsSubmitted)
+                        {
+                            <option value="@((int)Model.Status)" selected>@Model.Status</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Result Remark</label>
+                    <input name="ResultRemark" value="@Model.ResultRemark" class="form-control" />
+                </div>
+                <div class="col-md-4 d-flex gap-2 flex-wrap">
+                    <button name="submit" value="save" class="btn btn-outline-primary">Save</button>
+                    <button name="submit" value="complete" class="btn btn-success">Complete</button>
+                    <button name="submit" value="reject" class="btn btn-outline-danger" title="The account cannot be opened or disabled"
+                            onclick="return confirm('Mark this item as rejected (cannot be processed)?');">Reject</button>
+                </div>
+            </fieldset>
+        </form>
+
+        @if (Model.CanApprove)
+        {
+            <div class="d-flex gap-2 mt-3 pt-3 border-top">
+                <form asp-controller="AccountApprovals" asp-action="Approve" asp-route-id="@Model.Id" method="post">
+                    <button class="btn btn-primary">Approve</button>
+                </form>
+                <button type="button" class="btn btn-outline-danger" data-bs-toggle="collapse" data-bs-target="#return-@Model.Id">Return to Handlers</button>
+            </div>
+            <div class="collapse mt-2" id="return-@Model.Id">
+                <form asp-controller="AccountApprovals" asp-action="Return" asp-route-id="@Model.Id" method="post" class="d-flex gap-2">
+                    <input name="reason" class="form-control" maxlength="500" placeholder="What needs to be fixed" required />
+                    <button class="btn btn-danger text-nowrap">Return</button>
+                </form>
+            </div>
+        }
+        else if (Model.IsApprover && !Model.IsApproved)
+        {
+            <div class="mt-3 pt-3 border-top">
+                <button type="button" class="btn btn-primary" disabled title="Available once the item is completed or rejected">Approve</button>
+            </div>
+        }
+    </div>
+</div>

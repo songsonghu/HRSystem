@@ -1,0 +1,55 @@
+@model AssigneesEditorViewModel
+@{
+    // Area words for the help text, e.g. "Account Checklist" / "Account Approval".
+    var area = (string)(ViewData["AreaLabel"] ?? "");
+    string NamesOf(IReadOnlyList<string> ids)
+        => ids.Count == 0
+            ? (Model.Assignees.ManagerUserName is null ? "— nobody —" : $"Manager: {Model.Assignees.ManagerUserName}")
+            : string.Join(", ", ids.Select(id => Model.Names.TryGetValue(id, out var n) ? n : id));
+    var nobody = Model.Assignees.ManagerUserName is null;
+}
+<div class="card mb-3">
+    <div class="card-header">Handlers &amp; Approvers</div>
+    <div class="card-body">
+        <p class="text-muted small mb-3">
+            Any <b>handler</b> processes this department's work under @area Checklist; once it is completed, any <b>approver</b>
+            approves it or returns it under @area Approval. Leave a list empty to use the department manager's login.
+        </p>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label">Handlers</label>
+                @if (Model.CanEdit)
+                {
+                    <partial name="_UserPicker" model="Model.Picker(nameof(DepartmentAssignmentDto.HandlerUserIds), Model.Assignees.HandlerUserIds)" />
+                }
+                else
+                {
+                    <div class="form-control-plaintext">@NamesOf(Model.Assignees.HandlerUserIds)</div>
+                }
+                @if (Model.Assignees.HandlerUserIds.Count == 0 && nobody)
+                {
+                    <div class="form-text text-danger">Requests fail to submit until someone is set.</div>
+                }
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Approvers</label>
+                @if (Model.CanEdit)
+                {
+                    <partial name="_UserPicker" model="Model.Picker(nameof(DepartmentAssignmentDto.ApproverUserIds), Model.Assignees.ApproverUserIds)" />
+                }
+                else
+                {
+                    <div class="form-control-plaintext">@NamesOf(Model.Assignees.ApproverUserIds)</div>
+                }
+                @if (Model.Assignees.ApproverUserIds.Count == 0 && nobody)
+                {
+                    <div class="form-text text-danger">Requests fail to submit until someone is set.</div>
+                }
+            </div>
+        </div>
+        @if (!Model.CanEdit)
+        {
+            <p class="text-muted small mt-2 mb-0">Only users with the checklist-approvers.manage permission can change who handles and approves.</p>
+        }
+    </div>
+</div>

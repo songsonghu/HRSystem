@@ -1,0 +1,5 @@
+@model ChecklistStatus
+@{
+    var (css, label) = ChecklistStatusDisplay.Of(Model);
+}
+<span class="badge @css">@label</span>

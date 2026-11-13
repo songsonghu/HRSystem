@@ -19,9 +19,6 @@ public class AccountRequestItem : BaseEntity
     /// <summary>Department the item is dispatched to (snapshot at submit time).</summary>
     public int AssignedDeptId { get; set; }
 
-    /// <summary>Identity user id of the assigned department head.</summary>
-    public string? AssignedUserId { get; set; }
-
     /// <summary>Current item status (NotStarted / WIP / Completed / KIV / Rejected).</summary>
     public ItemStatus Status { get; set; } = ItemStatus.NotStarted;
 
@@ -43,6 +40,15 @@ public class AccountRequestItem : BaseEntity
 
     /// <summary>UTC timestamp when the item was handled.</summary>
     public DateTime? HandledAt { get; set; }
+
+    /// <summary>The department approver who accepted the handled item, and when.</summary>
+    public string? ApprovedBy { get; set; }
+    public string? ApprovedByName { get; set; }
+    public DateTime? ApprovedAt { get; set; }
+
+    /// <summary>Why the approver sent the item back to the handlers; cleared once it is approved.</summary>
+    public string? ReturnReason { get; set; }
+    public DateTime? ReturnedAt { get; set; }
 
     // Navigation
     public AccountRequest? Request { get; set; }

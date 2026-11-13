@@ -1,0 +1,58 @@
+@model HRSystem.Application.Common.IPagedResult
+@using Microsoft.AspNetCore.WebUtilities
+@* Page links that keep the page's other query values (search fields, page size). *@
+@{
+    var parameterName = (ViewData["PageParameter"] as string) ?? "page";
+    string Url(int page)
+    {
+        var values = Context.Request.Query
+            .Where(q => !string.Equals(q.Key, parameterName, StringComparison.OrdinalIgnoreCase))
+            .SelectMany(q => q.Value.Select(v => new KeyValuePair<string, string?>(q.Key, v)))
+            .Append(new KeyValuePair<string, string?>(parameterName, page.ToString()));
+        return QueryHelpers.AddQueryString(Context.Request.Path, values);
+    }
+    // At most 7 numbered links around the current page.
+    var first = Math.Max(1, Math.Min(Model.Page - 3, Model.TotalPages - 6));
+    var last = Math.Min(Model.TotalPages, first + 6);
+}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div class="text-muted small">
+        @if (Model.TotalCount == 0)
+        {
+            @:No records
+        }
+        else
+        {
+            @:Showing @Model.FirstItem–@Model.LastItem of @Model.TotalCount
+        }
+    </div>
+    @if (Model.TotalPages > 1)
+    {
+        <nav aria-label="Pages">
+            <ul class="pagination pagination-sm mb-0">
+                <li class="page-item @(Model.Page == 1 ? "disabled" : null)">
+                    <a class="page-link" href="@Url(Model.Page - 1)" aria-label="Previous">&laquo;</a>
+                </li>
+                @if (first > 1)
+                {
+                    <li class="page-item"><a class="page-link" href="@Url(1)">1</a></li>
+                    @if (first > 2) { <li class="page-item disabled"><span class="page-link">…</span></li> }
+                }
+                @for (var p = first; p <= last; p++)
+                {
+                    <li class="page-item @(p == Model.Page ? "active" : null)" aria-current="@(p == Model.Page ? "page" : null)">
+                        <a class="page-link" href="@Url(p)">@p</a>
+                    </li>
+                }
+                @if (last < Model.TotalPages)
+                {
+                    @if (last < Model.TotalPages - 1) { <li class="page-item disabled"><span class="page-link">…</span></li> }
+                    <li class="page-item"><a class="page-link" href="@Url(Model.TotalPages)">@Model.TotalPages</a></li>
+                }
+                <li class="page-item @(Model.Page == Model.TotalPages ? "disabled" : null)">
+                    <a class="page-link" href="@Url(Model.Page + 1)" aria-label="Next">&raquo;</a>
+                </li>
+            </ul>
+        </nav>
+    }
+</div>
